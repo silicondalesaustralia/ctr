@@ -1,12 +1,5 @@
 import { getStoredPassword } from "./auth";
-
-function resolveApiUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL ??
-    process.env.API_URL ??
-    "http://localhost:3001"
-  );
-}
+import { buildApiUrl, resolveApiBaseUrl } from "./api-base";
 
 function resolveApiKey(): string {
   const stored = getStoredPassword()?.trim();
@@ -25,13 +18,14 @@ function resolveApiKey(): string {
 export function getApiConfig() {
   const apiKey = resolveApiKey();
   return {
-    apiUrl: resolveApiUrl(),
+    apiUrl: resolveApiBaseUrl(),
     apiKeyConfigured: Boolean(apiKey && apiKey !== "dev-admin-key"),
   };
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${resolveApiUrl()}${path}`, {
+  const url = buildApiUrl(path);
+  const response = await fetch(url, {
     ...init,
     headers: {
       "x-api-key": resolveApiKey(),
@@ -43,7 +37,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? `API error ${response.status} for ${path}`);
+    throw new Error(payload?.error ?? `API error ${response.status} for ${url}`);
   }
 
   return response.json() as Promise<T>;
@@ -59,7 +53,7 @@ export async function safeApiGet<T>(path: string): Promise<{ data: T | null; err
     return { data, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown API error";
-    return { data: null, error: `${message} (API: ${resolveApiUrl()})` };
+    return { data: null, error: `${message} (API: ${buildApiUrl(path)})` };
   }
 }
 

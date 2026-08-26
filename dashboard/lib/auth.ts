@@ -1,3 +1,5 @@
+import { buildApiUrl } from "./api-base";
+
 const AUTH_KEY = "ctr_session";
 
 export function isAuthenticated(): boolean {
@@ -39,25 +41,17 @@ export function clearStoredApiKey(): void {
   clearStoredPassword();
 }
 
-export function resolveApiUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL ??
-    process.env.API_URL ??
-    "http://localhost:3001"
-  );
-}
-
 export async function verifyLogin(password: string): Promise<void> {
   const trimmed = password.trim();
   if (!trimmed) {
     throw new Error("Password is required");
   }
 
-  const apiUrl = resolveApiUrl();
+  const apiUrl = buildApiUrl("/auth/verify");
   let response: Response;
 
   try {
-    response = await fetch(`${apiUrl}/auth/verify`, {
+    response = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: trimmed }),
@@ -83,10 +77,10 @@ export async function verifyStoredPassword(): Promise<boolean> {
     return false;
   }
 
-  const apiUrl = resolveApiUrl();
+  const apiUrl = buildApiUrl("/auth/verify");
 
   try {
-    const response = await fetch(`${apiUrl}/auth/verify`, {
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: stored }),

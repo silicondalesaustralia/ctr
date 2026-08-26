@@ -52,7 +52,12 @@ export function createApiServer() {
   app.use(express.json());
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, runnerEnabled: isRunnerEnabled() });
+    res.json({
+      ok: true,
+      runnerEnabled: isRunnerEnabled(),
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+      features: ["campaign-analyze"],
+    });
   });
 
   app.post("/auth/verify", (req, res) => {
