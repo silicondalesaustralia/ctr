@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExperimentStatus {
+  draft
+  active
+  paused
+  completed
+  cancelled
+}
+
+enum QueryType {
+  core
+  close_variation
+  semantic
+  local
+  long_tail
+}
+
+enum TreatmentGroup {
+  search
+  direct
+  none
+}
+
+enum ScheduledSessionStatus {
+  scheduled
+  running
+  completed
+  cancelled
+}
+
+enum SessionStatus {
+  scheduled
+  running
+  completed
+  target_not_found
+  blocked
+  google_error
+  browser_error
+  proxy_error
+  target_error
+  cancelled
+}
+
+enum SessionEventType {
+  browser_started
+  google_loaded
+  search_entered
+  search_submitted
+  serp_loaded
+  target_found
+  target_clicked
+  landing_loaded
+  scroll
+  internal_click
+  session_completed
+  blocked
+  error
+}
+
+enum ProfileProvider {
+  gologin
+  multilogin
+  mock
+}
+
+enum DeviceClass {
+  desktop
+  mobile
+}
+
+model Experiment {
+  id                   String           @id @default(cuid())
+  name                 String
+  slug                 String           @unique
+  targetUrl            String           @map("target_url")
+  targetDomain         String           @map("target_domain")
+  status               ExperimentStatus @default(draft)
+  startDate            DateTime?        @map("start_date")
+  endDate              DateTime?        @map("end_date")
+  baselineStartDate    DateTime?        @map("baseline_start_date")
+  baselineEndDate      DateTime?        @map("baseline_end_date")
+  monthlySessionTarget Int              @default(300) @map("monthly_session_target")
+  baselineDays         Int              @default(28) @map("baseline_days")
+  treatmentDays        Int              @default(28) @map("treatment_days")
+  postTreatmentDays    Int              @default(21) @map("post_treatment_days")
+  maxSerpPages         Int              @default(3) @map("max_serp_pages")
+  scheduleTimezone     String           @default("Australia/Adelaide") @map("schedule_timezone")
+  scheduleStart        String           @default("06:30") @map("schedule_start")
+  scheduleEnd          String           @default("23:00") @map("schedule_end")
+  maxSessionsPerIdentityPerDay Int      @default(1) @map("max_sessions_per_identity_per_day")
+  repeatIdentityMinGapDays   Int      @default(2) @map("repeat_identity_min_gap_days")
+  minMinutesBetweenGlobalSessions Int @default(5) @map("min_minutes_between_global_sessions")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  queries          ExperimentQuery[]
+  scheduledSessions ScheduledSession[]
+  sessions         Session[]
+  rankingSnapshots RankingSnapshot[]
+  notes            ExperimentNote[]
+
+  @@map("experiments")
+}
+
+model ExperimentQuery {
+  id           String    @id @default(cuid())
+  experimentId String    @map("experiment_id")
+  query        String
+  queryType    QueryType @map("query_type")
+  weight       Float
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  experiment        Experiment         @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  scheduledSessions ScheduledSession[]
+
+  @@unique([experimentId, query])
+  @@map("experiment_queries")
+}
+
+model Identity {
+  id               String          @id @default(cuid())
+  externalId       String          @unique @map("external_id")
+  externalProfileId String?        @map("external_profile_id")
+  profileProvider  ProfileProvider @default(mock) @map("profile_provider")
+  deviceClass      DeviceClass     @map("device_class")
+  osFamily         String          @map("os_family")
+  browserFamily    String          @default("chromium") @map("browser_family")
+  locale           String          @default("en-AU")
+  timezone         String
+  country          String          @default("AU")
+  region           String
+  city             String
+  active           Boolean         @default(true)
+  totalSessions    Int             @default(0) @map("total_sessions")
+  googleSessions   Int             @default(0) @map("google_sessions")
+  targetClicks     Int             @default(0) @map("target_clicks")
+  blockedSessions  Int             @default(0) @map("blocked_sessions")
+  lastQuery        String?         @map("last_query")
+  lastExperimentId String?         @map("last_experiment_id")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  lastUsedAt       DateTime?       @map("last_used_at")
+
+  scheduledSessions ScheduledSession[]
+  sessions          Session[]
+
+  @@map("identities")
+}
+
+model ScheduledSession {
+  id           String                 @id @default(cuid())
+  experimentId String                 @map("experiment_id")
+  identityId   String                 @map("identity_id")
+  queryId      String                 @map("query_id")
+  group        TreatmentGroup
+  scheduledAt  DateTime               @map("scheduled_at")
+  status       ScheduledSessionStatus @default(scheduled)
+  attemptCount Int                    @default(0) @map("attempt_count")
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  experiment Experiment      @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  identity   Identity        @relation(fields: [identityId], references: [id])
+  query      ExperimentQuery @relation(fields: [queryId], references: [id])
+  sessions   Session[]
+
+  @@index([experimentId, scheduledAt])
+  @@index([identityId, scheduledAt])
+  @@map("scheduled_sessions")
+}
+
+model Session {
+  id                 String        @id @default(cuid())
+  scheduledSessionId String?       @map("scheduled_session_id")
+  experimentId       String        @map("experiment_id")
+  identityId         String        @map("identity_id")
+  queryText          String        @map("query_text")
+  group              TreatmentGroup
+  startedAt          DateTime?     @map("started_at")
+  endedAt            DateTime?     @map("ended_at")
+  status             SessionStatus @default(running)
+
+  proxyProvider String? @map("proxy_provider")
+  proxyCountry  String? @map("proxy_country")
+  proxyRegion   String? @map("proxy_region")
+  proxyCity     String? @map("proxy_city")
+  proxyIpHash   String? @map("proxy_ip_hash")
+
+  googleLoaded     Boolean? @map("google_loaded")
+  searchSubmitted  Boolean? @map("search_submitted")
+  targetFound      Boolean? @map("target_found")
+  serpPage         Int?     @map("serp_page")
+  observedPosition Int?     @map("observed_position")
+  resultTitle      String?  @map("result_title")
+  resultUrl        String?  @map("result_url")
+
+  targetClicked Boolean? @map("target_clicked")
+  landingUrl    String?  @map("landing_url")
+  finalUrl      String?  @map("final_url")
+
+  pageviews       Int   @default(0)
+  internalClicks  Int   @default(0) @map("internal_clicks")
+  scrollDepth     Float @default(0) @map("scroll_depth")
+  durationSeconds Int   @default(0) @map("duration_seconds")
+  bytesTransferred BigInt @default(0) @map("bytes_transferred")
+
+  engagementTemplate String? @map("engagement_template")
+  blockReason        String? @map("block_reason")
+  errorCode          String? @map("error_code")
+  errorMessage       String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  scheduledSession ScheduledSession? @relation(fields: [scheduledSessionId], references: [id])
+  experiment       Experiment        @relation(fields: [experimentId], references: [id])
+  identity         Identity          @relation(fields: [identityId], references: [id])
+  events           SessionEvent[]
+
+  @@index([experimentId, createdAt])
+  @@index([identityId, createdAt])
+  @@map("sessions")
+}
+
+model SessionEvent {
+  id           String           @id @default(cuid())
+  sessionId    String           @map("session_id")
+  timestamp    DateTime         @default(now())
+  eventType    SessionEventType @map("event_type")
+  metadataJson String?          @map("metadata_json")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp])
+  @@map("session_events")
+}
+
+model RankingSnapshot {
+  id           String   @id @default(cuid())
+  experimentId String   @map("experiment_id")
+  date         DateTime @db.Date
+  query        String
+  page         String
+  country      String   @default("AU")
+  device       String?
+  clicks       Int      @default(0)
+  impressions  Int      @default(0)
+  ctr          Float    @default(0)
+  position     Float
+  source       String   @default("gsc")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, date, query, page, country, device, source])
+  @@index([experimentId, query, date])
+  @@map("ranking_snapshots")
+}
+
+model ExperimentNote {
+  id           String   @id @default(cuid())
+  experimentId String   @map("experiment_id")
+  date         DateTime @db.Date
+  event        String
+  severity     String   @default("info")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@map("experiment_notes")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}

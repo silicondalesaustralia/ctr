@@ -1,0 +1,5 @@
+date,query,page,country,device,clicks,impressions,ctr,position
+2026-01-05,sell eggs from home,https://example.com/sell-eggs-from-home,AU,desktop,2,120,0.0167,12.4
+2026-01-12,sell eggs from home,https://example.com/sell-eggs-from-home,AU,desktop,3,130,0.0231,11.8
+2026-02-05,sell eggs from home,https://example.com/sell-eggs-from-home,AU,desktop,5,180,0.0278,8.7
+2026-02-12,selling eggs from home,https://example.com/sell-eggs-from-home,AU,desktop,2,90,0.0222,9.5

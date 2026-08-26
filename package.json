@@ -1,0 +1,49 @@
+{
+  "name": "au-serp-experiment-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src scripts tests",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "identities:create": "tsx scripts/create-identities.ts",
+    "identities:validate": "tsx scripts/validate-identities.ts",
+    "experiment:create": "tsx scripts/create-experiment.ts",
+    "schedule:generate": "tsx scripts/generate-schedule.ts",
+    "session:test": "tsx scripts/run-one-session.ts",
+    "worker": "tsx scripts/run-worker.ts",
+    "gsc:import": "tsx scripts/import-gsc.ts",
+    "experiment:analyse": "tsx scripts/analyse-experiment.ts",
+    "api": "tsx src/dashboard/api/server.ts",
+    "dashboard:dev": "npm run dev --prefix dashboard"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "bullmq": "^5.41.0",
+    "commander": "^13.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "pino": "^9.6.0",
+    "playwright": "^1.51.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "prisma": "^6.5.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.1",
+    "vitest": "^3.0.8"
+  }
+}

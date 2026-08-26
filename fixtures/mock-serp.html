@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mock Google SERP</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #fff; color: #202124; }
+    .search-box { width: 100%; max-width: 640px; padding: 12px 16px; font-size: 16px; border: 1px solid #dfe1e5; border-radius: 24px; }
+    .results { margin-top: 24px; max-width: 640px; }
+    .g { margin-bottom: 24px; }
+    .g a { color: #1a0dab; font-size: 20px; text-decoration: none; }
+    .g .url { color: #006621; font-size: 14px; margin-top: 4px; }
+    .g .snippet { color: #4d5156; font-size: 14px; margin-top: 4px; }
+    #search { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <input class="search-box" id="q" name="q" readonly />
+  <div id="search">
+    <div class="results" id="rso">
+      <div class="g">
+        <a id="target-link" href="#">Target Result</a>
+        <div class="url displayed-url" id="target-display"></div>
+        <div class="snippet">Mock organic result for dry-run testing.</div>
+      </div>
+      <div class="g">
+        <a href="https://competitor.example/page">Competitor Example Page</a>
+        <div class="url">competitor.example/page</div>
+        <div class="snippet">Unrelated competitor result.</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get("q") || "test query";
+    const domain = params.get("domain") || "example.com";
+    document.getElementById("q").value = query;
+    const targetUrl = `https://${domain}/sell-eggs-from-home`;
+    const link = document.getElementById("target-link");
+    link.href = targetUrl;
+    link.textContent = `How to ${query} - ${domain}`;
+    document.getElementById("target-display").textContent = `${domain}/sell-eggs-from-home`;
+  </script>
+</body>
+</html>
