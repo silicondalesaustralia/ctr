@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiExportUrl, apiGet, apiKey } from "../../lib/api";
+import { apiExportUrl, apiGet, getApiKey } from "../../lib/api";
 import Shell, { Card } from "../components/Shell";
 
 interface Experiment {
@@ -20,7 +20,7 @@ export default function ReportsPage() {
 
   async function loadReport(id: string) {
     const response = await fetch(`${apiExportUrl(`/experiments/${id}/report`)}`, {
-      headers: { "x-api-key": apiKey },
+      headers: { "x-api-key": getApiKey() },
     });
     setReport(await response.text());
   }

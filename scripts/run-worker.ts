@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createSessionWorker, pollAndEnqueueDueSessions } from "../src/scheduler/worker.js";
+import { cleanupStaleSessions } from "../src/sessions/session-cleanup.js";
 import { logger } from "../src/config/logger.js";
 
 const worker = createSessionWorker();
@@ -24,4 +25,9 @@ setInterval(() => {
 }, 60000);
 
 pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));
+
+cleanupStaleSessions().catch((error) =>
+  logger.error({ event: "stale_session_cleanup_failed", error: String(error) }),
+);
+
 console.log("Session worker started with concurrency=1");

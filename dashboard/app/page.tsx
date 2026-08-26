@@ -23,8 +23,10 @@ export default async function ExperimentsPage() {
             <strong>Could not load experiments.</strong> {error}
           </p>
           <p>
-            Check Vercel env vars: <code>NEXT_PUBLIC_API_URL</code> and{" "}
-            <code>NEXT_PUBLIC_API_KEY</code> must match Railway <code>ADMIN_API_KEY</code>.
+            Set on Vercel (Production): <code>NEXT_PUBLIC_API_URL</code> ={" "}
+            <code>https://ctr-production-d742.up.railway.app</code>, and{" "}
+            <code>API_KEY</code> (or <code>NEXT_PUBLIC_API_KEY</code>) to the same value as Railway{" "}
+            <code>ADMIN_API_KEY</code>. After changing <code>NEXT_PUBLIC_*</code> vars, redeploy.
           </p>
         </Card>
       )}

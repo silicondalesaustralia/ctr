@@ -7,11 +7,11 @@ import type {
   RunningBrowser,
 } from "./BrowserProfileProvider.js";
 import type { ProxyConfig } from "../proxy/ProxyProvider.js";
-
-interface GoLoginStartResponse {
-  wsUrl?: string;
-  ws?: string;
-}
+import { sleep } from "../../utils/helpers.js";
+import {
+  type GoLoginStartResponse,
+  resolveConnectUrl,
+} from "./gologin-utils.js";
 
 export class GoLoginProvider implements BrowserProfileProvider {
   private readonly apiToken: string;
@@ -24,6 +24,7 @@ export class GoLoginProvider implements BrowserProfileProvider {
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
+      signal: AbortSignal.timeout(30_000),
       headers: {
         Authorization: `Bearer ${this.apiToken}`,
         "Content-Type": "application/json",
@@ -36,20 +37,42 @@ export class GoLoginProvider implements BrowserProfileProvider {
       throw new Error(`GoLogin API error ${response.status}: ${body}`);
     }
 
-    return response.json() as Promise<T>;
+    const text = await response.text();
+    if (!text) {
+      return {} as T;
+    }
+
+    return JSON.parse(text) as T;
   }
 
   async createProfile(input: CreateProfileInput): Promise<BrowserProfile> {
+    const os =
+      input.osFamily === "windows" ? "win" : input.osFamily === "mac" ? "mac" : "lin";
+    const platform =
+      input.osFamily === "windows"
+        ? "Win32"
+        : input.osFamily === "mac"
+          ? "MacIntel"
+          : "Linux x86_64";
+    const userAgent =
+      input.deviceClass === "mobile"
+        ? "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        : os === "mac"
+          ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
     const payload = {
       name: input.name,
       browserType: "chrome",
-      os: input.osFamily === "windows" ? "win" : input.osFamily === "mac" ? "mac" : "lin",
+      os,
       navigator: {
         language: input.locale,
-        userAgent: input.deviceClass === "mobile" ? "mobile" : "desktop",
+        platform,
+        userAgent,
         resolution: input.deviceClass === "mobile" ? "390x844" : "1366x768",
       },
       timezone: { id: input.timezone },
+      proxy: { mode: "none" },
     };
 
     const created = await this.request<{ id: string }>("/browser", {
@@ -71,31 +94,58 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async startProfile(profileId: string, proxy?: ProxyConfig): Promise<RunningBrowser> {
-    if (proxy) {
+    const env = getEnv();
+    if (proxy && env.PROXY_PROVIDER !== "mock") {
       await this.updateProxy(profileId, proxy);
     }
 
-    const started = await this.request<GoLoginStartResponse>(
-      `/browser/${profileId}/web`,
-      { method: "POST" },
-    );
+    console.error(`[gologin] Stopping any existing cloud session for ${profileId}...`);
+    await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
 
-    const wsEndpoint = started.wsUrl ?? started.ws;
-    if (!wsEndpoint) {
-      throw new Error("GoLogin did not return a WebSocket endpoint");
-    }
+    console.error(`[gologin] Starting cloud profile ${profileId}...`);
+    const started = await this.request<GoLoginStartResponse>(`/browser/${profileId}/web`, {
+      method: "POST",
+      body: JSON.stringify({ isHeadless: true }),
+    });
+
+    console.error("[gologin] Waiting for cloud container boot...");
+    await sleep(15_000);
+
+    const wsEndpoint = resolveConnectUrl(started, profileId, this.apiToken);
+    console.error(`[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`);
 
     return { profileId, wsEndpoint, cdpUrl: wsEndpoint };
   }
 
-  async stopProfile(profileId: string): Promise<void> {
-    await this.request(`/browser/${profileId}/web`, { method: "DELETE" });
+  private async stopCloudSession(
+    profileId: string,
+    options?: { alreadyStoppedOk?: boolean },
+  ): Promise<void> {
+    console.error(`[gologin] Stopping cloud profile ${profileId}...`);
+    try {
+      await this.request(`/browser/${profileId}/web`, { method: "DELETE" });
+      console.error(`[gologin] Cloud profile ${profileId} stopped`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (options?.alreadyStoppedOk && message.includes("404")) {
+        console.error(`[gologin] Cloud profile ${profileId} was not running`);
+        return;
+      }
+      console.error(`[gologin] Failed to stop cloud profile ${profileId}: ${message}`);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
+  async stopProfile(profileId: string, _running?: RunningBrowser): Promise<void> {
+    await this.stopCloudSession(profileId);
   }
 
   async updateProxy(profileId: string, proxy: ProxyConfig): Promise<void> {
+    const profile = await this.request<Record<string, unknown>>(`/browser/${profileId}`);
     await this.request(`/browser/${profileId}`, {
       method: "PUT",
       body: JSON.stringify({
+        ...profile,
         proxy: {
           mode: "http",
           host: proxy.host,
@@ -140,3 +190,5 @@ export function createGoLoginProvider(): GoLoginProvider {
   }
   return new GoLoginProvider(env.GOLOGIN_API_TOKEN);
 }
+
+export { buildCloudConnectUrl, normalizeWsEndpoint, resolveConnectUrl } from "./gologin-utils.js";

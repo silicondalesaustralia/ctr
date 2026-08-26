@@ -32,6 +32,17 @@ export const DEFAULT_ENGAGEMENT_CONFIG: EngagementConfig = {
   },
 };
 
+/** Used for DRY_RUN smoke tests so sessions finish in seconds, not minutes. */
+export const FAST_DRY_RUN_ENGAGEMENT_CONFIG: EngagementConfig = {
+  initialRenderWaitMs: { min: 300, max: 800 },
+  betweenActionsMs: { min: 150, max: 400 },
+  dwellSeconds: {
+    short: { min: 2, max: 4 },
+    normal: { min: 3, max: 6 },
+    long: { min: 5, max: 8 },
+  },
+};
+
 const SCROLL_RANGES: Record<string, { min: number; max: number }> = {
   short_visit: { min: 10, max: 35 },
   read_only: { min: 35, max: 75 },

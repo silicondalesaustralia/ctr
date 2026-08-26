@@ -3,6 +3,7 @@ import { Redis } from "ioredis";
 import { getEnv, isRunnerEnabledAsync } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { runSession } from "../sessions/session-runner.js";
+import { cleanupStaleSessions } from "../sessions/session-cleanup.js";
 import { getRetryDelayMinutes, shouldRetry } from "./retry-policy.js";
 import { addMinutes } from "../utils/helpers.js";
 import { logger } from "../config/logger.js";
@@ -59,41 +60,45 @@ export async function processScheduledSession(
     data: { status: "running", attemptCount: { increment: 1 } },
   });
 
-  const result = await runSession({
-    experiment: scheduled.experiment,
-    identity: scheduled.identity,
-    queryText: scheduled.query.query,
-    group: scheduled.group,
-    scheduledSessionId: scheduled.id,
-  });
+  try {
+    const result = await runSession({
+      experiment: scheduled.experiment,
+      identity: scheduled.identity,
+      queryText: scheduled.query.query,
+      group: scheduled.group,
+      scheduledSessionId: scheduled.id,
+    });
 
-  const finalStatus =
-    result.status === "completed" ? "completed" : scheduled.status;
-
-  await prisma.scheduledSession.update({
-    where: { id: scheduledSessionId },
-    data: {
-      status: result.status === "completed" ? "completed" : "scheduled",
-    },
-  });
-
-  if (shouldRetry(result.status as never, scheduled.attemptCount + 1)) {
-    const delay = getRetryDelayMinutes(result.status as never);
     await prisma.scheduledSession.update({
       where: { id: scheduledSessionId },
       data: {
-        status: "scheduled",
-        scheduledAt: addMinutes(new Date(), delay),
+        status: result.status === "completed" ? "completed" : "scheduled",
       },
     });
-  }
 
-  logger.info({
-    event: "scheduled_session_processed",
-    scheduledSessionId,
-    result: result.status,
-    finalStatus,
-  });
+    if (shouldRetry(result.status as never, scheduled.attemptCount + 1)) {
+      const delay = getRetryDelayMinutes(result.status as never);
+      await prisma.scheduledSession.update({
+        where: { id: scheduledSessionId },
+        data: {
+          status: "scheduled",
+          scheduledAt: addMinutes(new Date(), delay),
+        },
+      });
+    }
+
+    logger.info({
+      event: "scheduled_session_processed",
+      scheduledSessionId,
+      result: result.status,
+    });
+  } catch (error) {
+    await prisma.scheduledSession.update({
+      where: { id: scheduledSessionId },
+      data: { status: "scheduled" },
+    });
+    throw error;
+  }
 }
 
 export function createSessionWorker(): Worker<SessionJobData> {

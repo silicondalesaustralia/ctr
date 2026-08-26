@@ -4,6 +4,7 @@ import { prisma } from "../src/db/client.js";
 import { getExperimentBySlug } from "../src/experiments/experiment-service.js";
 import { getIdentityByExternalId } from "../src/identities/identity-service.js";
 import { runSession } from "../src/sessions/session-runner.js";
+import { cleanupStaleSessions } from "../src/sessions/session-cleanup.js";
 
 const program = new Command();
 
@@ -22,6 +23,9 @@ program
       throw new Error(`Identity not found: ${options.identity}`);
     }
 
+    await cleanupStaleSessions();
+
+    console.error(`Starting session for ${options.identity}...`);
     const result = await runSession({
       experiment,
       identity,
@@ -43,4 +47,8 @@ program
     );
   });
 
-program.parse();
+program.parseAsync(process.argv).catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exit(1);
+});

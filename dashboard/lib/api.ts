@@ -14,16 +14,17 @@ function resolveApiKey(): string {
   );
 }
 
-const API_URL = resolveApiUrl();
-const API_KEY = resolveApiKey();
-
 export function getApiConfig() {
-  return { apiUrl: API_URL, apiKeyConfigured: Boolean(API_KEY && API_KEY !== "dev-admin-key") };
+  const apiKey = resolveApiKey();
+  return {
+    apiUrl: resolveApiUrl(),
+    apiKeyConfigured: Boolean(apiKey && apiKey !== "dev-admin-key"),
+  };
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "x-api-key": API_KEY },
+  const response = await fetch(`${resolveApiUrl()}${path}`, {
+    headers: { "x-api-key": resolveApiKey() },
     cache: "no-store",
   });
   if (!response.ok) {
@@ -38,15 +39,15 @@ export async function safeApiGet<T>(path: string): Promise<{ data: T | null; err
     return { data, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown API error";
-    return { data: null, error: `${message} (API: ${API_URL})` };
+    return { data: null, error: `${message} (API: ${resolveApiUrl()})` };
   }
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${resolveApiUrl()}${path}`, {
     method: "POST",
     headers: {
-      "x-api-key": API_KEY,
+      "x-api-key": resolveApiKey(),
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -58,10 +59,10 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${resolveApiUrl()}${path}`, {
     method: "PUT",
     headers: {
-      "x-api-key": API_KEY,
+      "x-api-key": resolveApiKey(),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -73,7 +74,12 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export function apiExportUrl(path: string): string {
-  return `${API_URL}${path}`;
+  return `${resolveApiUrl()}${path}`;
 }
 
-export const apiKey = API_KEY;
+export function getApiKey(): string {
+  return resolveApiKey();
+}
+
+/** @deprecated Prefer getApiKey() so client bundles pick up build-time env correctly. */
+export const apiKey = process.env.NEXT_PUBLIC_API_KEY ?? "dev-admin-key";

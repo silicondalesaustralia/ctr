@@ -1,6 +1,6 @@
 import { chromium, type Page, type Response } from "playwright";
 import type { Experiment, Identity, TreatmentGroup } from "@prisma/client";
-import { getEnv } from "../config/env.js";
+import { getEnv, isDryRun } from "../config/env.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
@@ -9,13 +9,23 @@ import {
 } from "../experiments/experiment-service.js";
 import { updateIdentityStats } from "../identities/identity-service.js";
 import { runDirectFlow, runSearchFlow } from "../browser/google-search.js";
-import { runEngagement } from "../browser/engagement.js";
-import { hashValue } from "../utils/helpers.js";
+import {
+  DEFAULT_ENGAGEMENT_CONFIG,
+  FAST_DRY_RUN_ENGAGEMENT_CONFIG,
+  runEngagement,
+} from "../browser/engagement.js";
+import { hashValue, sleep } from "../utils/helpers.js";
 import {
   appendSessionEvent,
   completeSession,
   createSessionRecord,
 } from "./session-logger.js";
+import {
+  cleanupBrowserSession,
+  clearSessionCleanup,
+  registerSessionCleanup,
+  type BrowserCleanupRefs,
+} from "./session-cleanup.js";
 
 export interface RunSessionInput {
   experiment: Experiment;
@@ -29,6 +39,22 @@ export interface RunSessionInput {
 export interface RunSessionResult {
   sessionId: string;
   status: string;
+}
+
+async function connectBrowserWithRetry(wsEndpoint: string, maxAttempts = 4) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    console.error(`[session] Cloud browser connect attempt ${attempt}/${maxAttempts}...`);
+    try {
+      return await chromium.connectOverCDP(wsEndpoint, { timeout: 15_000 });
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await sleep(3000);
+      }
+    }
+  }
+  throw lastError;
 }
 
 function trackBandwidth(page: Page): { getTotal: () => number } {
@@ -52,6 +78,9 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
   const engagementTemplate = selectEngagementTemplate(
     input.engagementWeights ?? defaultEngagementWeights(),
   );
+  const engagementConfig = isDryRun()
+    ? FAST_DRY_RUN_ENGAGEMENT_CONFIG
+    : DEFAULT_ENGAGEMENT_CONFIG;
 
   const session = await createSessionRecord({
     experimentId: input.experiment.id,
@@ -66,6 +95,28 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
   const proxyProvider = createProxyProvider();
   let proxyLeaseId: string | null = null;
   let runningBrowser: Awaited<ReturnType<typeof browserProvider.startProfile>> | null = null;
+  let connectedBrowser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | null = null;
+  let cloudStarted = false;
+  const useGoLogin = env.BROWSER_PROFILE_PROVIDER === "gologin";
+
+  const cleanupRefs: BrowserCleanupRefs = {
+    connectedBrowser: null,
+    runningBrowser: null,
+    profileId: input.identity.externalProfileId,
+    cloudStarted: false,
+    useGoLogin,
+    browserProvider,
+    proxyLeaseId: null,
+    proxyProvider,
+  };
+
+  registerSessionCleanup(async () => {
+    cleanupRefs.connectedBrowser = connectedBrowser;
+    cleanupRefs.runningBrowser = runningBrowser;
+    cleanupRefs.cloudStarted = cloudStarted;
+    cleanupRefs.proxyLeaseId = proxyLeaseId;
+    await cleanupBrowserSession(cleanupRefs);
+  });
 
   try {
     await appendSessionEvent(session.id, "browser_started", {
@@ -110,13 +161,14 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
     });
+    cloudStarted = useGoLogin;
 
     let page: Page;
     if (runningBrowser.context) {
       page = runningBrowser.context.pages()[0] ?? (await runningBrowser.context.newPage());
     } else if (runningBrowser.wsEndpoint) {
-      const browser = await chromium.connectOverCDP(runningBrowser.wsEndpoint);
-      const context = browser.contexts()[0] ?? (await browser.newContext());
+      connectedBrowser = await connectBrowserWithRetry(runningBrowser.wsEndpoint);
+      const context = connectedBrowser.contexts()[0] ?? (await connectedBrowser.newContext());
       page = context.pages()[0] ?? (await context.newPage());
     } else {
       throw new Error("Browser provider did not return a usable browser");
@@ -155,7 +207,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       const engagement = await runEngagement(
         page,
         engagementTemplate,
-        undefined,
+        engagementConfig,
         () => appendSessionEvent(session.id, "scroll"),
         () => appendSessionEvent(session.id, "internal_click"),
       );
@@ -254,7 +306,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     const engagement = await runEngagement(
       page,
       engagementTemplate,
-      undefined,
+      engagementConfig,
       () => appendSessionEvent(session.id, "scroll"),
       () => appendSessionEvent(session.id, "internal_click"),
     );
@@ -302,14 +354,17 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     await appendSessionEvent(session.id, "error", { message });
     return { sessionId: session.id, status: "browser_error" };
   } finally {
-    if (runningBrowser) {
-      await browserProvider.stopProfile(
-        input.identity.externalProfileId!,
-        runningBrowser,
-      ).catch(() => undefined);
-    }
-    if (proxyLeaseId) {
-      await proxyProvider.release(proxyLeaseId).catch(() => undefined);
+    cleanupRefs.connectedBrowser = connectedBrowser;
+    cleanupRefs.runningBrowser = runningBrowser;
+    cleanupRefs.cloudStarted = cloudStarted;
+    cleanupRefs.proxyLeaseId = proxyLeaseId;
+    try {
+      await cleanupBrowserSession(cleanupRefs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[session] Browser cleanup failed: ${message}`);
+    } finally {
+      clearSessionCleanup();
     }
   }
 }

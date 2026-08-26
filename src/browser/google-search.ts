@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
-import { isDryRun } from "../config/env.js";
-import { getMockSerpUrl } from "../utils/helpers.js";
+import { getEnv, isDryRun } from "../config/env.js";
+import { getMockSerpUrl, loadMockSerpInPage } from "../utils/helpers.js";
 import { acceptConsentIfPresent, detectBlockedPage } from "./blocked-detection.js";
 import { clickSerpResult, findTargetInSerp, type SerpResult } from "./serp-parser.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
@@ -36,11 +36,18 @@ export async function runSearchFlow(input: SearchFlowInput): Promise<SearchFlowR
     targetClicked: false,
   };
 
-  const startUrl = isDryRun()
-    ? getMockSerpUrl(targetDomain, query)
-    : "https://www.google.com.au/";
-
-  await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+  if (isDryRun()) {
+    if (getEnv().BROWSER_PROFILE_PROVIDER === "gologin") {
+      await loadMockSerpInPage(page, targetDomain, query);
+    } else {
+      await page.goto(getMockSerpUrl(targetDomain, query), {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+    }
+  } else {
+    await page.goto("https://www.google.com.au/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  }
   result.googleLoaded = true;
 
   let blocked = await detectBlockedPage(page);

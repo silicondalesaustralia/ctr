@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
+import type { Page } from "playwright";
 
 export function randomBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -29,6 +31,34 @@ export function getMockSerpUrl(targetDomain: string, query: string): string {
     domain: targetDomain,
   });
   return `${pathToFileURL(filePath).href}?${params.toString()}`;
+}
+
+export async function loadMockSerpInPage(
+  page: Page,
+  targetDomain: string,
+  query: string,
+): Promise<void> {
+  const html = await readFile(getMockSerpPath(), "utf-8");
+  await page.setContent(html, { waitUntil: "domcontentloaded" });
+  await page.evaluate(
+    ({ q, domain }) => {
+      const queryInput = document.getElementById("q") as HTMLInputElement | null;
+      if (queryInput) {
+        queryInput.value = q;
+      }
+      const targetUrl = `https://${domain}/sell-eggs-from-home`;
+      const link = document.getElementById("target-link") as HTMLAnchorElement | null;
+      const display = document.getElementById("target-display");
+      if (link) {
+        link.href = targetUrl;
+        link.textContent = `How to ${q} - ${domain}`;
+      }
+      if (display) {
+        display.textContent = `${domain}/sell-eggs-from-home`;
+      }
+    },
+    { q: query, domain: targetDomain },
+  );
 }
 
 export function domainMatches(url: string, targetDomain: string): boolean {
