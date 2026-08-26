@@ -57,6 +57,9 @@ export async function generateMonthlySchedule(
   const days = daysInMonth(month);
   const dailyTotals = distributeMonthlyTotal(input.experiment.monthlySessionTarget, days);
   const groups: TreatmentGroup[] = input.treatmentGroups ?? ["search", "direct"];
+  const identities = input.experiment.focusRegion
+    ? input.identities.filter((identity) => identity.region === input.experiment.focusRegion)
+    : input.identities;
   const scheduled: Array<{
     experimentId: string;
     identityId: string;
@@ -78,7 +81,7 @@ export async function generateMonthlySchedule(
       const group = groups[Math.floor(Math.random() * groups.length)]!;
 
       const eligible = [];
-      for (const identity of input.identities) {
+      for (const identity of identities) {
         let scheduledAt = randomTimeInWindow(
           dayDate,
           input.experiment.scheduleStart,

@@ -1,6 +1,75 @@
 import type { Experiment, ExperimentQuery, TreatmentGroup } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { loadExperimentConfig, slugify, type ExperimentConfig } from "../config/experiments.js";
+import {
+  buildExperimentName,
+  extractTargetDomain,
+  generateQueryCluster,
+  resolveRegionTimezone,
+} from "./query-generator.js";
+import { randomUUID } from "node:crypto";
+
+export interface CreateExperimentInput {
+  keyword: string;
+  targetUrl: string;
+  region: string;
+  name?: string;
+  sessionsPerMonth?: number;
+  activate?: boolean;
+}
+
+export async function createExperimentFromInput(
+  input: CreateExperimentInput,
+): Promise<{ experiment: Experiment; queries: ExperimentQuery[] }> {
+  const keyword = input.keyword.trim();
+  const targetUrl = input.targetUrl.trim();
+  const region = input.region.trim().toUpperCase();
+  const targetDomain = extractTargetDomain(targetUrl);
+  const name = input.name?.trim() || buildExperimentName(keyword, region);
+  const baseSlug = slugify(name);
+  const slug = await uniqueSlug(baseSlug);
+  const generatedQueries = generateQueryCluster(keyword, region);
+  const timezone = resolveRegionTimezone(region);
+
+  const experiment = await prisma.experiment.create({
+    data: {
+      name,
+      slug,
+      targetUrl,
+      targetDomain,
+      status: input.activate ? "active" : "draft",
+      monthlySessionTarget: input.sessionsPerMonth ?? 100,
+      focusRegion: region === "ALL" ? null : region,
+      scheduleTimezone: timezone,
+      maxSerpPages: 3,
+    },
+  });
+
+  const queries: ExperimentQuery[] = [];
+  for (const query of generatedQueries) {
+    const created = await prisma.experimentQuery.create({
+      data: {
+        experimentId: experiment.id,
+        query: query.text,
+        queryType: query.type,
+        weight: query.weight,
+        active: true,
+      },
+    });
+    queries.push(created);
+  }
+
+  return { experiment, queries };
+}
+
+async function uniqueSlug(baseSlug: string): Promise<string> {
+  const existing = await prisma.experiment.findUnique({ where: { slug: baseSlug } });
+  if (!existing) {
+    return baseSlug;
+  }
+
+  return `${baseSlug}-${randomUUID().slice(0, 6)}`;
+}
 
 export async function createExperimentFromConfig(
   filePath: string,
@@ -97,6 +166,12 @@ export function selectEngagementTemplate(
 
 export async function getExperimentBySlug(slug: string): Promise<Experiment | null> {
   return prisma.experiment.findUnique({ where: { slug } });
+}
+
+export async function getExperimentQueries(experimentId: string): Promise<ExperimentQuery[]> {
+  return prisma.experimentQuery.findMany({
+    where: { experimentId, active: true },
+  });
 }
 
 export function defaultEngagementWeights(): Record<string, number> {

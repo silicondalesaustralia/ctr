@@ -1,12 +1,19 @@
+import { getStoredApiKey } from "./auth";
+
 function resolveApiUrl(): string {
   return (
-    process.env.API_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
+    process.env.API_URL ??
     "http://localhost:3001"
   );
 }
 
 function resolveApiKey(): string {
+  const stored = getStoredApiKey();
+  if (stored) {
+    return stored;
+  }
+
   return (
     process.env.API_KEY ??
     process.env.NEXT_PUBLIC_API_KEY ??
@@ -22,15 +29,27 @@ export function getApiConfig() {
   };
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${resolveApiUrl()}${path}`, {
-    headers: { "x-api-key": resolveApiKey() },
+    ...init,
+    headers: {
+      "x-api-key": resolveApiKey(),
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
     cache: "no-store",
   });
+
   if (!response.ok) {
-    throw new Error(`API error ${response.status} for ${path}`);
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? `API error ${response.status} for ${path}`);
   }
+
   return response.json() as Promise<T>;
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+  return apiFetch<T>(path);
 }
 
 export async function safeApiGet<T>(path: string): Promise<{ data: T | null; error: string | null }> {
@@ -44,42 +63,19 @@ export async function safeApiGet<T>(path: string): Promise<{ data: T | null; err
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${resolveApiUrl()}${path}`, {
+  return apiFetch<T>(path, {
     method: "POST",
-    headers: {
-      "x-api-key": resolveApiKey(),
-      "Content-Type": "application/json",
-    },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}`);
-  }
-  return response.json() as Promise<T>;
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${resolveApiUrl()}${path}`, {
+  return apiFetch<T>(path, {
     method: "PUT",
-    headers: {
-      "x-api-key": resolveApiKey(),
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}`);
-  }
-  return response.json() as Promise<T>;
-}
-
-export function apiExportUrl(path: string): string {
-  return `${resolveApiUrl()}${path}`;
 }
 
 export function getApiKey(): string {
   return resolveApiKey();
 }
-
-/** @deprecated Prefer getApiKey() so client bundles pick up build-time env correctly. */
-export const apiKey = process.env.NEXT_PUBLIC_API_KEY ?? "dev-admin-key";

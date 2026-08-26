@@ -1,5 +1,6 @@
 import { DeviceClass, ProfileProvider, type Identity } from "@prisma/client";
 import { prisma } from "../db/client.js";
+import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { getEnv } from "../config/env.js";
 import { AU_REGIONS, isRegionCoherent, pickWeightedRegion } from "./regions.js";
@@ -48,6 +49,8 @@ export async function createIdentities(
       getMockBrowserProvider().registerExistingProfile(profile);
     }
 
+    const persona = assignPersona(deviceClass, externalId);
+
     const identity = await prisma.identity.upsert({
       where: { externalId },
       update: {
@@ -61,6 +64,8 @@ export async function createIdentities(
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
+        personaId: persona.id,
+        personaAssignedAt: new Date(),
       },
       create: {
         externalId,
@@ -74,6 +79,8 @@ export async function createIdentities(
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
+        personaId: persona.id,
+        personaAssignedAt: new Date(),
       },
     });
 

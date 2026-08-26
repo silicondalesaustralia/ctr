@@ -1,24 +1,23 @@
 import { chromium, type Page, type Response } from "playwright";
-import type { Experiment, Identity, TreatmentGroup } from "@prisma/client";
-import { getEnv, isDryRun } from "../config/env.js";
+import type { Experiment, Identity, SessionEventType, TreatmentGroup } from "@prisma/client";
+import { loadBehaviourOverrides } from "../behaviour/experiment-behaviour.js";
+import { getPersonaForIdentity } from "../behaviour/personas.js";
+import { resolveInitialQuery } from "../behaviour/query-evolution.js";
+import { runSearchJourney } from "../behaviour/search-journey.js";
+import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits.js";
+import { runSiteJourney } from "../behaviour/site-journey.js";
+import { getEnv } from "../config/env.js";
+import { getExperimentQueries } from "../experiments/experiment-service.js";
+import { updateIdentityStats } from "../identities/identity-service.js";
+import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
-import {
-  defaultEngagementWeights,
-  selectEngagementTemplate,
-} from "../experiments/experiment-service.js";
-import { updateIdentityStats } from "../identities/identity-service.js";
-import { runDirectFlow, runSearchFlow } from "../browser/google-search.js";
-import {
-  DEFAULT_ENGAGEMENT_CONFIG,
-  FAST_DRY_RUN_ENGAGEMENT_CONFIG,
-  runEngagement,
-} from "../browser/engagement.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
   appendSessionEvent,
   completeSession,
   createSessionRecord,
+  updateSessionRecord,
 } from "./session-logger.js";
 import {
   cleanupBrowserSession,
@@ -33,7 +32,6 @@ export interface RunSessionInput {
   queryText: string;
   group?: TreatmentGroup;
   scheduledSessionId?: string;
-  engagementWeights?: Record<string, number>;
 }
 
 export interface RunSessionResult {
@@ -72,15 +70,25 @@ function trackBandwidth(page: Page): { getTotal: () => number } {
   };
 }
 
+function proxyFields(
+  env: ReturnType<typeof getEnv>,
+  identity: Identity,
+  proxyLease: { host: string; sessionKey?: string },
+) {
+  return {
+    proxyProvider: env.PROXY_PROVIDER,
+    proxyCountry: "AU" as const,
+    proxyRegion: identity.region,
+    proxyCity: identity.city,
+    proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`),
+  };
+}
+
 export async function runSession(input: RunSessionInput): Promise<RunSessionResult> {
   const env = getEnv();
   const group = input.group ?? "search";
-  const engagementTemplate = selectEngagementTemplate(
-    input.engagementWeights ?? defaultEngagementWeights(),
-  );
-  const engagementConfig = isDryRun()
-    ? FAST_DRY_RUN_ENGAGEMENT_CONFIG
-    : DEFAULT_ENGAGEMENT_CONFIG;
+  const behaviourOverrides = loadBehaviourOverrides(input.experiment.slug);
+  const persona = await getPersonaForIdentity(input.identity, behaviourOverrides);
 
   const session = await createSessionRecord({
     experimentId: input.experiment.id,
@@ -88,7 +96,18 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     queryText: input.queryText,
     group,
     scheduledSessionId: input.scheduledSessionId,
-    engagementTemplate,
+    engagementTemplate: persona.id,
+    personaId: persona.id,
+  });
+
+  const sessionTraits = generateSessionTraits(
+    persona,
+    session.id,
+    input.identity.externalId,
+  );
+
+  await updateSessionRecord(session.id, {
+    sessionTraitsJson: traitsToJson(sessionTraits),
   });
 
   const browserProvider = createBrowserProvider();
@@ -122,6 +141,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     await appendSessionEvent(session.id, "browser_started", {
       identityId: input.identity.externalId,
       group,
+      personaId: persona.id,
     });
 
     const profileId = input.identity.externalProfileId;
@@ -176,15 +196,22 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     }
 
     const bandwidth = trackBandwidth(page);
+    const proxyMeta = proxyFields(env, input.identity, proxyLease);
 
     if (group === "none") {
       await completeSession(session.id, {
         status: "completed",
         durationSeconds: 0,
         bytesTransferred: BigInt(0),
+        personaId: persona.id,
+        sessionTraitsJson: traitsToJson(sessionTraits),
       });
       return { sessionId: session.id, status: "completed" };
     }
+
+    const onEvent = async (eventType: SessionEventType, metadata?: Record<string, unknown>) => {
+      await appendSessionEvent(session.id, eventType, metadata);
+    };
 
     if (group === "direct") {
       const direct = await runDirectFlow(page, input.experiment.targetUrl);
@@ -194,6 +221,8 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
           blockReason: direct.blockReason,
           landingUrl: direct.landingUrl,
           bytesTransferred: BigInt(bandwidth.getTotal()),
+          personaId: persona.id,
+          sessionTraitsJson: traitsToJson(sessionTraits),
         });
         await appendSessionEvent(session.id, "blocked", { reason: direct.blockReason });
         await updateIdentityStats(input.identity.id, {
@@ -205,24 +234,26 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       }
 
       await appendSessionEvent(session.id, "landing_loaded", { url: direct.landingUrl });
-      const engagement = await runEngagement(
+      const site = await runSiteJourney({
         page,
-        engagementTemplate,
-        engagementConfig,
-        () => appendSessionEvent(session.id, "scroll"),
-        () => appendSessionEvent(session.id, "internal_click"),
-      );
+        persona,
+        traits: sessionTraits,
+        onEvent,
+      });
 
       await completeSession(session.id, {
         status: "completed",
         landingUrl: direct.landingUrl,
-        finalUrl: page.url(),
+        finalUrl: site.finalUrl,
         targetClicked: false,
-        pageviews: engagement.pageviews,
-        internalClicks: engagement.internalClicks,
-        scrollDepth: engagement.scrollDepth,
-        durationSeconds: engagement.durationSeconds,
+        pageviews: site.pageviews,
+        internalClicks: site.internalClicks,
+        scrollDepth: site.scrollDepth,
+        durationSeconds: site.durationSeconds,
         bytesTransferred: BigInt(bandwidth.getTotal()),
+        personaId: persona.id,
+        sessionTraitsJson: traitsToJson(sessionTraits),
+        backToSerp: site.backToSerp,
       });
       await appendSessionEvent(session.id, "session_completed");
       await updateIdentityStats(input.identity.id, {
@@ -232,33 +263,46 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       return { sessionId: session.id, status: "completed" };
     }
 
-    const search = await runSearchFlow({
+    const cluster = await getExperimentQueries(input.experiment.id);
+    const initialQuery = resolveInitialQuery(input.queryText, cluster);
+
+    const search = await runSearchJourney({
       page,
-      query: input.queryText,
+      persona,
+      traits: sessionTraits,
+      cluster,
+      initialQuery,
       targetDomain: input.experiment.targetDomain,
       maxSerpPages: input.experiment.maxSerpPages,
+      behaviourOverrides,
+      onEvent,
     });
 
-    if (search.googleLoaded) {
-      await appendSessionEvent(session.id, "google_loaded");
-    }
-    if (search.searchSubmitted) {
-      await appendSessionEvent(session.id, "search_submitted", { query: input.queryText });
-      await appendSessionEvent(session.id, "serp_loaded");
-    }
+    const queriesUsed = search.searches.map((attempt) => attempt.queryText);
+    const commonFields = {
+      googleLoaded: search.googleLoaded,
+      searchSubmitted: search.searchSubmitted,
+      targetFound: search.targetFound,
+      targetClicked: search.targetClicked,
+      targetSkipped: search.targetSkipped,
+      serpPage: search.serpPage,
+      observedPosition: search.observedPosition,
+      resultTitle: search.resultTitle,
+      resultUrl: search.resultUrl,
+      landingUrl: search.landingUrl,
+      searchAttempts: search.searches.length,
+      queriesUsedJson: JSON.stringify(queriesUsed),
+      personaId: persona.id,
+      sessionTraitsJson: traitsToJson(sessionTraits),
+      ...proxyMeta,
+      bytesTransferred: BigInt(bandwidth.getTotal()),
+    };
 
-    if (search.blocked) {
+    if (search.status === "blocked") {
       await completeSession(session.id, {
         status: "blocked",
         blockReason: search.blockReason,
-        googleLoaded: search.googleLoaded,
-        searchSubmitted: search.searchSubmitted,
-        proxyProvider: env.PROXY_PROVIDER,
-        proxyCountry: "AU",
-        proxyRegion: input.identity.region,
-        proxyCity: input.identity.city,
-        proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey}`),
-        bytesTransferred: BigInt(bandwidth.getTotal()),
+        ...commonFields,
       });
       await appendSessionEvent(session.id, "blocked", { reason: search.blockReason });
       await updateIdentityStats(input.identity.id, {
@@ -270,18 +314,39 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       return { sessionId: session.id, status: "blocked" };
     }
 
-    if (!search.targetFound) {
+    if (search.status === "search_abandoned") {
+      await completeSession(session.id, {
+        status: "search_abandoned",
+        durationSeconds: 0,
+        ...commonFields,
+      });
+      await updateIdentityStats(input.identity.id, {
+        googleSession: true,
+        experimentId: input.experiment.id,
+        query: input.queryText,
+      });
+      return { sessionId: session.id, status: "search_abandoned" };
+    }
+
+    if (search.status === "target_found_no_click") {
+      await completeSession(session.id, {
+        status: "target_found_no_click",
+        durationSeconds: 0,
+        ...commonFields,
+      });
+      await updateIdentityStats(input.identity.id, {
+        googleSession: true,
+        experimentId: input.experiment.id,
+        query: input.queryText,
+      });
+      return { sessionId: session.id, status: "target_found_no_click" };
+    }
+
+    if (search.status === "target_not_found") {
       await completeSession(session.id, {
         status: "target_not_found",
-        googleLoaded: search.googleLoaded,
-        searchSubmitted: search.searchSubmitted,
-        targetFound: false,
-        proxyProvider: env.PROXY_PROVIDER,
-        proxyCountry: "AU",
-        proxyRegion: input.identity.region,
-        proxyCity: input.identity.city,
-        proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey}`),
-        bytesTransferred: BigInt(bandwidth.getTotal()),
+        durationSeconds: 0,
+        ...commonFields,
       });
       await updateIdentityStats(input.identity.id, {
         googleSession: true,
@@ -291,49 +356,26 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       return { sessionId: session.id, status: "target_not_found" };
     }
 
-    await appendSessionEvent(session.id, "target_found", {
-      position: search.observedPosition,
-      serpPage: search.serpPage,
-    });
-
-    if (search.targetClicked) {
-      await appendSessionEvent(session.id, "target_clicked", {
-        url: search.resultUrl,
-        title: search.resultTitle,
-      });
+    if (search.landingUrl) {
       await appendSessionEvent(session.id, "landing_loaded", { url: search.landingUrl });
     }
 
-    const engagement = await runEngagement(
+    const site = await runSiteJourney({
       page,
-      engagementTemplate,
-      engagementConfig,
-      () => appendSessionEvent(session.id, "scroll"),
-      () => appendSessionEvent(session.id, "internal_click"),
-    );
+      persona,
+      traits: sessionTraits,
+      onEvent,
+    });
 
     await completeSession(session.id, {
       status: "completed",
-      googleLoaded: search.googleLoaded,
-      searchSubmitted: search.searchSubmitted,
-      targetFound: search.targetFound,
-      serpPage: search.serpPage,
-      observedPosition: search.observedPosition,
-      resultTitle: search.resultTitle,
-      resultUrl: search.resultUrl,
-      targetClicked: search.targetClicked,
-      landingUrl: search.landingUrl,
-      finalUrl: page.url(),
-      pageviews: engagement.pageviews,
-      internalClicks: engagement.internalClicks,
-      scrollDepth: engagement.scrollDepth,
-      durationSeconds: engagement.durationSeconds,
-      proxyProvider: env.PROXY_PROVIDER,
-      proxyCountry: "AU",
-      proxyRegion: input.identity.region,
-      proxyCity: input.identity.city,
-      proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey}`),
-      bytesTransferred: BigInt(bandwidth.getTotal()),
+      finalUrl: site.finalUrl,
+      pageviews: site.pageviews,
+      internalClicks: site.internalClicks,
+      scrollDepth: site.scrollDepth,
+      durationSeconds: site.durationSeconds,
+      backToSerp: site.backToSerp,
+      ...commonFields,
     });
 
     await appendSessionEvent(session.id, "session_completed");
@@ -351,6 +393,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       status: "browser_error",
       errorMessage: message,
       errorCode: "browser_error",
+      personaId: persona.id,
     });
     await appendSessionEvent(session.id, "error", { message });
     return { sessionId: session.id, status: "browser_error" };

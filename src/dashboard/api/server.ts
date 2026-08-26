@@ -6,6 +6,23 @@ import { generateExperimentReport, analyseExperiment } from "../../analytics/rep
 import { importGscFile } from "../../analytics/gsc.js";
 import { processScheduledSession } from "../../scheduler/worker.js";
 import { shouldRetry } from "../../scheduler/retry-policy.js";
+import {
+  createExperimentFromInput,
+  type CreateExperimentInput,
+} from "../../experiments/experiment-service.js";
+import {
+  generateQueryCluster,
+  listRegionOptions,
+} from "../../experiments/query-generator.js";
+import {
+  getCampaignLog,
+  getCurrentCampaign,
+  runCampaign,
+  serializeCampaign,
+  serializeLogEntry,
+  stopCampaign,
+  upsertCampaign,
+} from "../../experiments/campaign-service.js";
 import type { Session } from "@prisma/client";
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -17,19 +34,33 @@ function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+async function isRunnerEnabledSetting(): Promise<boolean> {
+  const setting = await prisma.appSetting.findUnique({ where: { key: "runner_enabled" } });
+  return setting?.value !== "false" && isRunnerEnabled();
+}
+
 export function createApiServer() {
   const app = express();
   app.use(cors());
   app.use(express.json());
-  app.use(authMiddleware);
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, runnerEnabled: isRunnerEnabled() });
   });
 
+  app.post("/auth/verify", (req, res) => {
+    const apiKey = req.body?.apiKey as string | undefined;
+    if (apiKey && apiKey === getEnv().ADMIN_API_KEY) {
+      res.json({ ok: true });
+      return;
+    }
+    res.status(401).json({ error: "Invalid API key" });
+  });
+
+  app.use(authMiddleware);
+
   app.get("/settings/runner", async (_req, res) => {
-    const setting = await prisma.appSetting.findUnique({ where: { key: "runner_enabled" } });
-    res.json({ enabled: setting?.value !== "false" && isRunnerEnabled() });
+    res.json({ enabled: await isRunnerEnabledSetting() });
   });
 
   app.put("/settings/runner", async (req, res) => {
@@ -52,6 +83,144 @@ export function createApiServer() {
       orderBy: { createdAt: "desc" },
     });
     res.json(experiments);
+  });
+
+  app.get("/regions", (_req, res) => {
+    res.json([
+      { code: "ALL", label: "All Australia", city: "Mixed" },
+      ...listRegionOptions(),
+    ]);
+  });
+
+  app.get("/campaign", async (_req, res) => {
+    const campaign = await getCurrentCampaign();
+    if (!campaign) {
+      res.json({ campaign: null, running: false });
+      return;
+    }
+
+    res.json({
+      campaign: serializeCampaign(campaign),
+      running: campaign.status === "active" && (await isRunnerEnabledSetting()),
+    });
+  });
+
+  app.put("/campaign", async (req, res) => {
+    const body = req.body as Partial<CreateExperimentInput>;
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const result = await upsertCampaign({
+        keyword: body.keyword,
+        targetUrl: body.targetUrl,
+        region: body.region,
+        sessionsPerMonth: body.sessionsPerMonth,
+      });
+      res.json({
+        campaign: serializeCampaign({ ...result.experiment, queries: result.queries }),
+        running: result.experiment.status === "active",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaign/run", async (_req, res) => {
+    const current = await getCurrentCampaign();
+    if (!current) {
+      res.status(400).json({ error: "Save a campaign first" });
+      return;
+    }
+
+    const campaign = await runCampaign(current.id);
+    res.json({
+      campaign: serializeCampaign(campaign),
+      running: true,
+    });
+  });
+
+  app.post("/campaign/stop", async (_req, res) => {
+    const current = await getCurrentCampaign();
+    if (!current) {
+      res.status(400).json({ error: "No campaign to stop" });
+      return;
+    }
+
+    const campaign = await stopCampaign(current.id);
+    res.json({
+      campaign: serializeCampaign(campaign),
+      running: false,
+    });
+  });
+
+  app.get("/campaign/log", async (_req, res) => {
+    const current = await getCurrentCampaign();
+    if (!current) {
+      res.json({ entries: [] });
+      return;
+    }
+
+    const sessions = await getCampaignLog(current.id);
+    res.json({
+      entries: sessions.map((session) => serializeLogEntry(session)),
+    });
+  });
+
+  app.post("/experiments/preview-queries", (req, res) => {
+    const { keyword, region } = req.body as { keyword?: string; region?: string };
+    if (!keyword?.trim()) {
+      res.status(400).json({ error: "keyword is required" });
+      return;
+    }
+
+    try {
+      const queries = generateQueryCluster(keyword, region ?? "ALL");
+      res.json({ queries });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/experiments", async (req, res) => {
+    const body = req.body as Partial<CreateExperimentInput>;
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const result = await createExperimentFromInput({
+        keyword: body.keyword,
+        targetUrl: body.targetUrl,
+        region: body.region,
+        name: body.name,
+        sessionsPerMonth: body.sessionsPerMonth,
+        activate: body.activate ?? false,
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
   });
 
   app.get("/experiments/:id", async (req, res) => {

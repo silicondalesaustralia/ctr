@@ -11,6 +11,8 @@ export const RETRY_POLICIES: Record<string, RetryPolicy> = {
   target_error: { maxAttempts: 1, delayMinutes: 60 },
   blocked: { maxAttempts: 0, delayMinutes: 0 },
   target_not_found: { maxAttempts: 0, delayMinutes: 0 },
+  search_abandoned: { maxAttempts: 0, delayMinutes: 0 },
+  target_found_no_click: { maxAttempts: 0, delayMinutes: 0 },
   google_error: { maxAttempts: 0, delayMinutes: 0 },
 };
 

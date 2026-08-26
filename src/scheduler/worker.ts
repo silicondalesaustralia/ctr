@@ -69,10 +69,23 @@ export async function processScheduledSession(
       scheduledSessionId: scheduled.id,
     });
 
+    const terminalStatuses = new Set([
+      "completed",
+      "target_not_found",
+      "search_abandoned",
+      "target_found_no_click",
+      "blocked",
+      "browser_error",
+      "google_error",
+      "proxy_error",
+      "target_error",
+      "cancelled",
+    ]);
+
     await prisma.scheduledSession.update({
       where: { id: scheduledSessionId },
       data: {
-        status: result.status === "completed" ? "completed" : "scheduled",
+        status: terminalStatuses.has(result.status) ? "completed" : "scheduled",
       },
     });
 

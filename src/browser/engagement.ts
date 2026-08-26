@@ -50,7 +50,7 @@ const SCROLL_RANGES: Record<string, { min: number; max: number }> = {
   long_read: { min: 65, max: 100 },
 };
 
-async function scrollToDepth(
+export async function scrollPageToDepth(
   page: Page,
   targetDepthPercent: number,
   config: EngagementConfig,
@@ -101,7 +101,7 @@ export async function runEngagement(
   if (template === "short_visit") dwellBand = config.dwellSeconds.short;
   if (template === "long_read") dwellBand = config.dwellSeconds.long;
 
-  const scroll = await scrollToDepth(page, targetDepth, config, onScroll);
+  const scroll = await scrollPageToDepth(page, targetDepth, config, onScroll);
   let internalClicks = 0;
   let pageviews = 1;
 
@@ -115,7 +115,7 @@ export async function runEngagement(
       pageviews = 2;
       onInternalClick?.();
       await sleep(randomBetween(config.betweenActionsMs.min, config.betweenActionsMs.max));
-      await scrollToDepth(page, randomFloat(20, 60), config, onScroll);
+      await scrollPageToDepth(page, randomFloat(20, 60), config, onScroll);
     }
   }
 

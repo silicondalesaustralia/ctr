@@ -13,6 +13,8 @@ export interface CreateSessionInput {
   group: TreatmentGroup;
   scheduledSessionId?: string;
   engagementTemplate?: string;
+  personaId?: string;
+  sessionTraitsJson?: string;
 }
 
 export interface SessionUpdateInput {
@@ -31,6 +33,7 @@ export interface SessionUpdateInput {
   resultTitle?: string;
   resultUrl?: string;
   targetClicked?: boolean;
+  targetSkipped?: boolean;
   landingUrl?: string;
   finalUrl?: string;
   pageviews?: number;
@@ -38,6 +41,11 @@ export interface SessionUpdateInput {
   scrollDepth?: number;
   durationSeconds?: number;
   bytesTransferred?: bigint;
+  personaId?: string;
+  sessionTraitsJson?: string;
+  searchAttempts?: number;
+  queriesUsedJson?: string;
+  backToSerp?: boolean;
   blockReason?: string;
   errorCode?: string;
   errorMessage?: string;
@@ -52,6 +60,8 @@ export async function createSessionRecord(input: CreateSessionInput) {
       group: input.group,
       scheduledSessionId: input.scheduledSessionId,
       engagementTemplate: input.engagementTemplate,
+      personaId: input.personaId,
+      sessionTraitsJson: input.sessionTraitsJson,
       status: "running",
       startedAt: new Date(),
     },

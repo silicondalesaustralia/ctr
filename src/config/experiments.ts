@@ -57,6 +57,15 @@ const experimentConfigSchema = z.object({
       long_read: z.number().min(0).max(1).default(0.2),
     })
     .optional(),
+  behaviour: z
+    .object({
+      persona_weights: z.record(z.number().min(0).max(1)).optional(),
+      min_target_click_rate: z.number().min(0).max(1).optional(),
+      allow_query_reformulation: z.boolean().default(true),
+      allow_search_abandon: z.boolean().default(true),
+      allow_target_skip: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 export type ExperimentConfig = z.infer<typeof experimentConfigSchema>;

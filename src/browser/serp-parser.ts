@@ -12,6 +12,29 @@ export interface SerpResult {
 interface SerpLinkCandidate {
   href: string;
   title: string;
+  displayedUrl: string;
+}
+
+function candidateMatchesTarget(candidate: SerpLinkCandidate, targetDomain: string): boolean {
+  const resolvedHref = resolveGoogleSerpHref(candidate.href);
+  if (resolvedHref.startsWith("http") && domainMatches(resolvedHref, targetDomain)) {
+    return true;
+  }
+
+  const normalizedTarget = targetDomain.replace(/^www\./, "").toLowerCase();
+  const citeHaystack = candidate.displayedUrl.toLowerCase();
+  return citeHaystack.includes(normalizedTarget);
+}
+
+function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
+  const resolvedHref = resolveGoogleSerpHref(candidate.href);
+  if (resolvedHref.startsWith("http") && !/google\.com/i.test(resolvedHref)) {
+    return true;
+  }
+  if (candidate.displayedUrl.length > 3) {
+    return true;
+  }
+  return candidate.href.includes("/goto?");
 }
 
 const ORGANIC_SELECTORS = [
@@ -42,7 +65,12 @@ async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[
       if (!title) {
         continue;
       }
-      links.push({ href, title });
+      const displayedUrl = await link
+        .locator("xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//cite")
+        .first()
+        .innerText()
+        .catch(() => "");
+      links.push({ href, title, displayedUrl: displayedUrl.trim() });
     }
     if (links.length > 0) {
       return links;
@@ -63,10 +91,61 @@ async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[
       if (title.length < 4) {
         continue;
       }
-      links.push({ href, title });
+      const block = anchor.closest(".g, .MjjYud, [data-hveid]");
+      const displayedUrl = (block?.querySelector("cite")?.textContent ?? "").trim();
+      links.push({ href, title, displayedUrl });
     }
     return links;
   });
+}
+
+export async function findTargetOnCurrentPage(
+  page: Page,
+  targetDomain: string,
+  serpPage: number,
+): Promise<SerpResult | null> {
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+
+  const candidates = await collectSerpLinkCandidates(page);
+  let position = 0;
+
+  for (const candidate of candidates) {
+    if (!isOrganicCandidate(candidate)) {
+      continue;
+    }
+
+    position += 1;
+    if (candidateMatchesTarget(candidate, targetDomain)) {
+      const resolvedHref = resolveGoogleSerpHref(candidate.href);
+      return {
+        position,
+        title: candidate.title,
+        url: candidate.href,
+        displayedUrl: resolvedHref.startsWith("http")
+          ? resolvedHref
+          : candidate.displayedUrl,
+        serpPage,
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function goToNextSerpPage(page: Page): Promise<boolean> {
+  const nextButton = page
+    .locator(
+      'a#pnnext, a:has-text("Next"), a[aria-label="Next page"], a[aria-label="More search results"]',
+    )
+    .first();
+
+  if (!(await nextButton.isVisible().catch(() => false))) {
+    return false;
+  }
+
+  await nextButton.click();
+  await page.waitForTimeout(2000);
+  return true;
 }
 
 export async function findTargetInSerp(
@@ -78,45 +157,19 @@ export async function findTargetInSerp(
 
   for (let serpPage = 1; serpPage <= maxPages; serpPage += 1) {
     pagesSearched = serpPage;
-    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
     await page.waitForTimeout(1000);
 
-    const candidates = await collectSerpLinkCandidates(page);
-    let position = 0;
-
-    for (const candidate of candidates) {
-      const resolvedHref = resolveGoogleSerpHref(candidate.href);
-      if (!resolvedHref.startsWith("http")) {
-        continue;
-      }
-
-      position += 1;
-      if (domainMatches(resolvedHref, targetDomain)) {
-        return {
-          result: {
-            position,
-            title: candidate.title,
-            url: candidate.href,
-            displayedUrl: resolvedHref,
-            serpPage,
-          },
-          pagesSearched,
-        };
-      }
+    const result = await findTargetOnCurrentPage(page, targetDomain, serpPage);
+    if (result) {
+      return { result, pagesSearched };
     }
 
     if (serpPage >= maxPages) break;
 
-    const nextButton = page
-      .locator(
-        'a#pnnext, a:has-text("Next"), a[aria-label="Next page"], a[aria-label="More search results"]',
-      )
-      .first();
-    if (!(await nextButton.isVisible().catch(() => false))) {
+    const hasNext = await goToNextSerpPage(page);
+    if (!hasNext) {
       break;
     }
-    await nextButton.click();
-    await page.waitForTimeout(2000);
   }
 
   return { result: null, pagesSearched };

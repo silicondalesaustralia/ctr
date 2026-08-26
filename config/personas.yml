@@ -1,0 +1,80 @@
+personas:
+  quick_scanner:
+    weight: 0.20
+    device_filter: any
+    typing_speed: fast
+    typing_delay_ms: [35, 75]
+    pre_type_pause_ms: [400, 1200]
+    post_type_pause_ms: [300, 900]
+    serp_scan_seconds: [2, 8]
+    serp_scroll_probability: 0.25
+    serp_scroll_depth: [0.15, 0.45]
+    reformulate_probability: 0.08
+    max_searches_per_session: 2
+    abandon_before_inspect_probability: 0.06
+    target_click_probability_if_found: 0.80
+    page_depth: shallow
+    internal_click_probability: 0.12
+    back_to_serp_probability: 0.10
+    max_internal_pages: 1
+    dwell_seconds: [15, 50]
+
+  normal_researcher:
+    weight: 0.40
+    device_filter: any
+    typing_speed: normal
+    typing_delay_ms: [45, 130]
+    pre_type_pause_ms: [700, 2000]
+    post_type_pause_ms: [500, 1600]
+    serp_scan_seconds: [5, 18]
+    serp_scroll_probability: 0.60
+    serp_scroll_depth: [0.25, 0.70]
+    reformulate_probability: 0.18
+    max_searches_per_session: 3
+    abandon_before_inspect_probability: 0.08
+    target_click_probability_if_found: 0.85
+    page_depth: medium
+    internal_click_probability: 0.35
+    back_to_serp_probability: 0.12
+    max_internal_pages: 2
+    dwell_seconds: [40, 130]
+
+  deep_researcher:
+    weight: 0.15
+    device_filter: any
+    typing_speed: normal
+    typing_delay_ms: [55, 150]
+    pre_type_pause_ms: [900, 2500]
+    post_type_pause_ms: [700, 2000]
+    serp_scan_seconds: [10, 30]
+    serp_scroll_probability: 0.85
+    serp_scroll_depth: [0.40, 0.90]
+    reformulate_probability: 0.30
+    max_searches_per_session: 4
+    abandon_before_inspect_probability: 0.10
+    target_click_probability_if_found: 0.75
+    page_depth: deep
+    internal_click_probability: 0.55
+    back_to_serp_probability: 0.20
+    max_internal_pages: 3
+    dwell_seconds: [90, 260]
+
+  mobile_skimmer:
+    weight: 0.25
+    device_filter: mobile
+    typing_speed: medium
+    typing_delay_ms: [40, 100]
+    pre_type_pause_ms: [500, 1500]
+    post_type_pause_ms: [400, 1200]
+    serp_scan_seconds: [3, 12]
+    serp_scroll_probability: 0.70
+    serp_scroll_depth: [0.30, 0.75]
+    reformulate_probability: 0.12
+    max_searches_per_session: 2
+    abandon_before_inspect_probability: 0.07
+    target_click_probability_if_found: 0.82
+    page_depth: medium
+    internal_click_probability: 0.22
+    back_to_serp_probability: 0.08
+    max_internal_pages: 2
+    dwell_seconds: [25, 90]
