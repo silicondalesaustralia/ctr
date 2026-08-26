@@ -19,6 +19,7 @@ export interface ProxyLease {
   region?: string;
   city?: string;
   sessionKey?: string;
+  proxyType?: "residential" | "mobile";
 }
 
 export interface ProxyAllocationRequest {
@@ -26,6 +27,7 @@ export interface ProxyAllocationRequest {
   region?: string;
   city?: string;
   sessionKey?: string;
+  deviceClass?: "desktop" | "mobile";
 }
 
 export interface ProxyProvider {

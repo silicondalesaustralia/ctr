@@ -148,6 +148,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       region: input.identity.region,
       city: input.identity.city,
       sessionKey: session.id,
+      deviceClass: input.identity.deviceClass,
     });
     proxyLeaseId = proxyLease.leaseId;
 
