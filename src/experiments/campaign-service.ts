@@ -18,6 +18,7 @@ import {
   resolveRegionTimezone,
 } from "./query-generator.js";
 import { createExperimentFromInput, type CreateExperimentInput } from "./experiment-service.js";
+import { createAdditionalIdentities } from "../identities/identity-service.js";
 
 export type CampaignWithQueries = Experiment & { queries: ExperimentQuery[] };
 
@@ -316,6 +317,44 @@ export async function stopCampaign(experimentId: string): Promise<CampaignWithQu
   return experiment;
 }
 
+export async function createIdentitiesForCampaign(
+  input: UpsertCampaignInput,
+  options?: { count?: number },
+): Promise<{
+  createdCount: number;
+  fromExternalId: string | null;
+  toExternalId: string | null;
+  intensity: CampaignIntensityResult;
+}> {
+  const current = await getCurrentCampaign();
+  const intensity = await previewCampaignIntensity(input, current?.id);
+  const deficit = intensity.identityDeficit ?? 0;
+  const toCreate = options?.count ?? deficit;
+
+  if (toCreate <= 0) {
+    return {
+      createdCount: 0,
+      fromExternalId: null,
+      toExternalId: null,
+      intensity,
+    };
+  }
+
+  const result = await createAdditionalIdentities({
+    count: toCreate,
+    desktopPercent: input.desktopPercent ?? current?.desktopPercent ?? 65,
+  });
+
+  const refreshed = await previewCampaignIntensity(input, current?.id);
+
+  return {
+    createdCount: result.created.length,
+    fromExternalId: result.fromExternalId,
+    toExternalId: result.toExternalId,
+    intensity: refreshed,
+  };
+}
+
 export async function getCampaignLog(experimentId: string, limit = 100) {
   return prisma.session.findMany({
     where: { experimentId },
@@ -368,8 +407,9 @@ export function serializeCampaign(
           totalBaselineClicks: intensity.totalBaselineClicks,
           totalAllocatedSessions: intensity.totalAllocatedSessions,
           suggestedIdentities: intensity.suggestedIdentities,
-          feasibleSessions: intensity.feasibleSessions,
           activeIdentityCount: intensity.activeIdentityCount,
+          identityDeficit: intensity.identityDeficit,
+          feasibleSessions: intensity.feasibleSessions,
           treatmentMultiplier: intensity.treatmentMultiplier,
         }
       : null,

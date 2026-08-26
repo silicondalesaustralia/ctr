@@ -153,11 +153,12 @@ export function calculateCampaignIntensity(
 
   let suggestedIdentities = Math.ceil(totalAllocatedSessions / 3);
   let feasibleSessions: number | null = null;
+  const activeCount = options.activeIdentityCount ?? null;
 
-  if (options.activeIdentityCount != null && options.activeIdentityCount > 0) {
+  if (activeCount != null) {
     const feasibility = estimateFeasibleSessions(
       totalAllocatedSessions,
-      options.activeIdentityCount,
+      activeCount,
       options.trafficModel.campaignDurationDays,
       options.maxSessionsPerIdentityPerDay ?? 1,
       options.repeatIdentityMinGapDays ?? 2,
@@ -166,14 +167,18 @@ export function calculateCampaignIntensity(
     feasibleSessions = feasibility.feasibleSessions;
   }
 
+  const identityDeficit =
+    activeCount != null ? Math.max(0, suggestedIdentities - activeCount) : null;
+
   return {
     queries,
     totalBaselineClicks: Math.round(totalBaselineClicks * 100) / 100,
     totalTreatmentSessions,
     totalAllocatedSessions,
     suggestedIdentities,
+    activeIdentityCount: activeCount,
+    identityDeficit,
     feasibleSessions,
-    activeIdentityCount: options.activeIdentityCount ?? null,
     treatmentMultiplier: multiplier,
   };
 }

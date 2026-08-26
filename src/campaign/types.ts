@@ -45,8 +45,9 @@ export interface CampaignIntensityResult {
   totalTreatmentSessions: number;
   totalAllocatedSessions: number;
   suggestedIdentities: number;
-  feasibleSessions: number | null;
   activeIdentityCount: number | null;
+  identityDeficit: number | null;
+  feasibleSessions: number | null;
   treatmentMultiplier: number;
 }
 

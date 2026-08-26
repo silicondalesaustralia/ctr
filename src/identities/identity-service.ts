@@ -10,6 +10,99 @@ export interface CreateIdentitiesOptions {
   desktopPercent?: number;
 }
 
+function externalIdForIndex(index: number): string {
+  return `au_${String(index).padStart(3, "0")}`;
+}
+
+export function parseExternalIdNumber(externalId: string): number | null {
+  const match = /^au_(\d+)$/.exec(externalId);
+  if (!match) return null;
+  return Number.parseInt(match[1]!, 10);
+}
+
+export async function getMaxExternalIdNumber(): Promise<number> {
+  const identities = await prisma.identity.findMany({ select: { externalId: true } });
+  let max = 0;
+  for (const { externalId } of identities) {
+    const number = parseExternalIdNumber(externalId);
+    if (number != null) {
+      max = Math.max(max, number);
+    }
+  }
+  return max;
+}
+
+export async function countActiveIdentities(): Promise<number> {
+  return prisma.identity.count({ where: { active: true } });
+}
+
+async function createIdentityBatch(
+  startIndex: number,
+  count: number,
+  desktopPercent: number,
+): Promise<Identity[]> {
+  const browserProvider = createBrowserProvider();
+  const env = getEnv();
+  const provider =
+    env.BROWSER_PROFILE_PROVIDER === "gologin"
+      ? ProfileProvider.gologin
+      : ProfileProvider.mock;
+
+  const desktopCount = Math.round((count * desktopPercent) / 100);
+  const created: Identity[] = [];
+
+  for (let offset = 0; offset < count; offset += 1) {
+    const index = startIndex + offset;
+    const externalId = externalIdForIndex(index);
+    const regionConfig = pickWeightedRegion(offset, count);
+    const deviceClass = offset < desktopCount ? DeviceClass.desktop : DeviceClass.mobile;
+    const osFamily =
+      deviceClass === DeviceClass.mobile
+        ? "android"
+        : offset % 2 === 0
+          ? "windows"
+          : "mac";
+
+    const profile = await browserProvider.createProfile({
+      name: externalId,
+      deviceClass,
+      osFamily,
+      locale: "en-AU",
+      timezone: regionConfig.timezone,
+      region: regionConfig.region,
+      city: regionConfig.city,
+    });
+
+    if (provider === ProfileProvider.mock) {
+      getMockBrowserProvider().registerExistingProfile(profile);
+    }
+
+    const persona = assignPersona(deviceClass, externalId);
+
+    const identity = await prisma.identity.create({
+      data: {
+        externalId,
+        externalProfileId: profile.profileId,
+        profileProvider: provider,
+        deviceClass,
+        osFamily,
+        locale: "en-AU",
+        timezone: regionConfig.timezone,
+        country: "AU",
+        region: regionConfig.region,
+        city: regionConfig.city,
+        active: true,
+        personaId: persona.id,
+        personaAssignedAt: new Date(),
+      },
+    });
+
+    created.push(identity);
+  }
+
+  return created;
+}
+
 export async function createIdentities(
   options: CreateIdentitiesOptions,
 ): Promise<Identity[]> {
@@ -25,7 +118,7 @@ export async function createIdentities(
   const created: Identity[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const externalId = `au_${String(i + 1).padStart(3, "0")}`;
+    const externalId = externalIdForIndex(i + 1);
     const regionConfig = pickWeightedRegion(i, count);
     const deviceClass = i < desktopCount ? DeviceClass.desktop : DeviceClass.mobile;
     const osFamily =
@@ -88,6 +181,27 @@ export async function createIdentities(
   }
 
   return created;
+}
+
+export async function createAdditionalIdentities(
+  options: CreateIdentitiesOptions,
+): Promise<{ created: Identity[]; fromExternalId: string; toExternalId: string }> {
+  const { count, desktopPercent = 65 } = options;
+  if (count <= 0) {
+    throw new Error("count must be positive");
+  }
+  if (count > 50) {
+    throw new Error("Cannot create more than 50 identities at once");
+  }
+
+  const maxIndex = await getMaxExternalIdNumber();
+  const created = await createIdentityBatch(maxIndex + 1, count, desktopPercent);
+
+  return {
+    created,
+    fromExternalId: externalIdForIndex(maxIndex + 1),
+    toExternalId: externalIdForIndex(maxIndex + count),
+  };
 }
 
 export interface ValidationIssue {

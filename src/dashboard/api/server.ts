@@ -15,6 +15,7 @@ import {
   listRegionOptions,
 } from "../../experiments/query-generator.js";
 import {
+  createIdentitiesForCampaign,
   getCampaignLog,
   getCurrentCampaign,
   getCampaignKeyword,
@@ -27,6 +28,7 @@ import {
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
+import { createAdditionalIdentities } from "../../identities/identity-service.js";
 import type { Session } from "@prisma/client";
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -424,6 +426,66 @@ export function createApiServer() {
     }
     await processScheduledSession(session.scheduledSessionId);
     res.json({ ok: true });
+  });
+
+  app.post("/campaign/create-identities", async (req, res) => {
+    const body = req.body as Partial<UpsertCampaignInput> & { count?: number };
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      const result = await createIdentitiesForCampaign(body as UpsertCampaignInput, {
+        count: body.count,
+      });
+
+      if (result.createdCount === 0) {
+        res.json({
+          message: "No additional identities needed for this campaign plan",
+          createdCount: 0,
+          intensity: result.intensity,
+        });
+        return;
+      }
+
+      res.json({
+        message: `Created ${result.createdCount} identities (${result.fromExternalId}–${result.toExternalId})`,
+        createdCount: result.createdCount,
+        fromExternalId: result.fromExternalId,
+        toExternalId: result.toExternalId,
+        intensity: result.intensity,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/identities/create", async (req, res) => {
+    const body = req.body as { count?: number; desktopPercent?: number };
+    const count = body.count ?? 1;
+
+    try {
+      const result = await createAdditionalIdentities({
+        count,
+        desktopPercent: body.desktopPercent,
+      });
+      res.json({
+        createdCount: result.created.length,
+        fromExternalId: result.fromExternalId,
+        toExternalId: result.toExternalId,
+        identities: result.created.map((identity) => ({
+          id: identity.id,
+          externalId: identity.externalId,
+          region: identity.region,
+          deviceClass: identity.deviceClass,
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
   });
 
   app.get("/identities", async (_req, res) => {

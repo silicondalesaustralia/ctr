@@ -37,8 +37,9 @@ interface IntensityPreview {
   totalBaselineClicks: number;
   totalAllocatedSessions: number;
   suggestedIdentities: number;
-  feasibleSessions: number | null;
   activeIdentityCount: number | null;
+  identityDeficit: number | null;
+  feasibleSessions: number | null;
   treatmentMultiplier: number;
 }
 
@@ -63,8 +64,9 @@ interface IntensitySummary {
   totalBaselineClicks: number;
   totalAllocatedSessions: number;
   suggestedIdentities: number;
-  feasibleSessions: number | null;
   activeIdentityCount: number | null;
+  identityDeficit: number | null;
+  feasibleSessions: number | null;
   treatmentMultiplier: number;
 }
 
@@ -203,7 +205,15 @@ export default function CampaignDashboard() {
         "/campaign/preview-intensity",
         buildPayload(),
       );
-      setIntensity(result.intensity);
+      setIntensity({
+        totalBaselineClicks: result.intensity.totalBaselineClicks,
+        totalAllocatedSessions: result.intensity.totalAllocatedSessions,
+        suggestedIdentities: result.intensity.suggestedIdentities,
+        activeIdentityCount: result.intensity.activeIdentityCount,
+        identityDeficit: result.intensity.identityDeficit,
+        feasibleSessions: result.intensity.feasibleSessions,
+        treatmentMultiplier: result.intensity.treatmentMultiplier,
+      });
       setQueries(
         result.intensity.queries.map((q) => ({
           text: q.query,
@@ -219,6 +229,35 @@ export default function CampaignDashboard() {
       setMessage("Intensity preview updated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createIdentities() {
+    setBusy("identities");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const result = await apiPost<{
+        message: string;
+        createdCount: number;
+        intensity: IntensityPreview;
+      }>("/campaign/create-identities", buildPayload());
+
+      setIntensity({
+        totalBaselineClicks: result.intensity.totalBaselineClicks,
+        totalAllocatedSessions: result.intensity.totalAllocatedSessions,
+        suggestedIdentities: result.intensity.suggestedIdentities,
+        activeIdentityCount: result.intensity.activeIdentityCount,
+        identityDeficit: result.intensity.identityDeficit,
+        feasibleSessions: result.intensity.feasibleSessions,
+        treatmentMultiplier: result.intensity.treatmentMultiplier,
+      });
+      setMessage(result.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create identities");
     } finally {
       setBusy(null);
     }
@@ -495,11 +534,54 @@ export default function CampaignDashboard() {
             <Stat label="Baseline clicks" value={String(intensity.totalBaselineClicks)} />
             <Stat label="Planned sessions" value={String(intensity.totalAllocatedSessions)} />
             <Stat label="Treatment ×" value={String(intensity.treatmentMultiplier)} />
+            <Stat label="Active identities" value={String(intensity.activeIdentityCount ?? "—")} />
             <Stat label="Suggested identities" value={String(intensity.suggestedIdentities)} />
             {intensity.feasibleSessions != null && (
               <Stat label="Feasible w/ pool" value={String(intensity.feasibleSessions)} />
             )}
           </div>
+
+          {intensity.identityDeficit != null && intensity.identityDeficit > 0 && (
+            <div
+              style={{
+                marginTop: 20,
+                padding: 16,
+                borderRadius: 8,
+                background: "#fffbeb",
+                border: "1px solid #fcd34d",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <strong>Need {intensity.identityDeficit} more identities</strong>
+                <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
+                  You have {intensity.activeIdentityCount} active but this campaign needs{" "}
+                  {intensity.suggestedIdentities}. Only {intensity.feasibleSessions} of{" "}
+                  {intensity.totalAllocatedSessions} sessions can run with the current pool.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void createIdentities()}
+                disabled={Boolean(busy) || running}
+                style={primaryButtonStyle("#2563eb")}
+              >
+                {busy === "identities"
+                  ? "Creating..."
+                  : `Create ${intensity.identityDeficit} identities`}
+              </button>
+            </div>
+          )}
+
+          {intensity.identityDeficit === 0 && intensity.activeIdentityCount != null && (
+            <p style={{ marginTop: 16, color: "#16a34a", fontSize: 14 }}>
+              Identity pool is sufficient for this campaign plan.
+            </p>
+          )}
         </section>
       )}
 
