@@ -2,27 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { verifyLogin } from "../../lib/auth";
+import { clearStoredPassword, isAuthenticated, verifyLogin, verifyStoredPassword } from "../../lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [apiKey, setApiKey] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("ctr_api_key")) {
-      router.replace("/");
-    }
+    void (async () => {
+      if (!isAuthenticated()) {
+        return;
+      }
+
+      const valid = await verifyStoredPassword();
+      if (valid) {
+        router.replace("/");
+      }
+    })();
   }, [router]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
 
     try {
-      await verifyLogin(apiKey.trim());
+      await verifyLogin(password);
       router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -54,17 +63,18 @@ export default function LoginPage() {
       >
         <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>CTR Campaign</h1>
         <p style={{ margin: "0 0 24px", color: "#64748b" }}>
-          Sign in with your access key to manage search campaigns.
+          Sign in to manage search campaigns.
         </p>
 
         <label style={{ display: "block", marginBottom: 20 }}>
-          <span style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Access key</span>
+          <span style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Password</span>
           <input
             type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="Enter access key"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Enter password"
             required
+            autoComplete="current-password"
             style={{
               width: "100%",
               padding: "12px 14px",
@@ -77,6 +87,7 @@ export default function LoginPage() {
         </label>
 
         {error && <p style={{ color: "#b91c1c", marginBottom: 16 }}>{error}</p>}
+        {notice && <p style={{ color: "#16a34a", marginBottom: 16 }}>{notice}</p>}
 
         <button
           type="submit"

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { clearStoredApiKey } from "../../lib/auth";
+import { clearStoredPassword } from "../../lib/auth";
 import { apiGet } from "../../lib/api";
 
 const nav = [
@@ -30,7 +30,7 @@ export default function AppLayout({
   }, [pathname]);
 
   function logout() {
-    clearStoredApiKey();
+    clearStoredPassword();
     router.replace("/login");
   }
 

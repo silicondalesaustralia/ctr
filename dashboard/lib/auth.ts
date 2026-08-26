@@ -1,25 +1,42 @@
-const AUTH_KEY = "ctr_api_key";
+const AUTH_KEY = "ctr_session";
 
 export function isAuthenticated(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
-  return Boolean(sessionStorage.getItem(AUTH_KEY));
+  return Boolean(sessionStorage.getItem(AUTH_KEY) ?? sessionStorage.getItem("ctr_api_key"));
 }
 
-export function getStoredApiKey(): string | null {
+export function getStoredPassword(): string | null {
   if (typeof window === "undefined") {
     return null;
   }
-  return sessionStorage.getItem(AUTH_KEY);
+  return sessionStorage.getItem(AUTH_KEY) ?? sessionStorage.getItem("ctr_api_key");
 }
 
-export function setStoredApiKey(apiKey: string): void {
-  sessionStorage.setItem(AUTH_KEY, apiKey);
+export function setStoredPassword(password: string): void {
+  sessionStorage.setItem(AUTH_KEY, password);
+  sessionStorage.removeItem("ctr_api_key");
 }
 
-export function clearStoredApiKey(): void {
+export function clearStoredPassword(): void {
   sessionStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem("ctr_api_key");
+}
+
+/** @deprecated use getStoredPassword */
+export function getStoredApiKey(): string | null {
+  return getStoredPassword();
+}
+
+/** @deprecated use setStoredPassword */
+export function setStoredApiKey(password: string): void {
+  setStoredPassword(password);
+}
+
+/** @deprecated use clearStoredPassword */
+export function clearStoredApiKey(): void {
+  clearStoredPassword();
 }
 
 export function resolveApiUrl(): string {
@@ -30,17 +47,57 @@ export function resolveApiUrl(): string {
   );
 }
 
-export async function verifyLogin(apiKey: string): Promise<void> {
-  const response = await fetch(`${resolveApiUrl()}/auth/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apiKey }),
-  });
+export async function verifyLogin(password: string): Promise<void> {
+  const trimmed = password.trim();
+  if (!trimmed) {
+    throw new Error("Password is required");
+  }
+
+  const apiUrl = resolveApiUrl();
+  let response: Response;
+
+  try {
+    response = await fetch(`${apiUrl}/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: trimmed }),
+    });
+  } catch {
+    throw new Error(
+      `Cannot reach API at ${apiUrl}. Start it with: npm run api`,
+    );
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? "Invalid access key");
+    const detail = payload?.error ?? "Incorrect password";
+    throw new Error(detail);
   }
 
-  setStoredApiKey(apiKey);
+  setStoredPassword(trimmed);
+}
+
+export async function verifyStoredPassword(): Promise<boolean> {
+  const stored = getStoredPassword()?.trim();
+  if (!stored) {
+    return false;
+  }
+
+  const apiUrl = resolveApiUrl();
+
+  try {
+    const response = await fetch(`${apiUrl}/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: stored }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** @deprecated use verifyStoredPassword */
+export async function verifyStoredApiKey(): Promise<boolean> {
+  return verifyStoredPassword();
 }

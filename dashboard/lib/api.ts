@@ -1,4 +1,4 @@
-import { getStoredApiKey } from "./auth";
+import { getStoredPassword } from "./auth";
 
 function resolveApiUrl(): string {
   return (
@@ -9,16 +9,17 @@ function resolveApiUrl(): string {
 }
 
 function resolveApiKey(): string {
-  const stored = getStoredApiKey();
+  const stored = getStoredPassword()?.trim();
   if (stored) {
     return stored;
   }
 
   return (
+    process.env.DASHBOARD_PASSWORD ??
     process.env.API_KEY ??
     process.env.NEXT_PUBLIC_API_KEY ??
     "dev-admin-key"
-  );
+  ).trim();
 }
 
 export function getApiConfig() {

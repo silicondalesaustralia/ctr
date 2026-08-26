@@ -99,7 +99,14 @@ const envSchema = z.object({
   GSC_CLIENT_SECRET: z.string().optional(),
   GSC_REFRESH_TOKEN: z.string().optional(),
   GA4_PROPERTY_ID: z.string().optional(),
-  ADMIN_API_KEY: z.string().default("dev-admin-key"),
+  ADMIN_API_KEY: z
+    .string()
+    .default("dev-admin-key")
+    .transform((value) => value.trim()),
+  DASHBOARD_PASSWORD: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined),
   API_PORT: z.string().optional().transform((v) => Number(v ?? "3001")),
   RUN_INTEGRATION: z
     .string()
@@ -120,6 +127,19 @@ export function getEnv(): Env {
     cachedEnv = envSchema.parse(prepared);
   }
   return cachedEnv;
+}
+
+/** Password for dashboard login. Falls back to ADMIN_API_KEY for API/script auth. */
+export function getDashboardPassword(): string {
+  const env = getEnv();
+  return env.DASHBOARD_PASSWORD ?? env.ADMIN_API_KEY;
+}
+
+export function isValidDashboardPassword(candidate: string | undefined): boolean {
+  if (!candidate?.trim()) {
+    return false;
+  }
+  return candidate.trim() === getDashboardPassword();
 }
 
 export function isDryRun(): boolean {

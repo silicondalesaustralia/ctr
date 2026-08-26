@@ -1,6 +1,6 @@
 import cors from "cors";
 import express, { type Request, type Response, type NextFunction } from "express";
-import { getEnv, isRunnerEnabled } from "../../config/env.js";
+import { getEnv, isRunnerEnabled, isValidDashboardPassword } from "../../config/env.js";
 import { prisma } from "../../db/client.js";
 import { generateExperimentReport, analyseExperiment } from "../../analytics/report.js";
 import { importGscFile } from "../../analytics/gsc.js";
@@ -32,12 +32,12 @@ import { createAdditionalIdentities } from "../../identities/identity-service.js
 import type { Session } from "@prisma/client";
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const apiKey = req.header("x-api-key");
-  if (apiKey !== getEnv().ADMIN_API_KEY) {
-    res.status(401).json({ error: "Unauthorized" });
+  const credential = req.header("x-api-key")?.trim();
+  if (isValidDashboardPassword(credential)) {
+    next();
     return;
   }
-  next();
+  res.status(401).json({ error: "Unauthorized" });
 }
 
 async function isRunnerEnabledSetting(): Promise<boolean> {
@@ -55,12 +55,13 @@ export function createApiServer() {
   });
 
   app.post("/auth/verify", (req, res) => {
-    const apiKey = req.body?.apiKey as string | undefined;
-    if (apiKey && apiKey === getEnv().ADMIN_API_KEY) {
+    const body = req.body as { password?: string; apiKey?: string };
+    const credential = (body.password ?? body.apiKey)?.trim();
+    if (isValidDashboardPassword(credential)) {
       res.json({ ok: true });
       return;
     }
-    res.status(401).json({ error: "Invalid API key" });
+    res.status(401).json({ error: "Incorrect password" });
   });
 
   app.use(authMiddleware);
