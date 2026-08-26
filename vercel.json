@@ -1,7 +1,18 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "installCommand": "npm install --prefix dashboard",
-  "buildCommand": "npm run build --prefix dashboard",
-  "outputDirectory": "dashboard/.next"
+  "version": 2,
+  "builds": [
+    {
+      "src": "dashboard/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "dashboard/$1"
+    }
+  ]
 }
