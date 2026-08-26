@@ -15,6 +15,7 @@ COPY fixtures ./fixtures
 COPY experiments ./experiments
 
 ENV NODE_ENV=production
+EXPOSE 8080
 
 # Default: run API. Override CMD for worker, e.g. npm run worker
 CMD ["npm", "run", "api"]

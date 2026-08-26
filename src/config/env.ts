@@ -35,8 +35,10 @@ function prepareEnv(): NodeJS.ProcessEnv {
     env.DATABASE_URL = databaseUrl;
   }
 
-  if (!env.API_PORT && env.PORT) {
+  if (env.PORT) {
     env.API_PORT = env.PORT;
+  } else if (!env.API_PORT) {
+    env.API_PORT = "3001";
   }
 
   return env;

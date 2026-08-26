@@ -246,8 +246,8 @@ export function createApiServer() {
 export function startApiServer(): void {
   const app = createApiServer();
   const port = getEnv().API_PORT;
-  app.listen(port, () => {
-    console.log(`Admin API listening on http://localhost:${port}`);
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`Admin API listening on http://0.0.0.0:${port}`);
   });
 }
 
