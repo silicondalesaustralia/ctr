@@ -1,14 +1,38 @@
 import { z } from "zod";
 
+function buildDatabaseUrl(env: NodeJS.ProcessEnv): string | undefined {
+  if (env.DATABASE_URL?.trim()) {
+    return env.DATABASE_URL.trim();
+  }
+
+  const alias =
+    env.POSTGRES_PRISMA_URL ??
+    env.POSTGRES_URL ??
+    env.DATABASE_URL_UNPOOLED ??
+    env.POSTGRES_URL_NON_POOLING;
+
+  if (alias?.trim()) {
+    return alias.trim();
+  }
+
+  const host = env.PGHOST ?? env.POSTGRES_HOST;
+  const user = env.PGUSER ?? env.POSTGRES_USER;
+  const password = env.PGPASSWORD ?? env.POSTGRES_PASSWORD;
+  const database = env.PGDATABASE ?? env.POSTGRES_DATABASE;
+
+  if (host && user && password && database) {
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}/${database}?sslmode=require`;
+  }
+
+  return undefined;
+}
+
 function prepareEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
+  const databaseUrl = buildDatabaseUrl(env);
 
-  if (!env.DATABASE_URL) {
-    env.DATABASE_URL =
-      env.POSTGRES_PRISMA_URL ??
-      env.POSTGRES_URL ??
-      env.DATABASE_URL_UNPOOLED ??
-      env.POSTGRES_URL_NON_POOLING;
+  if (databaseUrl) {
+    env.DATABASE_URL = databaseUrl;
   }
 
   if (!env.API_PORT && env.PORT) {
@@ -16,6 +40,30 @@ function prepareEnv(): NodeJS.ProcessEnv {
   }
 
   return env;
+}
+
+function reportMissingDatabaseEnv(): void {
+  const hints = [
+    "DATABASE_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL",
+    "PGHOST + PGUSER + PGPASSWORD + PGDATABASE",
+  ];
+  const present = Object.keys(process.env).filter(
+    (key) =>
+      key.includes("DATABASE") ||
+      key.includes("POSTGRES") ||
+      key.startsWith("PG"),
+  );
+
+  console.error("FATAL: No database connection string found.");
+  console.error(`Set one of: ${hints.join(", ")}`);
+  console.error(
+    `Railway: open your API service → Variables → Raw Editor → add DATABASE_URL=your-neon-pooled-url`,
+  );
+  console.error(
+    `Env keys present (names only): ${present.length ? present.join(", ") : "(none)"}`,
+  );
 }
 
 const envSchema = z.object({
@@ -55,7 +103,11 @@ let cachedEnv: Env | null = null;
 
 export function getEnv(): Env {
   if (!cachedEnv) {
-    cachedEnv = envSchema.parse(prepareEnv());
+    const prepared = prepareEnv();
+    if (!prepared.DATABASE_URL) {
+      reportMissingDatabaseEnv();
+    }
+    cachedEnv = envSchema.parse(prepared);
   }
   return cachedEnv;
 }
