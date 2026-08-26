@@ -84,6 +84,17 @@ enum DeviceClass {
   mobile
 }
 
+enum TreatmentIntensity {
+  low
+  normal
+  strong
+}
+
+enum CtrSource {
+  default_curve
+  gsc_site_curve
+}
+
 model Experiment {
   id                   String           @id @default(cuid())
   name                 String
@@ -107,6 +118,16 @@ model Experiment {
   repeatIdentityMinGapDays   Int      @default(2) @map("repeat_identity_min_gap_days")
   minMinutesBetweenGlobalSessions Int @default(5) @map("min_minutes_between_global_sessions")
   focusRegion          String?          @map("focus_region")
+  country              String           @default("AU")
+  campaignDurationDays Int              @default(14) @map("campaign_duration_days")
+  treatmentIntensity   TreatmentIntensity @default(normal) @map("treatment_intensity")
+  adaptivePacing       Boolean          @default(true) @map("adaptive_pacing")
+  recalculateEveryDays Int              @default(3) @map("recalculate_every_days")
+  maxShareOfSearchDemand Float          @default(0.02) @map("max_share_of_search_demand")
+  maxShareOfGscImpressions Float        @default(0.05) @map("max_share_of_gsc_impressions")
+  desktopPercent       Int              @default(65) @map("desktop_percent")
+  ctrSource            CtrSource        @default(default_curve) @map("ctr_source")
+  lastPacingRecalcAt   DateTime?        @map("last_pacing_recalc_at")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
@@ -126,6 +147,11 @@ model ExperimentQuery {
   queryType    QueryType @map("query_type")
   weight       Float
   active       Boolean   @default(true)
+  monthlySearchVolume Int?    @map("monthly_search_volume")
+  startingPosition    Float?  @map("starting_position")
+  gscImpressions28d   Int?    @map("gsc_impressions_28d")
+  gscClicks28d        Int?    @map("gsc_clicks_28d")
+  allocatedSessions   Int?    @map("allocated_sessions")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   experiment        Experiment         @relation(fields: [experimentId], references: [id], onDelete: Cascade)

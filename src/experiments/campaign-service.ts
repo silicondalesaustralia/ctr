@@ -1,6 +1,16 @@
-import type { Experiment, ExperimentQuery, Session } from "@prisma/client";
+import type { CtrSource, Experiment, ExperimentQuery, Session, TreatmentIntensity } from "@prisma/client";
 import { prisma } from "../db/client.js";
-import { generateMonthlySchedule } from "../scheduler/schedule-generator.js";
+import {
+  buildSiteCurveFromExperiment,
+  fetchGscMetricsForExperiment,
+  matchGscMetrics,
+} from "../campaign/gsc-demand.js";
+import {
+  calculateCampaignIntensity,
+  normalizeQueryWeights,
+} from "../campaign/intensity-calculator.js";
+import type { CampaignIntensityResult } from "../campaign/types.js";
+import { generateCampaignSchedule } from "../scheduler/schedule-generator.js";
 import {
   buildExperimentName,
   extractTargetDomain,
@@ -10,6 +20,28 @@ import {
 import { createExperimentFromInput, type CreateExperimentInput } from "./experiment-service.js";
 
 export type CampaignWithQueries = Experiment & { queries: ExperimentQuery[] };
+
+export interface CampaignQueryInput {
+  text: string;
+  type?: string;
+  weight?: number;
+  monthlySearchVolume?: number | null;
+  startingPosition?: number | null;
+  gscImpressions28d?: number | null;
+  gscClicks28d?: number | null;
+}
+
+export interface UpsertCampaignInput extends CreateExperimentInput {
+  campaignDurationDays?: number;
+  treatmentIntensity?: TreatmentIntensity;
+  adaptivePacing?: boolean;
+  recalculateEveryDays?: number;
+  maxShareOfSearchDemand?: number;
+  maxShareOfGscImpressions?: number;
+  desktopPercent?: number;
+  ctrSource?: CtrSource;
+  queries?: CampaignQueryInput[];
+}
 
 export async function getCurrentCampaign(): Promise<CampaignWithQueries | null> {
   const active = await prisma.experiment.findFirst({
@@ -32,19 +64,161 @@ export function getCampaignKeyword(campaign: CampaignWithQueries): string {
   return core?.query ?? campaign.queries[0]?.query ?? "";
 }
 
-export async function upsertCampaign(
-  input: CreateExperimentInput,
-): Promise<{ experiment: Experiment; queries: ExperimentQuery[] }> {
-  const current = await getCurrentCampaign();
+async function enrichQueriesWithGsc(
+  experimentId: string | null,
+  targetUrl: string,
+  queries: CampaignQueryInput[],
+): Promise<CampaignQueryInput[]> {
+  if (!experimentId) return queries;
 
-  if (!current) {
-    return createExperimentFromInput({ ...input, activate: false });
+  const gscMap = await fetchGscMetricsForExperiment(experimentId, targetUrl);
+  if (gscMap.size === 0) return queries;
+
+  return queries.map((query) => {
+    const gsc = matchGscMetrics(query.text, gscMap);
+    if (!gsc) return query;
+
+    return {
+      ...query,
+      startingPosition: query.startingPosition ?? gsc.position,
+      gscImpressions28d: query.gscImpressions28d ?? gsc.impressions28d,
+      gscClicks28d: query.gscClicks28d ?? gsc.clicks28d,
+    };
+  });
+}
+
+export async function previewCampaignIntensity(
+  input: UpsertCampaignInput,
+  experimentId?: string | null,
+): Promise<CampaignIntensityResult> {
+  const keyword = input.keyword.trim();
+  const region = input.region.trim().toUpperCase();
+
+  let queries: CampaignQueryInput[] =
+    input.queries ??
+    generateQueryCluster(keyword, region).map((q) => ({
+      text: q.text,
+      type: q.type,
+      weight: q.weight,
+    }));
+
+  queries = await enrichQueriesWithGsc(experimentId ?? null, input.targetUrl.trim(), queries);
+
+  const identityCount = await prisma.identity.count({ where: { active: true } });
+
+  const siteCurveData =
+    input.ctrSource === "gsc_site_curve" && experimentId
+      ? await buildSiteCurveFromExperiment(experimentId)
+      : null;
+
+  return calculateCampaignIntensity({
+    queries: queries.map((q) => ({
+      text: q.text,
+      type: q.type ?? "core",
+      weight: q.weight ?? 0,
+      monthlySearchVolume: q.monthlySearchVolume,
+      startingPosition: q.startingPosition,
+      gscImpressions28d: q.gscImpressions28d,
+      gscClicks28d: q.gscClicks28d,
+    })),
+    trafficModel: {
+      campaignDurationDays: input.campaignDurationDays ?? 14,
+      treatmentIntensity: input.treatmentIntensity ?? "normal",
+      maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? 0.02,
+      maxShareOfGscImpressions: input.maxShareOfGscImpressions ?? 0.05,
+      ctrSource: input.ctrSource ?? "default_curve",
+      desktopPercent: input.desktopPercent ?? 65,
+    },
+    siteCurveData,
+    activeIdentityCount: identityCount,
+    maxSessionsPerIdentityPerDay: 1,
+    repeatIdentityMinGapDays: 2,
+  });
+}
+
+async function persistQueries(
+  experimentId: string,
+  queries: CampaignQueryInput[],
+  intensity: CampaignIntensityResult,
+): Promise<ExperimentQuery[]> {
+  await prisma.experimentQuery.deleteMany({ where: { experimentId } });
+
+  const normalized = normalizeQueryWeights(intensity.queries);
+  const created: ExperimentQuery[] = [];
+
+  for (let i = 0; i < queries.length; i += 1) {
+    const input = queries[i]!;
+    const calc = normalized[i]!;
+
+    const row = await prisma.experimentQuery.create({
+      data: {
+        experimentId,
+        query: input.text,
+        queryType: (input.type ?? "core") as ExperimentQuery["queryType"],
+        weight: calc.weight,
+        active: true,
+        monthlySearchVolume: input.monthlySearchVolume ?? calc.monthlySearchVolume,
+        startingPosition: input.startingPosition ?? calc.startingPosition,
+        gscImpressions28d: input.gscImpressions28d ?? calc.gscImpressions28d,
+        gscClicks28d: input.gscClicks28d ?? calc.gscClicks28d,
+        allocatedSessions: calc.allocatedSessions,
+      },
+    });
+    created.push(row);
   }
 
+  return created;
+}
+
+export async function upsertCampaign(
+  input: UpsertCampaignInput,
+): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
+  const current = await getCurrentCampaign();
   const keyword = input.keyword.trim();
   const targetUrl = input.targetUrl.trim();
   const region = input.region.trim().toUpperCase();
-  const generatedQueries = generateQueryCluster(keyword, region);
+
+  let queries: CampaignQueryInput[] =
+    input.queries ??
+    generateQueryCluster(keyword, region).map((q) => ({
+      text: q.text,
+      type: q.type,
+      weight: q.weight,
+    }));
+
+  queries = await enrichQueriesWithGsc(current?.id ?? null, targetUrl, queries);
+
+  const intensity = await previewCampaignIntensity(input, current?.id);
+
+  if (!current) {
+    const created = await createExperimentFromInput({
+      ...input,
+      activate: false,
+      sessionsPerMonth: intensity.totalAllocatedSessions,
+    });
+
+    await prisma.experiment.update({
+      where: { id: created.experiment.id },
+      data: {
+        campaignDurationDays: input.campaignDurationDays ?? 14,
+        treatmentIntensity: input.treatmentIntensity ?? "normal",
+        adaptivePacing: input.adaptivePacing ?? true,
+        recalculateEveryDays: input.recalculateEveryDays ?? 3,
+        maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? 0.02,
+        maxShareOfGscImpressions: input.maxShareOfGscImpressions ?? 0.05,
+        desktopPercent: input.desktopPercent ?? 65,
+        ctrSource: input.ctrSource ?? "default_curve",
+        monthlySessionTarget: intensity.totalAllocatedSessions,
+      },
+    });
+
+    const persistedQueries = await persistQueries(created.experiment.id, queries, intensity);
+    const experiment = await prisma.experiment.findUniqueOrThrow({
+      where: { id: created.experiment.id },
+    });
+
+    return { experiment, queries: persistedQueries, intensity };
+  }
 
   const experiment = await prisma.experiment.update({
     where: { id: current.id },
@@ -54,34 +228,36 @@ export async function upsertCampaign(
       targetDomain: extractTargetDomain(targetUrl),
       focusRegion: region === "ALL" ? null : region,
       scheduleTimezone: resolveRegionTimezone(region),
-      monthlySessionTarget: input.sessionsPerMonth ?? current.monthlySessionTarget,
+      monthlySessionTarget: intensity.totalAllocatedSessions,
+      campaignDurationDays: input.campaignDurationDays ?? current.campaignDurationDays,
+      treatmentIntensity: input.treatmentIntensity ?? current.treatmentIntensity,
+      adaptivePacing: input.adaptivePacing ?? current.adaptivePacing,
+      recalculateEveryDays: input.recalculateEveryDays ?? current.recalculateEveryDays,
+      maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? current.maxShareOfSearchDemand,
+      maxShareOfGscImpressions:
+        input.maxShareOfGscImpressions ?? current.maxShareOfGscImpressions,
+      desktopPercent: input.desktopPercent ?? current.desktopPercent,
+      ctrSource: input.ctrSource ?? current.ctrSource,
     },
   });
 
-  await prisma.experimentQuery.deleteMany({ where: { experimentId: experiment.id } });
-
-  const queries: ExperimentQuery[] = [];
-  for (const query of generatedQueries) {
-    const created = await prisma.experimentQuery.create({
-      data: {
-        experimentId: experiment.id,
-        query: query.text,
-        queryType: query.type,
-        weight: query.weight,
-        active: true,
-      },
-    });
-    queries.push(created);
-  }
-
-  return { experiment, queries };
+  const persistedQueries = await persistQueries(experiment.id, queries, intensity);
+  return { experiment, queries: persistedQueries, intensity };
 }
 
 export async function runCampaign(experimentId: string): Promise<CampaignWithQueries> {
-  const experiment = await prisma.experiment.update({
+  const existing = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + existing.campaignDurationDays);
+
+  await prisma.experiment.update({
     where: { id: experimentId },
-    data: { status: "active" },
-    include: { queries: { where: { active: true } } },
+    data: {
+      status: "active",
+      startDate,
+      endDate,
+    },
   });
 
   await prisma.appSetting.upsert({
@@ -97,14 +273,25 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
 
   if (scheduledCount === 0) {
     const identities = await prisma.identity.findMany({ where: { active: true } });
-    await generateMonthlySchedule({
-      experiment,
-      queries: experiment.queries,
+    const fresh = await prisma.experiment.findUniqueOrThrow({
+      where: { id: experimentId },
+      include: { queries: { where: { active: true } } },
+    });
+
+    await generateCampaignSchedule({
+      experiment: fresh,
+      queries: fresh.queries,
       identities,
+      totalSessions: fresh.monthlySessionTarget,
+      startDate,
+      durationDays: fresh.campaignDurationDays,
     });
   }
 
-  return experiment;
+  return prisma.experiment.findUniqueOrThrow({
+    where: { id: experimentId },
+    include: { queries: { where: { active: true } } },
+  });
 }
 
 export async function stopCampaign(experimentId: string): Promise<CampaignWithQueries> {
@@ -142,7 +329,10 @@ export async function getCampaignLog(experimentId: string, limit = 100) {
   });
 }
 
-export function serializeCampaign(campaign: CampaignWithQueries) {
+export function serializeCampaign(
+  campaign: CampaignWithQueries,
+  intensity?: CampaignIntensityResult | null,
+) {
   return {
     id: campaign.id,
     name: campaign.name,
@@ -152,12 +342,37 @@ export function serializeCampaign(campaign: CampaignWithQueries) {
     targetUrl: campaign.targetUrl,
     targetDomain: campaign.targetDomain,
     region: campaign.focusRegion ?? "ALL",
+    country: campaign.country,
     monthlySessionTarget: campaign.monthlySessionTarget,
+    campaignDurationDays: campaign.campaignDurationDays,
+    treatmentIntensity: campaign.treatmentIntensity,
+    adaptivePacing: campaign.adaptivePacing,
+    recalculateEveryDays: campaign.recalculateEveryDays,
+    maxShareOfSearchDemand: campaign.maxShareOfSearchDemand,
+    maxShareOfGscImpressions: campaign.maxShareOfGscImpressions,
+    desktopPercent: campaign.desktopPercent,
+    ctrSource: campaign.ctrSource,
+    lastPacingRecalcAt: campaign.lastPacingRecalcAt?.toISOString() ?? null,
     queries: campaign.queries.map((query) => ({
       text: query.query,
       type: query.queryType,
       weight: query.weight,
+      monthlySearchVolume: query.monthlySearchVolume,
+      startingPosition: query.startingPosition,
+      gscImpressions28d: query.gscImpressions28d,
+      gscClicks28d: query.gscClicks28d,
+      allocatedSessions: query.allocatedSessions,
     })),
+    intensity: intensity
+      ? {
+          totalBaselineClicks: intensity.totalBaselineClicks,
+          totalAllocatedSessions: intensity.totalAllocatedSessions,
+          suggestedIdentities: intensity.suggestedIdentities,
+          feasibleSessions: intensity.feasibleSessions,
+          activeIdentityCount: intensity.activeIdentityCount,
+          treatmentMultiplier: intensity.treatmentMultiplier,
+        }
+      : null,
   };
 }
 

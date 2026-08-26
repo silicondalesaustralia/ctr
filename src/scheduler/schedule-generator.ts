@@ -53,13 +53,76 @@ export async function generateMonthlySchedule(
 ): Promise<number> {
   const month = input.month ?? new Date();
   const monthStart = startOfMonth(month);
-  const monthEnd = endOfMonth(month);
   const days = daysInMonth(month);
-  const dailyTotals = distributeMonthlyTotal(input.experiment.monthlySessionTarget, days);
-  const groups: TreatmentGroup[] = input.treatmentGroups ?? ["search", "direct"];
+  return generateCampaignSchedule({
+    ...input,
+    totalSessions: input.experiment.monthlySessionTarget,
+    startDate: monthStart,
+    durationDays: days,
+    endDate: endOfMonth(month),
+  });
+}
+
+function shuffleArray<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+  }
+  return copy;
+}
+
+function buildQuerySlots(queries: ExperimentQuery[], totalSessions?: number): ExperimentQuery[] {
+  const slots: ExperimentQuery[] = [];
+  const hasAllocation = queries.some((q) => (q.allocatedSessions ?? 0) > 0);
+
+  if (hasAllocation) {
+    for (const query of queries) {
+      const count = query.allocatedSessions ?? 0;
+      for (let i = 0; i < count; i += 1) {
+        slots.push(query);
+      }
+    }
+  } else {
+    const target = totalSessions ?? 0;
+    for (let i = 0; i < target; i += 1) {
+      slots.push(selectWeightedQuery(queries));
+    }
+  }
+
+  return shuffleArray(slots);
+}
+
+export interface CampaignScheduleInput extends ScheduleGeneratorInput {
+  totalSessions: number;
+  startDate: Date;
+  durationDays?: number;
+  endDate?: Date;
+}
+
+export async function generateCampaignSchedule(
+  input: CampaignScheduleInput,
+): Promise<number> {
+  const durationDays = input.durationDays ?? input.experiment.campaignDurationDays;
+  const startDate = new Date(input.startDate);
+  startDate.setHours(0, 0, 0, 0);
+  const endDate =
+    input.endDate ??
+    new Date(startDate.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+  endDate.setHours(23, 59, 59, 999);
+
+  const dailyTotals = distributeMonthlyTotal(input.totalSessions, durationDays);
+  const groups: TreatmentGroup[] = input.treatmentGroups ?? ["search"];
   const identities = input.experiment.focusRegion
     ? input.identities.filter((identity) => identity.region === input.experiment.focusRegion)
     : input.identities;
+
+  const desktopIdentities = identities.filter((i) => i.deviceClass === "desktop");
+  const mobileIdentities = identities.filter((i) => i.deviceClass === "mobile");
+
+  const querySlots = buildQuerySlots(input.queries, input.totalSessions);
+  let slotIndex = 0;
+
   const scheduled: Array<{
     experimentId: string;
     identityId: string;
@@ -71,17 +134,29 @@ export async function generateMonthlySchedule(
   let lastGlobalTime: Date | null = null;
   const identityLastScheduled = new Map<string, Date>();
 
-  for (let day = 0; day < days; day += 1) {
-    const dayDate = new Date(monthStart);
+  for (let day = 0; day < durationDays; day += 1) {
+    const dayDate = new Date(startDate);
     dayDate.setDate(dayDate.getDate() + day);
     const countForDay = dailyTotals[day] ?? 0;
 
     for (let i = 0; i < countForDay; i += 1) {
-      const query = selectWeightedQuery(input.queries);
+      if (slotIndex >= querySlots.length) break;
+
+      const query = querySlots[slotIndex]!;
+      slotIndex += 1;
       const group = groups[Math.floor(Math.random() * groups.length)]!;
+      const desktopPercent = input.experiment.desktopPercent ?? 65;
+      const preferDesktop = Math.random() * 100 < desktopPercent;
+
+      const pool =
+        preferDesktop && desktopIdentities.length > 0
+          ? desktopIdentities
+          : mobileIdentities.length > 0
+            ? mobileIdentities
+            : identities;
 
       const eligible = [];
-      for (const identity of identities) {
+      for (const identity of pool.length > 0 ? pool : identities) {
         let scheduledAt = randomTimeInWindow(
           dayDate,
           input.experiment.scheduleStart,
@@ -96,7 +171,7 @@ export async function generateMonthlySchedule(
           }
         }
 
-        if (scheduledAt > monthEnd) continue;
+        if (scheduledAt > endDate) continue;
 
         const lastForIdentity = identityLastScheduled.get(identity.id);
         if (lastForIdentity) {
@@ -138,7 +213,7 @@ export async function generateMonthlySchedule(
   await prisma.scheduledSession.deleteMany({
     where: {
       experimentId: input.experiment.id,
-      scheduledAt: { gte: monthStart, lte: monthEnd },
+      scheduledAt: { gte: startDate, lte: endDate },
       status: "scheduled",
     },
   });

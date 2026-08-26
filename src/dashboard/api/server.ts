@@ -17,12 +17,16 @@ import {
 import {
   getCampaignLog,
   getCurrentCampaign,
+  getCampaignKeyword,
+  previewCampaignIntensity,
   runCampaign,
   serializeCampaign,
   serializeLogEntry,
   stopCampaign,
   upsertCampaign,
+  type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
+import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import type { Session } from "@prisma/client";
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -99,14 +103,45 @@ export function createApiServer() {
       return;
     }
 
+    let intensity = null;
+    try {
+      intensity = await previewCampaignIntensity(
+        {
+          keyword: getCampaignKeyword(campaign),
+          targetUrl: campaign.targetUrl,
+          region: campaign.focusRegion ?? "ALL",
+          campaignDurationDays: campaign.campaignDurationDays,
+          treatmentIntensity: campaign.treatmentIntensity,
+          adaptivePacing: campaign.adaptivePacing,
+          recalculateEveryDays: campaign.recalculateEveryDays,
+          maxShareOfSearchDemand: campaign.maxShareOfSearchDemand,
+          maxShareOfGscImpressions: campaign.maxShareOfGscImpressions,
+          desktopPercent: campaign.desktopPercent,
+          ctrSource: campaign.ctrSource,
+          queries: campaign.queries.map((q) => ({
+            text: q.query,
+            type: q.queryType,
+            weight: q.weight,
+            monthlySearchVolume: q.monthlySearchVolume,
+            startingPosition: q.startingPosition,
+            gscImpressions28d: q.gscImpressions28d,
+            gscClicks28d: q.gscClicks28d,
+          })),
+        },
+        campaign.id,
+      );
+    } catch {
+      intensity = null;
+    }
+
     res.json({
-      campaign: serializeCampaign(campaign),
+      campaign: serializeCampaign(campaign, intensity),
       running: campaign.status === "active" && (await isRunnerEnabledSetting()),
     });
   });
 
   app.put("/campaign", async (req, res) => {
-    const body = req.body as Partial<CreateExperimentInput>;
+    const body = req.body as Partial<UpsertCampaignInput>;
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
@@ -120,15 +155,48 @@ export function createApiServer() {
     }
 
     try {
-      const result = await upsertCampaign({
-        keyword: body.keyword,
-        targetUrl: body.targetUrl,
-        region: body.region,
-        sessionsPerMonth: body.sessionsPerMonth,
-      });
+      const result = await upsertCampaign(body as UpsertCampaignInput);
       res.json({
-        campaign: serializeCampaign({ ...result.experiment, queries: result.queries }),
+        campaign: serializeCampaign({ ...result.experiment, queries: result.queries }, result.intensity),
         running: result.experiment.status === "active",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaign/preview-intensity", async (req, res) => {
+    const body = req.body as Partial<UpsertCampaignInput>;
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      const current = await getCurrentCampaign();
+      const intensity = await previewCampaignIntensity(body as UpsertCampaignInput, current?.id);
+      res.json({ intensity });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaign/recalculate-pacing", async (_req, res) => {
+    const current = await getCurrentCampaign();
+    if (!current) {
+      res.status(400).json({ error: "No campaign to recalculate" });
+      return;
+    }
+
+    try {
+      const result = await recalculateCampaignPacing(current.id, { regenerateSchedule: true });
+      const campaign = await getCurrentCampaign();
+      res.json({
+        intensity: result.intensity,
+        rescheduled: result.updated,
+        campaign: campaign ? serializeCampaign(campaign, result.intensity) : null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

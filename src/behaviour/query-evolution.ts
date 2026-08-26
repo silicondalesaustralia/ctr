@@ -28,6 +28,11 @@ export function resolveInitialQuery(
     weight: 1,
     active: true,
     createdAt: new Date(),
+    monthlySearchVolume: null,
+    startingPosition: null,
+    gscImpressions28d: null,
+    gscClicks28d: null,
+    allocatedSessions: null,
   };
 }
 

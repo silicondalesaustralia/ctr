@@ -1,13 +1,45 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { clearStoredApiKey, isAuthenticated } from "../../lib/auth";
+import Link from "next/link";
 import { apiGet, apiPost, apiPut } from "../../lib/api";
+import AppLayout from "./AppLayout";
 
 interface RegionOption {
   code: string;
   label: string;
+}
+
+interface QueryRow {
+  text: string;
+  type: string;
+  weight: number;
+  monthlySearchVolume: number | null;
+  startingPosition: number | null;
+  gscImpressions28d: number | null;
+  gscClicks28d: number | null;
+  allocatedSessions: number | null;
+}
+
+interface QueryIntensityRow {
+  query: string;
+  type: string;
+  weight: number;
+  monthlySearchVolume: number | null;
+  startingPosition: number | null;
+  gscImpressions28d: number | null;
+  gscClicks28d: number | null;
+  allocatedSessions: number;
+}
+
+interface IntensityPreview {
+  queries: QueryIntensityRow[];
+  totalBaselineClicks: number;
+  totalAllocatedSessions: number;
+  suggestedIdentities: number;
+  feasibleSessions: number | null;
+  activeIdentityCount: number | null;
+  treatmentMultiplier: number;
 }
 
 interface Campaign {
@@ -16,7 +48,24 @@ interface Campaign {
   targetUrl: string;
   region: string;
   status: string;
-  queries: Array<{ text: string; type: string; weight: number }>;
+  campaignDurationDays: number;
+  treatmentIntensity: string;
+  adaptivePacing: boolean;
+  recalculateEveryDays: number;
+  maxShareOfSearchDemand: number;
+  desktopPercent: number;
+  ctrSource: string;
+  queries: QueryRow[];
+  intensity: IntensitySummary | null;
+}
+
+interface IntensitySummary {
+  totalBaselineClicks: number;
+  totalAllocatedSessions: number;
+  suggestedIdentities: number;
+  feasibleSessions: number | null;
+  activeIdentityCount: number | null;
+  treatmentMultiplier: number;
 }
 
 interface LogEntry {
@@ -50,10 +99,18 @@ const inputStyle: React.CSSProperties = {
 };
 
 export default function CampaignDashboard() {
-  const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [region, setRegion] = useState("ALL");
+  const [campaignDurationDays, setCampaignDurationDays] = useState(14);
+  const [treatmentIntensity, setTreatmentIntensity] = useState("normal");
+  const [adaptivePacing, setAdaptivePacing] = useState(true);
+  const [recalculateEveryDays, setRecalculateEveryDays] = useState(3);
+  const [maxShareOfSearchDemand, setMaxShareOfSearchDemand] = useState(0.02);
+  const [desktopPercent, setDesktopPercent] = useState(65);
+  const [ctrSource, setCtrSource] = useState("default_curve");
+  const [queries, setQueries] = useState<QueryRow[]>([]);
+  const [intensity, setIntensity] = useState<IntensitySummary | null>(null);
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [running, setRunning] = useState(false);
   const [campaignStatus, setCampaignStatus] = useState<string>("draft");
@@ -70,10 +127,20 @@ export default function CampaignDashboard() {
     ]);
 
     if (campaignRes.campaign) {
-      setKeyword(campaignRes.campaign.keyword);
-      setTargetUrl(campaignRes.campaign.targetUrl);
-      setRegion(campaignRes.campaign.region);
-      setCampaignStatus(campaignRes.campaign.status);
+      const c = campaignRes.campaign;
+      setKeyword(c.keyword);
+      setTargetUrl(c.targetUrl);
+      setRegion(c.region);
+      setCampaignDurationDays(c.campaignDurationDays);
+      setTreatmentIntensity(c.treatmentIntensity);
+      setAdaptivePacing(c.adaptivePacing);
+      setRecalculateEveryDays(c.recalculateEveryDays);
+      setMaxShareOfSearchDemand(c.maxShareOfSearchDemand);
+      setDesktopPercent(c.desktopPercent);
+      setCtrSource(c.ctrSource);
+      setQueries(c.queries);
+      setIntensity(c.intensity);
+      setCampaignStatus(c.status);
     }
 
     setRunning(campaignRes.running);
@@ -81,11 +148,6 @@ export default function CampaignDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-
     void (async () => {
       try {
         const regionOptions = await apiGet<RegionOption[]>("/regions");
@@ -97,35 +159,84 @@ export default function CampaignDashboard() {
         setLoading(false);
       }
     })();
-  }, [router, loadCampaign]);
+  }, [loadCampaign]);
 
   useEffect(() => {
-    if (!running) {
-      return;
-    }
-
+    if (!running) return;
     const timer = setInterval(() => {
       void apiGet<{ entries: LogEntry[] }>("/campaign/log")
         .then((result) => setLog(result.entries))
         .catch(() => undefined);
     }, 10000);
-
     return () => clearInterval(timer);
   }, [running]);
+
+  function buildPayload() {
+    return {
+      keyword,
+      targetUrl,
+      region,
+      campaignDurationDays,
+      treatmentIntensity,
+      adaptivePacing,
+      recalculateEveryDays,
+      maxShareOfSearchDemand,
+      desktopPercent,
+      ctrSource,
+      queries: queries.map((q) => ({
+        text: q.text,
+        type: q.type,
+        weight: q.weight,
+        monthlySearchVolume: q.monthlySearchVolume,
+        startingPosition: q.startingPosition,
+        gscImpressions28d: q.gscImpressions28d,
+        gscClicks28d: q.gscClicks28d,
+      })),
+    };
+  }
+
+  async function previewIntensity() {
+    setBusy("preview");
+    setError(null);
+    try {
+      const result = await apiPost<{ intensity: IntensityPreview }>(
+        "/campaign/preview-intensity",
+        buildPayload(),
+      );
+      setIntensity(result.intensity);
+      setQueries(
+        result.intensity.queries.map((q) => ({
+          text: q.query,
+          type: q.type,
+          weight: q.weight,
+          monthlySearchVolume: q.monthlySearchVolume,
+          startingPosition: q.startingPosition,
+          gscImpressions28d: q.gscImpressions28d,
+          gscClicks28d: q.gscClicks28d,
+          allocatedSessions: q.allocatedSessions,
+        })),
+      );
+      setMessage("Intensity preview updated");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function saveCampaign() {
     setBusy("save");
     setError(null);
     setMessage(null);
-
     try {
-      const result = await apiPut<{ campaign: Campaign; running: boolean }>("/campaign", {
-        keyword,
-        targetUrl,
-        region,
-      });
+      const result = await apiPut<{ campaign: Campaign; running: boolean }>(
+        "/campaign",
+        buildPayload(),
+      );
       setCampaignStatus(result.campaign.status);
       setRunning(result.running);
+      setQueries(result.campaign.queries);
+      setIntensity(result.campaign.intensity);
       setMessage("Campaign saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -138,13 +249,12 @@ export default function CampaignDashboard() {
     setBusy("run");
     setError(null);
     setMessage(null);
-
     try {
-      await apiPut("/campaign", { keyword, targetUrl, region });
+      await apiPut("/campaign", buildPayload());
       const result = await apiPost<{ campaign: Campaign; running: boolean }>("/campaign/run");
       setRunning(result.running);
       setCampaignStatus(result.campaign.status);
-      setMessage("Campaign running — sessions will execute on schedule");
+      setMessage("Campaign running — sessions scheduled from intensity model");
       await loadCampaign();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start campaign");
@@ -157,115 +267,75 @@ export default function CampaignDashboard() {
     setBusy("stop");
     setError(null);
     setMessage(null);
-
     try {
       const result = await apiPost<{ campaign: Campaign; running: boolean }>("/campaign/stop");
       setRunning(result.running);
       setCampaignStatus(result.campaign.status);
       setMessage("Campaign stopped");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to stop campaign");
+      setError(err instanceof Error ? err.message : "Failed to stop");
     } finally {
       setBusy(null);
     }
   }
 
-  function logout() {
-    clearStoredApiKey();
-    router.replace("/login");
+  function updateQuery(index: number, field: keyof QueryRow, value: string) {
+    setQueries((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        if (field === "text" || field === "type") {
+          return { ...row, [field]: value };
+        }
+        const num = value === "" ? null : Number(value);
+        return { ...row, [field]: num };
+      }),
+    );
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        Loading...
-      </div>
+      <AppLayout>
+        <p>Loading...</p>
+      </AppLayout>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9" }}>
-      <header
-        style={{
-          background: "#0f172a",
-          color: "white",
-          padding: "16px 24px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <strong style={{ fontSize: 18 }}>CTR Campaign</strong>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span
-            style={{
-              padding: "4px 12px",
-              borderRadius: 999,
-              fontSize: 13,
-              background: running ? "#16a34a" : "#64748b",
-            }}
-          >
-            {running ? "Running" : "Stopped"}
-          </span>
-          <button
-            type="button"
-            onClick={logout}
-            style={{
-              background: "transparent",
-              border: "1px solid #475569",
-              color: "#e2e8f0",
-              borderRadius: 6,
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
-          >
-            Log out
-          </button>
-        </div>
-      </header>
+    <AppLayout>
+      <section style={panelStyle}>
+        <h2 style={{ margin: "0 0 20px" }}>Campaign setup</h2>
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-        <section
-          style={{
-            background: "white",
-            borderRadius: 12,
-            padding: 24,
-            marginBottom: 24,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h2 style={{ margin: "0 0 20px" }}>Campaign setup</h2>
+        <div style={{ display: "grid", gap: 16 }}>
+          <label>
+            <span style={labelStyle}>Keyword</span>
+            <input
+              style={inputStyle}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="e.g. womens breeches"
+              disabled={running}
+            />
+          </label>
 
-          <div style={{ display: "grid", gap: 16 }}>
+          <label>
+            <span style={labelStyle}>Target URL</span>
+            <input
+              style={inputStyle}
+              type="url"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              placeholder="https://www.example.com.au/page"
+              disabled={running}
+            />
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <label>
-              <span style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Keyword</span>
-              <input
-                style={inputStyle}
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
-                placeholder="e.g. womens breeches"
-                disabled={running}
-              />
-            </label>
-
-            <label>
-              <span style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Target URL</span>
-              <input
-                style={inputStyle}
-                type="url"
-                value={targetUrl}
-                onChange={(event) => setTargetUrl(event.target.value)}
-                placeholder="https://www.example.com.au/page"
-                disabled={running}
-              />
-            </label>
-
-            <label>
-              <span style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Region</span>
+              <span style={labelStyle}>Region</span>
               <select
                 style={inputStyle}
                 value={region}
-                onChange={(event) => setRegion(event.target.value)}
+                onChange={(e) => setRegion(e.target.value)}
                 disabled={running}
               >
                 {regions.map((option) => (
@@ -275,143 +345,311 @@ export default function CampaignDashboard() {
                 ))}
               </select>
             </label>
+
+            <label>
+              <span style={labelStyle}>Duration (days)</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={campaignDurationDays}
+                onChange={(e) => setCampaignDurationDays(Number(e.target.value))}
+                disabled={running}
+              />
+            </label>
           </div>
 
-          {running && (
-            <p style={{ color: "#64748b", fontSize: 14, marginTop: 16 }}>
-              Stop the campaign to edit settings.
-            </p>
-          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <label>
+              <span style={labelStyle}>Treatment intensity</span>
+              <select
+                style={inputStyle}
+                value={treatmentIntensity}
+                onChange={(e) => setTreatmentIntensity(e.target.value)}
+                disabled={running}
+              >
+                <option value="low">Low (1.25×)</option>
+                <option value="normal">Normal (1.5×)</option>
+                <option value="strong">Strong (2×)</option>
+              </select>
+            </label>
 
-          <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
+            <label>
+              <span style={labelStyle}>Desktop mix %</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={0}
+                max={100}
+                value={desktopPercent}
+                onChange={(e) => setDesktopPercent(Number(e.target.value))}
+                disabled={running}
+              />
+            </label>
+
+            <label>
+              <span style={labelStyle}>CTR source</span>
+              <select
+                style={inputStyle}
+                value={ctrSource}
+                onChange={(e) => setCtrSource(e.target.value)}
+                disabled={running}
+              >
+                <option value="default_curve">Default curve</option>
+                <option value="gsc_site_curve">GSC site curve</option>
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24 }}>
+              <input
+                type="checkbox"
+                checked={adaptivePacing}
+                onChange={(e) => setAdaptivePacing(e.target.checked)}
+                disabled={running}
+              />
+              <span>Rank-adaptive pacing</span>
+            </label>
+
+            <label>
+              <span style={labelStyle}>Recalculate every (days)</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={recalculateEveryDays}
+                onChange={(e) => setRecalculateEveryDays(Number(e.target.value))}
+                disabled={running || !adaptivePacing}
+              />
+            </label>
+
+            <label>
+              <span style={labelStyle}>Max share of demand</span>
+              <input
+                style={inputStyle}
+                type="number"
+                step={0.001}
+                min={0.001}
+                max={0.1}
+                value={maxShareOfSearchDemand}
+                onChange={(e) => setMaxShareOfSearchDemand(Number(e.target.value))}
+                disabled={running}
+              />
+            </label>
+          </div>
+        </div>
+
+        {running && (
+          <p style={{ color: "#64748b", fontSize: 14, marginTop: 16 }}>
+            Stop the campaign to edit settings.
+          </p>
+        )}
+
+        <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => void previewIntensity()}
+            disabled={Boolean(busy) || running || !keyword}
+            style={secondaryButtonStyle}
+          >
+            {busy === "preview" ? "Calculating..." : "Preview intensity"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveCampaign()}
+            disabled={Boolean(busy) || running}
+            style={secondaryButtonStyle}
+          >
+            {busy === "save" ? "Saving..." : "Save"}
+          </button>
+          {!running ? (
             <button
               type="button"
-              onClick={() => void saveCampaign()}
-              disabled={Boolean(busy) || running}
-              style={secondaryButtonStyle}
+              onClick={() => void runCampaign()}
+              disabled={Boolean(busy) || !keyword || !targetUrl}
+              style={primaryButtonStyle("#16a34a")}
             >
-              {busy === "save" ? "Saving..." : "Save"}
+              {busy === "run" ? "Starting..." : "Run campaign"}
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void stopCampaign()}
+              disabled={Boolean(busy)}
+              style={primaryButtonStyle("#dc2626")}
+            >
+              {busy === "stop" ? "Stopping..." : "Stop campaign"}
+            </button>
+          )}
+        </div>
 
-            {!running ? (
-              <button
-                type="button"
-                onClick={() => void runCampaign()}
-                disabled={Boolean(busy) || !keyword || !targetUrl}
-                style={primaryButtonStyle("#16a34a")}
-              >
-                {busy === "run" ? "Starting..." : "Run campaign"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void stopCampaign()}
-                disabled={Boolean(busy)}
-                style={primaryButtonStyle("#dc2626")}
-              >
-                {busy === "stop" ? "Stopping..." : "Stop campaign"}
-              </button>
+        {message && <p style={{ color: "#16a34a", marginTop: 16 }}>{message}</p>}
+        {error && <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p>}
+      </section>
+
+      {intensity && (
+        <section style={{ ...panelStyle, marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 12px" }}>Recommended plan</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 16 }}>
+            <Stat label="Baseline clicks" value={String(intensity.totalBaselineClicks)} />
+            <Stat label="Planned sessions" value={String(intensity.totalAllocatedSessions)} />
+            <Stat label="Treatment ×" value={String(intensity.treatmentMultiplier)} />
+            <Stat label="Suggested identities" value={String(intensity.suggestedIdentities)} />
+            {intensity.feasibleSessions != null && (
+              <Stat label="Feasible w/ pool" value={String(intensity.feasibleSessions)} />
             )}
           </div>
-
-          {message && <p style={{ color: "#16a34a", marginTop: 16 }}>{message}</p>}
-          {error && <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p>}
         </section>
+      )}
 
-        <section
-          style={{
-            background: "white",
-            borderRadius: 12,
-            padding: 24,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ margin: 0 }}>Campaign log</h2>
-            <button
-              type="button"
-              onClick={() => void loadCampaign()}
-              style={secondaryButtonStyle}
-            >
-              Refresh
-            </button>
+      {queries.length > 0 && (
+        <section style={{ ...panelStyle, marginBottom: 24 }}>
+          <h2 style={{ margin: "0 0 16px" }}>Query cluster</h2>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  {[
+                    "Query",
+                    "Type",
+                    "Volume/mo",
+                    "Position",
+                    "GSC impr.",
+                    "GSC clicks",
+                    "Sessions",
+                  ].map((h) => (
+                    <th key={h} style={thStyle}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {queries.map((row, index) => (
+                  <tr key={row.text}>
+                    <td style={cellStyle}>{row.text}</td>
+                    <td style={cellStyle}>{row.type}</td>
+                    <td style={cellStyle}>
+                      <input
+                        style={{ ...inputStyle, padding: "6px 8px", width: 90 }}
+                        type="number"
+                        value={row.monthlySearchVolume ?? ""}
+                        onChange={(e) => updateQuery(index, "monthlySearchVolume", e.target.value)}
+                        disabled={running}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td style={cellStyle}>
+                      <input
+                        style={{ ...inputStyle, padding: "6px 8px", width: 70 }}
+                        type="number"
+                        step={0.1}
+                        value={row.startingPosition ?? ""}
+                        onChange={(e) => updateQuery(index, "startingPosition", e.target.value)}
+                        disabled={running}
+                        placeholder="—"
+                      />
+                    </td>
+                    <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
+                    <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
+                    <td style={cellStyle}>{row.allocatedSessions ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </section>
+      )}
 
-          {log.length === 0 ? (
-            <p style={{ color: "#64748b" }}>No sessions yet. Run the campaign to start searching.</p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {[
-                      "Time",
-                      "Query",
-                      "Searches",
-                      "Position",
-                      "Clicked",
-                      "Status",
-                      "Region",
-                      "Device",
-                      "Duration",
-                      "Pages",
-                    ].map((header) => (
-                      <th
-                        key={header}
-                        style={{
-                          textAlign: "left",
-                          padding: "10px 12px",
-                          borderBottom: "1px solid #e2e8f0",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
+      <section style={panelStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>Campaign log</h2>
+          <button type="button" onClick={() => void loadCampaign()} style={secondaryButtonStyle}>
+            Refresh
+          </button>
+        </div>
+
+        {log.length === 0 ? (
+          <p style={{ color: "#64748b" }}>No sessions yet. Run the campaign to start searching.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  {["Time", "Query", "Position", "Clicked", "Status", "Region", "Device", "Duration", ""].map(
+                    (header) => (
+                      <th key={header} style={thStyle}>
                         {header}
                       </th>
-                    ))}
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {log.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={cellStyle}>{new Date(entry.time).toLocaleString()}</td>
+                    <td style={cellStyle}>{entry.query}</td>
+                    <td style={cellStyle}>
+                      {entry.serpPosition ? `#${entry.serpPosition} p${entry.serpPage ?? 1}` : "—"}
+                    </td>
+                    <td style={cellStyle}>
+                      {entry.clicked ? "Yes" : entry.skipped ? "Skipped" : "No"}
+                    </td>
+                    <td style={cellStyle}>{entry.status}</td>
+                    <td style={cellStyle}>{entry.region}</td>
+                    <td style={cellStyle}>{entry.device}</td>
+                    <td style={cellStyle}>
+                      {entry.durationSeconds > 0 ? `${entry.durationSeconds}s` : "—"}
+                    </td>
+                    <td style={cellStyle}>
+                      <Link href={`/sessions/${entry.id}`}>View</Link>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {log.map((entry) => (
-                    <tr key={entry.id}>
-                      <td style={cellStyle}>{new Date(entry.time).toLocaleString()}</td>
-                      <td style={cellStyle}>
-                        <div>{entry.query}</div>
-                        {entry.queriesUsed.length > 1 && (
-                          <div style={{ fontSize: 12, color: "#64748b" }}>
-                            → {entry.queriesUsed.join(" → ")}
-                          </div>
-                        )}
-                      </td>
-                      <td style={cellStyle}>{entry.searchAttempts}</td>
-                      <td style={cellStyle}>
-                        {entry.serpPosition ? `#${entry.serpPosition} p${entry.serpPage ?? 1}` : "—"}
-                      </td>
-                      <td style={cellStyle}>
-                        {entry.clicked ? "Yes" : entry.skipped ? "Skipped" : "No"}
-                      </td>
-                      <td style={cellStyle}>{entry.status}</td>
-                      <td style={cellStyle}>{entry.region}</td>
-                      <td style={cellStyle}>{entry.device}</td>
-                      <td style={cellStyle}>
-                        {entry.durationSeconds > 0 ? `${entry.durationSeconds}s` : "—"}
-                      </td>
-                      <td style={cellStyle}>{entry.pageviews || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </main>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </AppLayout>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: "#f8fafc", borderRadius: 8, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#64748b" }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
     </div>
   );
 }
+
+const panelStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 12,
+  padding: 24,
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: 6,
+  fontWeight: 600,
+};
 
 const cellStyle: React.CSSProperties = {
   padding: "10px 12px",
   borderBottom: "1px solid #f1f5f9",
   verticalAlign: "top",
+};
+
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 12px",
+  borderBottom: "1px solid #e2e8f0",
+  whiteSpace: "nowrap",
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
