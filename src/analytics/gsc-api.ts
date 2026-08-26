@@ -1,4 +1,6 @@
 import { getEnv } from "../config/env.js";
+import type { GscApiContext } from "./gsc-connection-service.js";
+import { refreshAccessToken } from "./gsc-oauth.js";
 
 export interface GscLiveRow {
   query: string;
@@ -22,42 +24,6 @@ interface SearchAnalyticsResponse {
 
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function isGscConfigured(): boolean {
-  const env = getEnv();
-  return Boolean(
-    env.GSC_CLIENT_ID &&
-      env.GSC_CLIENT_SECRET &&
-      env.GSC_REFRESH_TOKEN &&
-      env.GSC_SITE_URL,
-  );
-}
-
-async function refreshAccessToken(): Promise<string> {
-  const env = getEnv();
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.GSC_CLIENT_ID!,
-      client_secret: env.GSC_CLIENT_SECRET!,
-      refresh_token: env.GSC_REFRESH_TOKEN!,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GSC token refresh failed: ${text}`);
-  }
-
-  const payload = (await response.json()) as { access_token?: string };
-  if (!payload.access_token) {
-    throw new Error("GSC token refresh returned no access token");
-  }
-
-  return payload.access_token;
 }
 
 function normalizePageUrl(url: string): string {
@@ -113,15 +79,11 @@ async function querySearchAnalytics(
 
 export async function fetchGscRowsForPage(
   targetUrl: string,
+  context: GscApiContext,
   lookbackDays = 28,
   country = "aus",
 ): Promise<GscLiveRow[]> {
-  if (!isGscConfigured()) {
-    return [];
-  }
-
-  const env = getEnv();
-  const accessToken = await refreshAccessToken();
+  const accessToken = await refreshAccessToken(context.refreshToken);
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - lookbackDays);
@@ -130,7 +92,7 @@ export async function fetchGscRowsForPage(
   const merged = new Map<string, GscLiveRow>();
 
   for (const page of candidates) {
-    const result = await querySearchAnalytics(accessToken, env.GSC_SITE_URL!, {
+    const result = await querySearchAnalytics(accessToken, context.siteUrl, {
       startDate: formatDate(start),
       endDate: formatDate(end),
       dimensions: ["query", "page", "country"],
@@ -178,18 +140,16 @@ export async function fetchGscRowsForPage(
   return [...merged.values()].sort((a, b) => b.impressions - a.impressions);
 }
 
-export async function fetchGscSiteCurveRows(lookbackDays = 90): Promise<GscLiveRow[]> {
-  if (!isGscConfigured()) {
-    return [];
-  }
-
-  const env = getEnv();
-  const accessToken = await refreshAccessToken();
+export async function fetchGscSiteCurveRows(
+  context: GscApiContext,
+  lookbackDays = 90,
+): Promise<GscLiveRow[]> {
+  const accessToken = await refreshAccessToken(context.refreshToken);
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - lookbackDays);
 
-  const result = await querySearchAnalytics(accessToken, env.GSC_SITE_URL!, {
+  const result = await querySearchAnalytics(accessToken, context.siteUrl, {
     startDate: formatDate(start),
     endDate: formatDate(end),
     dimensions: ["query", "country"],
@@ -213,5 +173,10 @@ export async function fetchGscSiteCurveRows(lookbackDays = 90): Promise<GscLiveR
 }
 
 export function isGscApiConfigured(): boolean {
-  return isGscConfigured();
+  const env = getEnv();
+  return Boolean(
+    env.GSC_CLIENT_ID &&
+      env.GSC_CLIENT_SECRET &&
+      (env.GSC_REFRESH_TOKEN || env.GSC_OAUTH_REDIRECT_URI),
+  );
 }

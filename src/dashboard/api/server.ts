@@ -30,6 +30,20 @@ import {
 import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
+import {
+  completeOAuthConnection,
+  consumeOAuthState,
+  createOAuthState,
+  deleteGscConnection,
+  isAnyGscConfigured,
+  listGscConnections,
+  listSitesForConnection,
+} from "../../analytics/gsc-connection-service.js";
+import {
+  buildGscOAuthUrl,
+  getDashboardRedirectUrl,
+  isGscOAuthConfigured,
+} from "../../analytics/gsc-oauth.js";
 import type { Session } from "@prisma/client";
 
 function authMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -70,6 +84,36 @@ export function createApiServer() {
     res.status(401).json({ error: "Incorrect password" });
   });
 
+  app.get("/gsc/oauth/callback", async (req, res) => {
+    const code = typeof req.query.code === "string" ? req.query.code : null;
+    const state = typeof req.query.state === "string" ? req.query.state : null;
+    const error = typeof req.query.error === "string" ? req.query.error : null;
+
+    if (error) {
+      res.redirect(`${getDashboardRedirectUrl("/gsc")}?error=${encodeURIComponent(error)}`);
+      return;
+    }
+
+    if (!code || !state) {
+      res.redirect(`${getDashboardRedirectUrl("/gsc")}?error=missing_oauth_params`);
+      return;
+    }
+
+    try {
+      const valid = await consumeOAuthState(state);
+      if (!valid) {
+        res.redirect(`${getDashboardRedirectUrl("/gsc")}?error=invalid_oauth_state`);
+        return;
+      }
+
+      const connection = await completeOAuthConnection(code);
+      res.redirect(`${getDashboardRedirectUrl("/gsc")}?connected=${encodeURIComponent(connection.id)}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.redirect(`${getDashboardRedirectUrl("/gsc")}?error=${encodeURIComponent(message)}`);
+    }
+  });
+
   app.use(authMiddleware);
 
   app.get("/settings/runner", async (_req, res) => {
@@ -103,6 +147,60 @@ export function createApiServer() {
       { code: "ALL", label: "All Australia", city: "Mixed" },
       ...listRegionOptions(),
     ]);
+  });
+
+  app.get("/gsc/status", (_req, res) => {
+    res.json({
+      oauthConfigured: isGscOAuthConfigured(),
+      clientConfigured: isAnyGscConfigured(),
+    });
+  });
+
+  app.get("/gsc/oauth/start", async (_req, res) => {
+    if (!isGscOAuthConfigured()) {
+      res.status(400).json({
+        error: "GSC OAuth not configured. Set GSC_CLIENT_ID, GSC_CLIENT_SECRET, and GSC_OAUTH_REDIRECT_URI on the API service.",
+      });
+      return;
+    }
+
+    try {
+      const state = await createOAuthState();
+      res.json({ url: buildGscOAuthUrl(state) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.get("/gsc/connections", async (_req, res) => {
+    try {
+      const connections = await listGscConnections();
+      res.json({ connections });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.get("/gsc/connections/:id/sites", async (req, res) => {
+    try {
+      const sites = await listSitesForConnection(req.params.id);
+      res.json({ sites });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.delete("/gsc/connections/:id", async (req, res) => {
+    try {
+      await deleteGscConnection(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
   });
 
   app.get("/campaign", async (_req, res) => {
@@ -176,7 +274,13 @@ export function createApiServer() {
   });
 
   app.post("/campaign/analyze", async (req, res) => {
-    const body = req.body as { keyword?: string; targetUrl?: string; region?: string };
+    const body = req.body as {
+      keyword?: string;
+      targetUrl?: string;
+      region?: string;
+      gscConnectionId?: string | null;
+      gscSiteUrl?: string | null;
+    };
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
@@ -194,6 +298,8 @@ export function createApiServer() {
         keyword: body.keyword,
         targetUrl: body.targetUrl,
         region: body.region,
+        gscConnectionId: body.gscConnectionId ?? null,
+        gscSiteUrl: body.gscSiteUrl ?? null,
       });
       res.json({ proposal });
     } catch (error) {

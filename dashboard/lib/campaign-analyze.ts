@@ -8,6 +8,8 @@ export interface AnalyzeInput {
   keyword: string;
   targetUrl: string;
   region: string;
+  gscConnectionId?: string | null;
+  gscSiteUrl?: string | null;
 }
 
 interface GeneratedQuery {
@@ -40,6 +42,8 @@ export interface CampaignProposalResponse {
   keyword: string;
   targetUrl: string;
   region: string;
+  gscConnectionId: string | null;
+  gscSiteUrl: string | null;
   campaignDurationDays: number;
   treatmentIntensity: string;
   adaptivePacing: boolean;
@@ -185,7 +189,13 @@ export async function buildCampaignProposalViaRailway(
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify({ keyword, targetUrl, region }),
+    body: JSON.stringify({
+      keyword,
+      targetUrl,
+      region,
+      gscConnectionId: input.gscConnectionId ?? null,
+      gscSiteUrl: input.gscSiteUrl ?? null,
+    }),
     cache: "no-store",
   });
 
@@ -240,6 +250,8 @@ export async function buildCampaignProposalViaRailway(
     keyword,
     targetUrl,
     region,
+    gscConnectionId: input.gscConnectionId ?? null,
+    gscSiteUrl: input.gscSiteUrl ?? null,
     campaignDurationDays,
     treatmentIntensity,
     adaptivePacing: true,

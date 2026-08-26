@@ -1,9 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/analytics/gsc-api.js", () => ({
-  isGscApiConfigured: vi.fn(() => false),
   fetchGscRowsForPage: vi.fn(async () => []),
   fetchGscSiteCurveRows: vi.fn(async () => []),
+}));
+
+vi.mock("../../src/analytics/gsc-connection-service.js", () => ({
+  resolveGscContext: vi.fn(async () => null),
 }));
 
 vi.mock("../../src/db/client.js", () => ({
@@ -15,13 +18,8 @@ vi.mock("../../src/db/client.js", () => ({
 }));
 
 import { buildCampaignProposal } from "../../src/campaign/campaign-proposal.js";
-import { isGscApiConfigured } from "../../src/analytics/gsc-api.js";
 
 describe("buildCampaignProposal", () => {
-  beforeEach(() => {
-    vi.mocked(isGscApiConfigured).mockReturnValue(false);
-  });
-
   it("builds a proposal from keyword variations when GSC is unavailable", async () => {
     const proposal = await buildCampaignProposal({
       keyword: "womens breeches",

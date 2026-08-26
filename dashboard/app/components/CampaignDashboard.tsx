@@ -6,6 +6,7 @@ import { apiGet, apiPost, apiPut } from "../../lib/api";
 import AppLayout from "./AppLayout";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
+import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
 import type {
   CampaignFormState,
   IntensitySummary,
@@ -57,6 +58,8 @@ interface Campaign {
   maxShareOfGscImpressions: number;
   desktopPercent: number;
   ctrSource: string;
+  gscConnectionId: string | null;
+  gscSiteUrl: string | null;
   queries: QueryRow[];
   intensity: IntensitySummary | null;
 }
@@ -81,6 +84,8 @@ const defaultForm = (): CampaignFormState => ({
   keyword: "",
   targetUrl: "",
   region: "ALL",
+  gscConnectionId: null,
+  gscSiteUrl: null,
   campaignDurationDays: 14,
   treatmentIntensity: "normal",
   adaptivePacing: true,
@@ -117,6 +122,20 @@ function queriesFromPreview(rows: QueryIntensityRow[]): QueryRow[] {
   }));
 }
 
+function suggestSiteFromUrl(targetUrl: string, sites: GscSiteOption[]): string | null {
+  if (!targetUrl.trim() || sites.length === 0) return null;
+  try {
+    const hostname = new URL(targetUrl).hostname.replace(/^www\./, "");
+    const match = sites.find((site) => {
+      const value = site.siteUrl.toLowerCase();
+      return value.includes(hostname.toLowerCase());
+    });
+    return match?.siteUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function CampaignDashboard() {
   const [form, setForm] = useState<CampaignFormState>(defaultForm());
   const [step, setStep] = useState<WizardStep>("setup");
@@ -124,6 +143,9 @@ export default function CampaignDashboard() {
   const [gscStatus, setGscStatus] = useState<"live" | "unavailable" | null>(null);
   const [intensity, setIntensity] = useState<IntensitySummary | null>(null);
   const [regions, setRegions] = useState<RegionOption[]>([]);
+  const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
+  const [gscSites, setGscSites] = useState<GscSiteOption[]>([]);
+  const [gscSitesLoading, setGscSitesLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +158,8 @@ export default function CampaignDashboard() {
       keyword: proposal.keyword,
       targetUrl: proposal.targetUrl,
       region: proposal.region,
+      gscConnectionId: proposal.gscConnectionId,
+      gscSiteUrl: proposal.gscSiteUrl,
       campaignDurationDays: proposal.campaignDurationDays,
       treatmentIntensity: proposal.treatmentIntensity,
       adaptivePacing: proposal.adaptivePacing,
@@ -161,6 +185,8 @@ export default function CampaignDashboard() {
       keyword: c.keyword,
       targetUrl: c.targetUrl,
       region: c.region,
+      gscConnectionId: c.gscConnectionId,
+      gscSiteUrl: c.gscSiteUrl,
       campaignDurationDays: c.campaignDurationDays,
       treatmentIntensity: c.treatmentIntensity,
       adaptivePacing: c.adaptivePacing,
@@ -176,6 +202,22 @@ export default function CampaignDashboard() {
       setStep("review");
     }
   }
+
+  const loadGscSites = useCallback(async (connectionId: string, targetUrl?: string) => {
+    setGscSitesLoading(true);
+    try {
+      const result = await apiGet<{ sites: GscSiteOption[] }>(`/gsc/connections/${connectionId}/sites`);
+      setGscSites(result.sites);
+      const suggested = suggestSiteFromUrl(targetUrl ?? form.targetUrl, result.sites);
+      if (suggested) {
+        setForm((prev) => ({ ...prev, gscConnectionId: connectionId, gscSiteUrl: suggested }));
+      }
+    } catch {
+      setGscSites([]);
+    } finally {
+      setGscSitesLoading(false);
+    }
+  }, [form.targetUrl]);
 
   const loadCampaign = useCallback(async () => {
     const [campaignRes, logRes] = await Promise.all([
@@ -194,8 +236,12 @@ export default function CampaignDashboard() {
   useEffect(() => {
     void (async () => {
       try {
-        const regionOptions = await apiGet<RegionOption[]>("/regions");
+        const [regionOptions, connectionsRes] = await Promise.all([
+          apiGet<RegionOption[]>("/regions"),
+          apiGet<{ connections: GscConnectionOption[] }>("/gsc/connections"),
+        ]);
         setRegions(regionOptions);
+        setGscConnections(connectionsRes.connections);
         await loadCampaign();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load campaign");
@@ -204,6 +250,14 @@ export default function CampaignDashboard() {
       }
     })();
   }, [loadCampaign]);
+
+  useEffect(() => {
+    if (!form.gscConnectionId) {
+      setGscSites([]);
+      return;
+    }
+    void loadGscSites(form.gscConnectionId, form.targetUrl);
+  }, [form.gscConnectionId, loadGscSites]);
 
   useEffect(() => {
     if (!running) return;
@@ -220,6 +274,8 @@ export default function CampaignDashboard() {
       keyword: form.keyword,
       targetUrl: form.targetUrl,
       region: form.region,
+      gscConnectionId: form.gscConnectionId,
+      gscSiteUrl: form.gscSiteUrl,
       campaignDurationDays: form.campaignDurationDays,
       treatmentIntensity: form.treatmentIntensity,
       adaptivePacing: form.adaptivePacing,
@@ -267,6 +323,8 @@ export default function CampaignDashboard() {
         keyword: form.keyword,
         targetUrl: form.targetUrl,
         region: form.region,
+        gscConnectionId: form.gscConnectionId,
+        gscSiteUrl: form.gscSiteUrl,
       });
       applyProposal(result.proposal);
       setMessage("Analysis complete — review settings below");
@@ -362,11 +420,21 @@ export default function CampaignDashboard() {
           keyword={form.keyword}
           targetUrl={form.targetUrl}
           region={form.region}
+          gscConnectionId={form.gscConnectionId}
+          gscSiteUrl={form.gscSiteUrl}
           regions={regions}
+          connections={gscConnections}
+          sites={gscSites}
+          sitesLoading={gscSitesLoading}
           busy={busy === "analyze"}
           onKeywordChange={(value) => updateForm("keyword", value)}
           onTargetUrlChange={(value) => updateForm("targetUrl", value)}
           onRegionChange={(value) => updateForm("region", value)}
+          onGscConnectionChange={(value) => {
+            updateForm("gscConnectionId", value);
+            updateForm("gscSiteUrl", null);
+          }}
+          onGscSiteChange={(value) => updateForm("gscSiteUrl", value)}
           onAnalyze={() => void analyzeCampaign()}
         />
       ) : (

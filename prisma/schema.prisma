@@ -127,6 +127,8 @@ model Experiment {
   maxShareOfGscImpressions Float        @default(0.05) @map("max_share_of_gsc_impressions")
   desktopPercent       Int              @default(65) @map("desktop_percent")
   ctrSource            CtrSource        @default(default_curve) @map("ctr_source")
+  gscConnectionId      String?          @map("gsc_connection_id")
+  gscSiteUrl           String?          @map("gsc_site_url")
   lastPacingRecalcAt   DateTime?        @map("last_pacing_recalc_at")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
@@ -136,8 +138,22 @@ model Experiment {
   sessions         Session[]
   rankingSnapshots RankingSnapshot[]
   notes            ExperimentNote[]
+  gscConnection    GscConnection?   @relation(fields: [gscConnectionId], references: [id], onDelete: SetNull)
 
   @@map("experiments")
+}
+
+model GscConnection {
+  id           String   @id @default(cuid())
+  label        String
+  googleEmail  String?  @map("google_email")
+  refreshToken String   @map("refresh_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  experiments Experiment[]
+
+  @@map("gsc_connections")
 }
 
 model ExperimentQuery {

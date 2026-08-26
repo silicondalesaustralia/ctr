@@ -99,6 +99,8 @@ const envSchema = z.object({
   GSC_CLIENT_SECRET: z.string().optional(),
   GSC_REFRESH_TOKEN: z.string().optional(),
   GSC_SITE_URL: z.string().optional(),
+  GSC_OAUTH_REDIRECT_URI: z.string().optional(),
+  DASHBOARD_URL: z.string().optional(),
   GA4_PROPERTY_ID: z.string().optional(),
   ADMIN_API_KEY: z
     .string()

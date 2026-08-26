@@ -1,5 +1,6 @@
 import type { CtrSource, TreatmentIntensity } from "@prisma/client";
-import { fetchGscRowsForPage, fetchGscSiteCurveRows, isGscApiConfigured } from "../analytics/gsc-api.js";
+import { fetchGscRowsForPage, fetchGscSiteCurveRows } from "../analytics/gsc-api.js";
+import { resolveGscContext } from "../analytics/gsc-connection-service.js";
 import { buildGscSiteCurve } from "./ctr-curve.js";
 import { calculateCampaignIntensity, normalizeQueryWeights } from "./intensity-calculator.js";
 import type { CampaignIntensityResult } from "./types.js";
@@ -17,6 +18,8 @@ export interface CampaignProposalInput {
   keyword: string;
   targetUrl: string;
   region: string;
+  gscConnectionId?: string | null;
+  gscSiteUrl?: string | null;
 }
 
 export interface CampaignProposal {
@@ -116,10 +119,11 @@ export async function buildCampaignProposal(
 
   let gscRows: Awaited<ReturnType<typeof fetchGscRowsForPage>> = [];
   let gscStatus: CampaignProposal["gscStatus"] = "unavailable";
+  const gscContext = await resolveGscContext(input.gscConnectionId, input.gscSiteUrl);
 
-  if (isGscApiConfigured()) {
+  if (gscContext) {
     try {
-      gscRows = await fetchGscRowsForPage(targetUrl, 28);
+      gscRows = await fetchGscRowsForPage(targetUrl, gscContext, 28);
       gscStatus = gscRows.length > 0 ? "live" : "unavailable";
     } catch {
       gscStatus = "unavailable";
@@ -140,9 +144,9 @@ export async function buildCampaignProposal(
   let siteCurveData: Array<{ position: number; ctr: number; impressions: number }> | null = null;
   let ctrSource: CtrSource = "default_curve";
 
-  if (isGscApiConfigured()) {
+  if (gscContext) {
     try {
-      const siteRows = await fetchGscSiteCurveRows(90);
+      const siteRows = await fetchGscSiteCurveRows(gscContext, 90);
       if (siteRows.length >= 50) {
         siteCurveData = siteRows.map((row) => ({
           position: row.position,
@@ -206,9 +210,9 @@ export async function buildCampaignProposal(
     rationales.push({
       setting: "Data source",
       value: "Keyword variations only",
-      reason: isGscApiConfigured()
+      reason: gscContext
         ? "GSC is configured but returned no AU data for this URL — check the URL matches Search Console exactly."
-        : "GSC API not configured. Set GSC_CLIENT_ID, GSC_CLIENT_SECRET, GSC_REFRESH_TOKEN, and GSC_SITE_URL on the API service.",
+        : "No GSC account or property selected. Connect an account in GSC settings and pick a property.",
     });
   }
 

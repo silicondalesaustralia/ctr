@@ -41,6 +41,8 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   maxShareOfGscImpressions?: number;
   desktopPercent?: number;
   ctrSource?: CtrSource;
+  gscConnectionId?: string | null;
+  gscSiteUrl?: string | null;
   queries?: CampaignQueryInput[];
 }
 
@@ -209,6 +211,8 @@ export async function upsertCampaign(
         maxShareOfGscImpressions: input.maxShareOfGscImpressions ?? 0.05,
         desktopPercent: input.desktopPercent ?? 65,
         ctrSource: input.ctrSource ?? "default_curve",
+        gscConnectionId: input.gscConnectionId ?? null,
+        gscSiteUrl: input.gscSiteUrl ?? null,
         monthlySessionTarget: intensity.totalAllocatedSessions,
       },
     });
@@ -239,6 +243,8 @@ export async function upsertCampaign(
         input.maxShareOfGscImpressions ?? current.maxShareOfGscImpressions,
       desktopPercent: input.desktopPercent ?? current.desktopPercent,
       ctrSource: input.ctrSource ?? current.ctrSource,
+      gscConnectionId: input.gscConnectionId ?? current.gscConnectionId,
+      gscSiteUrl: input.gscSiteUrl ?? current.gscSiteUrl,
     },
   });
 
@@ -391,6 +397,8 @@ export function serializeCampaign(
     maxShareOfGscImpressions: campaign.maxShareOfGscImpressions,
     desktopPercent: campaign.desktopPercent,
     ctrSource: campaign.ctrSource,
+    gscConnectionId: campaign.gscConnectionId,
+    gscSiteUrl: campaign.gscSiteUrl,
     lastPacingRecalcAt: campaign.lastPacingRecalcAt?.toISOString() ?? null,
     queries: campaign.queries.map((query) => ({
       text: query.query,

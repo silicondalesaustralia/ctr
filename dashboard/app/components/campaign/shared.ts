@@ -36,6 +36,8 @@ export interface CampaignFormState {
   keyword: string;
   targetUrl: string;
   region: string;
+  gscConnectionId: string | null;
+  gscSiteUrl: string | null;
   campaignDurationDays: number;
   treatmentIntensity: string;
   adaptivePacing: boolean;

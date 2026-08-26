@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import AuthGate from "../components/AuthGate";
+import GscPage from "./GscPageClient";
 
-export default function RedirectHome() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/");
-  }, [router]);
-  return null;
+export default function GscRoutePage() {
+  return (
+    <AuthGate>
+      <GscPage />
+    </AuthGate>
+  );
 }

@@ -16,7 +16,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { keyword?: string; targetUrl?: string; region?: string };
+  let body: {
+    keyword?: string;
+    targetUrl?: string;
+    region?: string;
+    gscConnectionId?: string | null;
+    gscSiteUrl?: string | null;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -41,6 +47,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       keyword: body.keyword,
       targetUrl: body.targetUrl,
       region: body.region,
+      gscConnectionId: body.gscConnectionId ?? null,
+      gscSiteUrl: body.gscSiteUrl ?? null,
     });
     return NextResponse.json({ proposal });
   } catch (error) {
