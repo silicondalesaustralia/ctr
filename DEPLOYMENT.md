@@ -43,7 +43,8 @@ Create two services from the same repo using `Dockerfile`:
 
 **Service A — API**
 - Start command: `npm run api`
-- Env: `DATABASE_URL`, `REDIS_URL`, `ADMIN_API_KEY`, provider secrets, `EXPERIMENT_RUNNER_ENABLED=true`
+- Env: `DATABASE_URL` (or Neon `POSTGRES_PRISMA_URL`), `REDIS_URL`, `ADMIN_API_KEY`, provider secrets, `EXPERIMENT_RUNNER_ENABLED=true`
+- Railway sets `PORT` automatically — the API listens on that port
 
 **Service B — Worker**
 - Start command: `npm run worker`

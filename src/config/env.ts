@@ -1,5 +1,23 @@
 import { z } from "zod";
 
+function prepareEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+
+  if (!env.DATABASE_URL) {
+    env.DATABASE_URL =
+      env.POSTGRES_PRISMA_URL ??
+      env.POSTGRES_URL ??
+      env.DATABASE_URL_UNPOOLED ??
+      env.POSTGRES_URL_NON_POOLING;
+  }
+
+  if (!env.API_PORT && env.PORT) {
+    env.API_PORT = env.PORT;
+  }
+
+  return env;
+}
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   BROWSER_PROFILE_PROVIDER: z.enum(["mock", "gologin", "multilogin"]).default("mock"),
@@ -37,7 +55,7 @@ let cachedEnv: Env | null = null;
 
 export function getEnv(): Env {
   if (!cachedEnv) {
-    cachedEnv = envSchema.parse(process.env);
+    cachedEnv = envSchema.parse(prepareEnv());
   }
   return cachedEnv;
 }
