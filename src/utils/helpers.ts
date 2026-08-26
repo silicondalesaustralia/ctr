@@ -39,26 +39,13 @@ export async function loadMockSerpInPage(
   query: string,
 ): Promise<void> {
   const html = await readFile(getMockSerpPath(), "utf-8");
-  await page.setContent(html, { waitUntil: "domcontentloaded" });
-  await page.evaluate(
-    ({ q, domain }) => {
-      const queryInput = document.getElementById("q") as HTMLInputElement | null;
-      if (queryInput) {
-        queryInput.value = q;
-      }
-      const targetUrl = `https://${domain}/sell-eggs-from-home`;
-      const link = document.getElementById("target-link") as HTMLAnchorElement | null;
-      const display = document.getElementById("target-display");
-      if (link) {
-        link.href = targetUrl;
-        link.textContent = `How to ${q} - ${domain}`;
-      }
-      if (display) {
-        display.textContent = `${domain}/sell-eggs-from-home`;
-      }
-    },
-    { q: query, domain: targetDomain },
+  const params = new URLSearchParams({ q: query, domain: targetDomain }).toString();
+  const populated = html.replace(
+    "const params = new URLSearchParams(window.location.search);",
+    `const params = new URLSearchParams("${params.replace(/"/g, '\\"')}");`,
   );
+  const dataUrl = `data:text/html;base64,${Buffer.from(populated).toString("base64")}`;
+  await page.goto(dataUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 }
 
 export function domainMatches(url: string, targetDomain: string): boolean {
