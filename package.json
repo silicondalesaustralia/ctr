@@ -18,6 +18,7 @@
     "schedule:generate": "tsx scripts/generate-schedule.ts",
     "session:test": "tsx scripts/run-one-session.ts",
     "gologin:stop": "tsx scripts/stop-gologin-profile.ts",
+    "gologin:repair": "tsx scripts/repair-gologin-profiles.ts",
     "sessions:cleanup-stale": "tsx scripts/cleanup-stale-sessions.ts",
     "worker": "tsx scripts/run-worker.ts",
     "gsc:import": "tsx scripts/import-gsc.ts",
