@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apiGet } from "../../lib/api";
+import { safeApiGet } from "../../lib/api";
 import Shell, { Card, Table } from "../components/Shell";
 
 interface SessionRow {
@@ -16,10 +16,17 @@ interface SessionRow {
 }
 
 export default async function SessionsPage() {
-  const sessions = await apiGet<SessionRow[]>("/sessions");
+  const { data: sessions, error } = await safeApiGet<SessionRow[]>("/sessions");
 
   return (
     <Shell title="Sessions">
+      {error && (
+        <Card>
+          <p style={{ color: "#b91c1c" }}>
+            <strong>Could not load sessions.</strong> {error}
+          </p>
+        </Card>
+      )}
       <Card>
         <Table
           headers={[
@@ -35,7 +42,7 @@ export default async function SessionsPage() {
             "Internal",
             "Status",
           ]}
-          rows={sessions.map((s) => [
+          rows={(sessions ?? []).map((s) => [
             new Date(s.createdAt).toLocaleString(),
             s.identity.externalId,
             s.identity.region,
@@ -52,7 +59,7 @@ export default async function SessionsPage() {
       </Card>
       <Card>
         <ul>
-          {sessions.slice(0, 10).map((s) => (
+          {(sessions ?? []).slice(0, 10).map((s) => (
             <li key={s.id}>
               <Link href={`/sessions/${s.id}`}>{s.id}</Link>
             </li>

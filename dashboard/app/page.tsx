@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apiGet } from "../lib/api";
+import { safeApiGet } from "../lib/api";
 import Shell, { Card, Table } from "./components/Shell";
 
 interface Experiment {
@@ -13,14 +13,25 @@ interface Experiment {
 }
 
 export default async function ExperimentsPage() {
-  const experiments = await apiGet<Experiment[]>("/experiments");
+  const { data: experiments, error } = await safeApiGet<Experiment[]>("/experiments");
 
   return (
     <Shell title="Experiments">
+      {error && (
+        <Card>
+          <p style={{ color: "#b91c1c" }}>
+            <strong>Could not load experiments.</strong> {error}
+          </p>
+          <p>
+            Check Vercel env vars: <code>NEXT_PUBLIC_API_URL</code> and{" "}
+            <code>NEXT_PUBLIC_API_KEY</code> must match Railway <code>ADMIN_API_KEY</code>.
+          </p>
+        </Card>
+      )}
       <Card>
         <Table
           headers={["Name", "Status", "Target", "Sessions", "Scheduled", "Actions"]}
-          rows={experiments.map((exp) => [
+          rows={(experiments ?? []).map((exp) => [
             exp.name,
             exp.status,
             exp.targetUrl,
@@ -33,7 +44,7 @@ export default async function ExperimentsPage() {
       <Card>
         <h3>Quick links</h3>
         <ul>
-          {experiments.map((exp) => (
+          {(experiments ?? []).map((exp) => (
             <li key={exp.id}>
               <Link href={`/experiments/${exp.id}`}>{exp.slug}</Link>
             </li>
