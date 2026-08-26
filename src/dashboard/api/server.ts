@@ -27,6 +27,7 @@ import {
   upsertCampaign,
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
+import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
 import type { Session } from "@prisma/client";
@@ -163,6 +164,33 @@ export function createApiServer() {
         campaign: serializeCampaign({ ...result.experiment, queries: result.queries }, result.intensity),
         running: result.experiment.status === "active",
       });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaign/analyze", async (req, res) => {
+    const body = req.body as { keyword?: string; targetUrl?: string; region?: string };
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const proposal = await buildCampaignProposal({
+        keyword: body.keyword,
+        targetUrl: body.targetUrl,
+        region: body.region,
+      });
+      res.json({ proposal });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });
