@@ -41,6 +41,15 @@ describe("domainMatches", () => {
     expect(domainMatches("https://www.example.com/page", "example.com")).toBe(true);
     expect(domainMatches("https://other.com/page", "example.com")).toBe(false);
   });
+
+  it("matches domains inside Google SERP redirect links", () => {
+    expect(
+      domainMatches(
+        "https://www.google.com/url?q=https://vendl.app/sell-food-from-home/south-australia&sa=U",
+        "vendl.app",
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("internal link classifier", () => {

@@ -48,9 +48,25 @@ export async function loadMockSerpInPage(
   await page.goto(dataUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 }
 
-export function domainMatches(url: string, targetDomain: string): boolean {
+export function resolveGoogleSerpHref(href: string): string {
   try {
-    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    const url = new URL(href, "https://www.google.com");
+    if (url.pathname === "/url" || url.pathname.startsWith("/url")) {
+      const target = url.searchParams.get("q") ?? url.searchParams.get("url");
+      if (target) {
+        return target;
+      }
+    }
+    return href;
+  } catch {
+    return href;
+  }
+}
+
+export function domainMatches(url: string, targetDomain: string): boolean {
+  const resolved = resolveGoogleSerpHref(url);
+  try {
+    const hostname = new URL(resolved).hostname.replace(/^www\./, "");
     const normalizedTarget = targetDomain.replace(/^www\./, "");
     return hostname === normalizedTarget || hostname.endsWith(`.${normalizedTarget}`);
   } catch {
