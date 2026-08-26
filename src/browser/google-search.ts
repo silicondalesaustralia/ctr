@@ -50,6 +50,10 @@ export async function runSearchFlow(input: SearchFlowInput): Promise<SearchFlowR
   }
   result.googleLoaded = true;
 
+  if (!isDryRun()) {
+    await acceptConsentIfPresent(page);
+  }
+
   let blocked = await detectBlockedPage(page);
   if (blocked.blocked) {
     result.blocked = true;
@@ -58,14 +62,6 @@ export async function runSearchFlow(input: SearchFlowInput): Promise<SearchFlowR
   }
 
   if (!isDryRun()) {
-    await acceptConsentIfPresent(page);
-    blocked = await detectBlockedPage(page);
-    if (blocked.blocked) {
-      result.blocked = true;
-      result.blockReason = blocked.reason;
-      return result;
-    }
-
     const searchBox = page.locator('textarea[name="q"], input[name="q"]').first();
     await searchBox.click();
     await sleep(randomBetween(700, 2000));

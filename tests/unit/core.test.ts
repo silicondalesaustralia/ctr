@@ -183,6 +183,14 @@ describe("blocked detection", () => {
     );
     expect(result.blocked).toBe(true);
   });
+
+  it("does not treat Google consent interstitials as blocked", () => {
+    const result = checkBlockedSignals(
+      "https://consent.google.com/m",
+      "Before you continue to Google",
+    );
+    expect(result.blocked).toBe(false);
+  });
 });
 
 describe("monthly schedule totals", () => {

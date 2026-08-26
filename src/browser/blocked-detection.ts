@@ -7,7 +7,6 @@ const BLOCKED_PATTERNS = [
   /verify you are human/i,
   /automated queries/i,
   /access denied/i,
-  /before you continue to google/i,
 ];
 
 export interface BlockCheckResult {
@@ -50,8 +49,9 @@ export async function detectBlockedPage(page: Page): Promise<BlockCheckResult> {
   return { blocked: false };
 }
 
-export async function acceptConsentIfPresent(page: Page): Promise<void> {
+export async function acceptConsentIfPresent(page: Page): Promise<boolean> {
   const selectors = [
+    "#L2AGLb",
     'button:has-text("Accept all")',
     'button:has-text("I agree")',
     'button:has-text("Accept")',
@@ -62,8 +62,11 @@ export async function acceptConsentIfPresent(page: Page): Promise<void> {
     const button = page.locator(selector).first();
     if (await button.isVisible().catch(() => false)) {
       await button.click().catch(() => undefined);
-      await page.waitForTimeout(1000);
-      break;
+      await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+      await page.waitForTimeout(1500);
+      return true;
     }
   }
+
+  return false;
 }
