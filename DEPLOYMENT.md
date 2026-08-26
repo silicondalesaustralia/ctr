@@ -54,6 +54,10 @@ Use the Playwright Docker image (included in `Dockerfile`).
 
 ## 4. Deploy dashboard to Vercel
 
+**Important:** Set **Root Directory** to `dashboard` in Vercel → Project → Settings → General.
+
+Alternatively, the repo root `vercel.json` builds the dashboard subfolder automatically.
+
 In Vercel project settings:
 
 - **Root directory:** `dashboard`
