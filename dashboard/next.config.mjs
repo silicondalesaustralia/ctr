@@ -15,14 +15,6 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: apiOrigin,
     NEXT_PUBLIC_API_KEY: process.env.NEXT_PUBLIC_API_KEY ?? "dev-admin-key",
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${apiOrigin.replace(/\/$/, "")}/:path*`,
-      },
-    ];
-  },
 };
 
 export default nextConfig;
