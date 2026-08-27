@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
 import { getEnv } from "../config/env.js";
+import { logger } from "../config/logger.js";
 import type { CampaignProposal } from "./campaign-proposal.js";
 
 export type PreflightJobStatus = "running" | "complete" | "error";
@@ -32,17 +33,35 @@ const TTL_SECONDS = 60 * 60;
 const KEY_PREFIX = "preflight:job:";
 
 let redis: Redis | null = null;
+let redisDisabled = false;
+
+function disableRedis(reason: string, error: unknown): void {
+  if (redisDisabled) return;
+  redisDisabled = true;
+  redis?.disconnect();
+  redis = null;
+  const message = error instanceof Error ? error.message : String(error);
+  logger.warn({
+    event: "preflight_redis_disabled",
+    reason,
+    error: message,
+  });
+}
 
 function getRedis(): Redis | null {
+  if (redisDisabled) return null;
   if (redis) return redis;
-  try {
-    const url = getEnv().REDIS_URL;
-    if (!url) return null;
-    redis = new Redis(url, { maxRetriesPerRequest: null });
-    return redis;
-  } catch {
+
+  const url = getEnv().REDIS_URL.trim();
+  if (!url || url === "redis://localhost:6379") {
     return null;
   }
+
+  redis = new Redis(url, { maxRetriesPerRequest: null });
+  redis.on("error", (error) => {
+    disableRedis("connection_error", error);
+  });
+  return redis;
 }
 
 function serializeJob(job: PreflightJob): StoredPreflightJob {
@@ -73,9 +92,15 @@ function deserializeJob(stored: StoredPreflightJob): PreflightJob {
 
 async function persistJob(job: PreflightJob): Promise<void> {
   memoryJobs.set(job.id, job);
+
   const client = getRedis();
   if (!client) return;
-  await client.setex(`${KEY_PREFIX}${job.id}`, TTL_SECONDS, JSON.stringify(serializeJob(job)));
+
+  try {
+    await client.setex(`${KEY_PREFIX}${job.id}`, TTL_SECONDS, JSON.stringify(serializeJob(job)));
+  } catch (error) {
+    disableRedis("persist_failed", error);
+  }
 }
 
 export async function createPreflightJob(totalCount: number): Promise<PreflightJob> {
@@ -94,25 +119,33 @@ export async function createPreflightJob(totalCount: number): Promise<PreflightJ
 }
 
 export async function getPreflightJob(id: string): Promise<PreflightJob | null> {
+  const cached = memoryJobs.get(id);
+  if (cached) return cached;
+
   const client = getRedis();
-  if (client) {
+  if (!client) return null;
+
+  try {
     const raw = await client.get(`${KEY_PREFIX}${id}`);
-    if (raw) {
-      return deserializeJob(JSON.parse(raw) as StoredPreflightJob);
-    }
+    if (!raw) return null;
+    const job = deserializeJob(JSON.parse(raw) as StoredPreflightJob);
+    memoryJobs.set(id, job);
+    return job;
+  } catch (error) {
+    disableRedis("read_failed", error);
+    return memoryJobs.get(id) ?? null;
   }
-  return memoryJobs.get(id) ?? null;
 }
 
 export async function updatePreflightJobProgress(id: string, testedCount: number): Promise<void> {
-  const job = (await getPreflightJob(id)) ?? memoryJobs.get(id);
+  const job = memoryJobs.get(id) ?? (await getPreflightJob(id));
   if (!job || job.status !== "running") return;
   job.testedCount = testedCount;
   await persistJob(job);
 }
 
 export async function completePreflightJob(id: string, proposal: CampaignProposal): Promise<void> {
-  const job = (await getPreflightJob(id)) ?? memoryJobs.get(id);
+  const job = memoryJobs.get(id) ?? (await getPreflightJob(id));
   if (!job) return;
   job.status = "complete";
   job.proposal = proposal;
@@ -122,7 +155,7 @@ export async function completePreflightJob(id: string, proposal: CampaignProposa
 }
 
 export async function failPreflightJob(id: string, error: string): Promise<void> {
-  const job = (await getPreflightJob(id)) ?? memoryJobs.get(id);
+  const job = memoryJobs.get(id) ?? (await getPreflightJob(id));
   if (!job) return;
   job.status = "error";
   job.error = error;

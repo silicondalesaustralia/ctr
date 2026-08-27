@@ -35,6 +35,10 @@ function prepareEnv(): NodeJS.ProcessEnv {
     env.DATABASE_URL = databaseUrl;
   }
 
+  if (!env.REDIS_URL?.trim() && env.UPSTASH_REDIS_URL?.trim()) {
+    env.REDIS_URL = env.UPSTASH_REDIS_URL.trim();
+  }
+
   if (env.PORT) {
     env.API_PORT = env.PORT;
   } else if (!env.API_PORT) {
