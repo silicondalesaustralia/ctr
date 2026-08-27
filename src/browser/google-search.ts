@@ -21,13 +21,14 @@ export async function loadDryRunSerp(
   page: Page,
   targetDomain: string,
   query: string,
+  targetPath = "/",
 ): Promise<void> {
   if (getEnv().BROWSER_PROFILE_PROVIDER === "gologin") {
-    await loadMockSerpInPage(page, targetDomain, query);
+    await loadMockSerpInPage(page, targetDomain, query, targetPath);
     return;
   }
 
-  await page.goto(getMockSerpUrl(targetDomain, query), {
+  await page.goto(getMockSerpUrl(targetDomain, query, targetPath), {
     waitUntil: "domcontentloaded",
     timeout: 60_000,
   });

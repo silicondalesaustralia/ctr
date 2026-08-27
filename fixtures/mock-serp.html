@@ -34,12 +34,14 @@
     const params = new URLSearchParams(window.location.search);
     const query = params.get("q") || "test query";
     const domain = params.get("domain") || "example.com";
+    const targetPath = params.get("path") || "/";
     document.getElementById("q").value = query;
-    const targetUrl = `https://${domain}/sell-eggs-from-home`;
+    const normalizedPath = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
+    const targetUrl = `https://${domain}${normalizedPath}`;
     const link = document.getElementById("target-link");
     link.href = targetUrl;
     link.textContent = `How to ${query} - ${domain}`;
-    document.getElementById("target-display").textContent = `${domain}/sell-eggs-from-home`;
+    document.getElementById("target-display").textContent = `${domain}${normalizedPath}`;
   </script>
 </body>
 </html>

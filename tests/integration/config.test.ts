@@ -20,6 +20,6 @@ describe("mock serp fixture", () => {
   it("contains a target link for the configured domain", () => {
     const html = readFileSync(join(process.cwd(), "fixtures/mock-serp.html"), "utf8");
     expect(html).toContain("target-link");
-    expect(domainMatches("https://example.com/sell-eggs-from-home", "example.com")).toBe(true);
+    expect(domainMatches("https://example.com/clothing/womens/breeches", "example.com")).toBe(true);
   });
 });

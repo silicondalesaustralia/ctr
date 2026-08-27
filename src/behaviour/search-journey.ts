@@ -37,6 +37,7 @@ export interface SearchJourneyInput {
   cluster: ExperimentQuery[];
   initialQuery: ExperimentQuery;
   targetDomain: string;
+  targetUrl?: string;
   maxSerpPages: number;
   behaviourOverrides?: BehaviourOverrides;
   onEvent: BehaviourEventCallback;
@@ -83,6 +84,7 @@ export async function runSearchJourney(
     cluster,
     initialQuery,
     targetDomain,
+    targetUrl,
     maxSerpPages,
     behaviourOverrides,
     onEvent,
@@ -93,6 +95,14 @@ export async function runSearchJourney(
   const allowReformulation = behaviourOverrides?.allowQueryReformulation ?? true;
   const allowAbandon = behaviourOverrides?.allowSearchAbandon ?? true;
   const allowTargetSkip = behaviourOverrides?.allowTargetSkip ?? true;
+  let targetPath = "/";
+  if (targetUrl) {
+    try {
+      targetPath = new URL(targetUrl).pathname || "/";
+    } catch {
+      targetPath = "/";
+    }
+  }
 
   const attempts: SearchAttempt[] = [];
   const usedQueries = new Set<string>();
@@ -103,7 +113,7 @@ export async function runSearchJourney(
 
   for (let searchIndex = 0; searchIndex < persona.maxSearchesPerSession; searchIndex += 1) {
     if (isDryRun() && searchIndex === 0) {
-      await loadDryRunSerp(page, targetDomain, currentQuery.query);
+      await loadDryRunSerp(page, targetDomain, currentQuery.query, targetPath);
       googleLoaded = true;
       searchSubmitted = true;
       await onEvent("google_loaded");

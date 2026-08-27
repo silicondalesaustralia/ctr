@@ -273,6 +273,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       cluster,
       initialQuery,
       targetDomain: input.experiment.targetDomain,
+      targetUrl: input.experiment.targetUrl,
       maxSerpPages: input.experiment.maxSerpPages,
       behaviourOverrides,
       onEvent,

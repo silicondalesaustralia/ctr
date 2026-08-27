@@ -24,11 +24,12 @@ export function getMockSerpPath(): string {
   return join(process.cwd(), "fixtures", "mock-serp.html");
 }
 
-export function getMockSerpUrl(targetDomain: string, query: string): string {
+export function getMockSerpUrl(targetDomain: string, query: string, targetPath = "/"): string {
   const filePath = getMockSerpPath();
   const params = new URLSearchParams({
     q: query,
     domain: targetDomain,
+    path: targetPath.startsWith("/") ? targetPath : `/${targetPath}`,
   });
   return `${pathToFileURL(filePath).href}?${params.toString()}`;
 }
@@ -37,9 +38,14 @@ export async function loadMockSerpInPage(
   page: Page,
   targetDomain: string,
   query: string,
+  targetPath = "/",
 ): Promise<void> {
   const html = await readFile(getMockSerpPath(), "utf-8");
-  const params = new URLSearchParams({ q: query, domain: targetDomain }).toString();
+  const params = new URLSearchParams({
+    q: query,
+    domain: targetDomain,
+    path: targetPath.startsWith("/") ? targetPath : `/${targetPath}`,
+  }).toString();
   const populated = html.replace(
     "const params = new URLSearchParams(window.location.search);",
     `const params = new URLSearchParams("${params.replace(/"/g, '\\"')}");`,
