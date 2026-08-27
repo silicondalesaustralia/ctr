@@ -575,19 +575,19 @@ export default function CampaignDashboard({
     setError(null);
     setMessage(null);
     try {
-      const { id, campaign } = await saveCampaignRecord();
-      if (isNew) {
-        router.replace(`/campaign/${id}`);
-      } else {
-        applyCampaign(campaign);
-      }
+      const { id } = await saveCampaignRecord();
       const result = await apiPost<{ campaign: Campaign; running: boolean }>(
         `/campaigns/${id}/run`,
       );
       setRunning(result.running);
       setCampaignActive(true);
       applyCampaign(result.campaign);
-      await loadCampaign();
+      setMessage("Campaign saved and started");
+      if (isNew) {
+        router.replace(`/campaign/${id}`);
+      } else {
+        await loadCampaign();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start campaign");
     } finally {

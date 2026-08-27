@@ -86,13 +86,27 @@ export default function CampaignReviewStep({
   onStop,
 }: Props) {
   const enabledQueries = form.queries.filter((row) => row.active);
+
+  function isQueryFindableLive(row: QueryRow): boolean {
+    if (row.preflightFound) return true;
+    if (!preflightSummary) return false;
+    const result = preflightSummary.results.find(
+      (item) => item.query.toLowerCase() === row.text.toLowerCase(),
+    );
+    return result?.found === true;
+  }
+
   const hasSchedulableEnabled = enabledQueries.some(
-    (row) => row.preflightFound || (row.gscImpressions28d ?? 0) > 0,
+    (row) => (row.gscImpressions28d ?? 0) > 0 || isQueryFindableLive(row),
   );
+
+  const needsLiveValidation = enabledQueries.some((row) => (row.gscImpressions28d ?? 0) === 0);
+  const preflightBlocked = preflightSummary?.status === "blocked";
+
   const preflightReady =
-    preflightSummary != null &&
-    preflightSummary.status !== "blocked" &&
-    hasSchedulableEnabled;
+    hasSchedulableEnabled &&
+    !preflightBlocked &&
+    (!needsLiveValidation || preflightSummary != null);
   const notFoundQueries =
     preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
   return (
@@ -372,9 +386,13 @@ export default function CampaignReviewStep({
         </div>
         {!running && !preflightReady && (
           <p style={{ color: "#b45309", fontSize: 14, marginTop: 12 }}>
-            {preflightSummary
-              ? "Enable at least one query with GSC data or a live Google find before starting."
-              : "Run Validate on Google before starting — live findability is required for queries without GSC history."}
+            {preflightBlocked
+              ? "Google blocked preflight — retry validation before starting."
+              : !hasSchedulableEnabled
+                ? "Enable at least one query with GSC impressions or a live Google find."
+                : needsLiveValidation && !preflightSummary
+                  ? "Run Validate on Google before starting — some enabled queries have no GSC history."
+                  : "Cannot start yet — check query cluster and preflight status."}
           </p>
         )}
       </section>
