@@ -442,10 +442,10 @@ export default function CampaignDashboard({
         throw new Error("Analysis did not return a campaign proposal");
       }
       applyProposal(result.proposal);
-      setMessage("Analysis complete — validating queries on Google...");
-      await runPreflight();
+      setMessage("Analysis complete — review the plan, then validate on Google when ready.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
+    } finally {
       setBusy(null);
     }
   }
