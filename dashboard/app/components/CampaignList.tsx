@@ -41,7 +41,10 @@ export default function CampaignList() {
   const [activeCount, setActiveCount] = useState(0);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<{
+    id: string;
+    action: "start" | "stop" | "delete";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -67,7 +70,7 @@ export default function CampaignList() {
   }, [load]);
 
   async function startCampaign(id: string) {
-    setBusyId(id);
+    setBusyAction({ id, action: "start" });
     setError(null);
     try {
       await apiPost(`/campaigns/${id}/run`);
@@ -75,12 +78,12 @@ export default function CampaignList() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start campaign");
     } finally {
-      setBusyId(null);
+      setBusyAction(null);
     }
   }
 
   async function stopCampaign(id: string) {
-    setBusyId(id);
+    setBusyAction({ id, action: "stop" });
     setError(null);
     try {
       await apiPost(`/campaigns/${id}/stop`);
@@ -88,7 +91,7 @@ export default function CampaignList() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop campaign");
     } finally {
-      setBusyId(null);
+      setBusyAction(null);
     }
   }
 
@@ -102,7 +105,7 @@ export default function CampaignList() {
       return;
     }
 
-    setBusyId(id);
+    setBusyAction({ id, action: "delete" });
     setError(null);
     try {
       await apiDelete(`/campaigns/${id}`);
@@ -110,7 +113,7 @@ export default function CampaignList() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete campaign");
     } finally {
-      setBusyId(null);
+      setBusyAction(null);
     }
   }
 
@@ -169,7 +172,16 @@ export default function CampaignList() {
                 </tr>
               </thead>
               <tbody>
-                {campaigns.map((campaign) => (
+                {campaigns.map((campaign) => {
+                  const isBusy = busyAction?.id === campaign.id;
+                  const busyLabel =
+                    busyAction?.action === "start"
+                      ? "Starting..."
+                      : busyAction?.action === "stop"
+                        ? "Stopping..."
+                        : "Deleting...";
+
+                  return (
                   <tr key={campaign.id}>
                     <td style={cellStyle}>
                       <strong>{campaign.keyword || campaign.name}</strong>
@@ -204,46 +216,47 @@ export default function CampaignList() {
                     </td>
                     <td style={cellStyle}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Link href={`/campaign/${campaign.id}`} style={secondaryButtonStyle}>
+                        <Link href={`/campaign/${campaign.id}`} style={secondaryButtonStyle(isBusy)}>
                           Open
                         </Link>
                         {campaign.status === "active" ? (
                           <button
                             type="button"
-                            disabled={busyId === campaign.id}
+                            disabled={isBusy}
                             onClick={() => void stopCampaign(campaign.id)}
-                            style={primaryButtonStyle("#dc2626")}
+                            style={primaryButtonStyle("#dc2626", isBusy)}
                           >
-                            Stop
+                            {isBusy ? busyLabel : "Stop"}
                           </button>
                         ) : (
                           <button
                             type="button"
-                            disabled={busyId === campaign.id}
+                            disabled={isBusy}
                             onClick={() => void startCampaign(campaign.id)}
-                            style={primaryButtonStyle("#16a34a")}
+                            style={primaryButtonStyle("#16a34a", isBusy)}
                           >
-                            Start
+                            {isBusy ? busyLabel : "Start"}
                           </button>
                         )}
                         <button
                           type="button"
-                          disabled={busyId === campaign.id}
+                          disabled={isBusy}
                           onClick={() =>
                             void deleteCampaignHandler(campaign.id, campaign.keyword || campaign.name)
                           }
                           style={{
-                            ...secondaryButtonStyle,
+                            ...secondaryButtonStyle(isBusy),
                             color: "#b91c1c",
                             borderColor: "#fecaca",
                           }}
                         >
-                          Delete
+                          {isBusy ? busyLabel : "Delete"}
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

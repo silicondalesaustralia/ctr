@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "../../../lib/api";
-import { cellStyle, panelStyle, thStyle } from "./shared";
+import { cellStyle, panelStyle, secondaryButtonStyle, thStyle } from "./shared";
 
 interface IdentityRow {
   id: string;
@@ -119,14 +119,15 @@ export default function CampaignIdentitiesTab({ campaignId, regionLabel }: Props
                       disabled={busyId === identity.id}
                       onClick={() => void toggle(identity.id, !identity.active)}
                       style={{
+                        ...secondaryButtonStyle(busyId === identity.id),
                         padding: "4px 10px",
-                        borderRadius: 6,
-                        border: "1px solid #cbd5e1",
-                        background: "white",
-                        cursor: busyId === identity.id ? "not-allowed" : "pointer",
                       }}
                     >
-                      {identity.active ? "Disable" : "Enable"}
+                      {busyId === identity.id
+                        ? "Updating..."
+                        : identity.active
+                          ? "Disable"
+                          : "Enable"}
                     </button>
                   </td>
                 </tr>

@@ -111,14 +111,21 @@ export const thStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-export const secondaryButtonStyle: React.CSSProperties = {
+export const secondaryButtonBase: React.CSSProperties = {
   padding: "10px 18px",
   borderRadius: 8,
   border: "1px solid #cbd5e1",
   background: "white",
-  cursor: "pointer",
   fontWeight: 600,
 };
+
+export function secondaryButtonStyle(disabled = false): React.CSSProperties {
+  return {
+    ...secondaryButtonBase,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+  };
+}
 
 export function primaryButtonStyle(color: string, disabled = false): React.CSSProperties {
   return {

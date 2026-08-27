@@ -19,7 +19,7 @@ import {
   resolveRegionTimezone,
 } from "./query-generator.js";
 import { createExperimentFromInput, type CreateExperimentInput } from "./experiment-service.js";
-import { createAdditionalIdentities } from "../identities/identity-service.js";
+import { assignMissingPersonas, createAdditionalIdentities } from "../identities/identity-service.js";
 
 export type CampaignWithQueries = Experiment & { queries: ExperimentQuery[] };
 
@@ -412,6 +412,7 @@ export async function createIdentitiesForCampaign(
   fromExternalId: string | null;
   toExternalId: string | null;
   intensity: CampaignIntensityResult;
+  personasAssigned?: number;
 }> {
   const experimentId =
     options?.experimentId ??
@@ -422,11 +423,13 @@ export async function createIdentitiesForCampaign(
   const toCreate = options?.count ?? deficit;
 
   if (toCreate <= 0) {
+    const backfilled = await assignMissingPersonas();
     return {
       createdCount: 0,
       fromExternalId: null,
       toExternalId: null,
       intensity,
+      personasAssigned: backfilled,
     };
   }
 
@@ -438,6 +441,8 @@ export async function createIdentitiesForCampaign(
     count: toCreate,
     desktopPercent: input.desktopPercent ?? campaign?.desktopPercent ?? 65,
   });
+
+  await assignMissingPersonas();
 
   const refreshed = await previewCampaignIntensity(input, experimentId);
 
@@ -478,6 +483,8 @@ export interface CampaignIdentityRow {
 }
 
 export async function getCampaignIdentities(experimentId: string): Promise<CampaignIdentityRow[]> {
+  await assignMissingPersonas();
+
   const campaign = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
   const sessions = await prisma.session.findMany({
     where: { experimentId },

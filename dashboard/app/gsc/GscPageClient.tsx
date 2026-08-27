@@ -173,7 +173,7 @@ export default function GscPageClient() {
                       type="button"
                       onClick={() => void loadSites(connection.id)}
                       disabled={Boolean(busy)}
-                      style={secondaryButtonStyle}
+                      style={secondaryButtonStyle(Boolean(busy))}
                     >
                       {busy === `sites-${connection.id}` ? "Loading..." : "Show properties"}
                     </button>
@@ -181,7 +181,7 @@ export default function GscPageClient() {
                       type="button"
                       onClick={() => void removeConnection(connection.id)}
                       disabled={Boolean(busy)}
-                      style={secondaryButtonStyle}
+                      style={secondaryButtonStyle(Boolean(busy))}
                     >
                       Disconnect
                     </button>

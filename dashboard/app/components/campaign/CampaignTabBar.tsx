@@ -1,5 +1,5 @@
 import type { CampaignTab } from "./shared";
-import { secondaryButtonStyle } from "./shared";
+import { secondaryButtonBase } from "./shared";
 
 interface Props {
   active: CampaignTab;
@@ -24,7 +24,7 @@ export default function CampaignTabBar({ active, onChange, showPlan }: Props) {
           type="button"
           onClick={() => onChange(tab.id)}
           style={{
-            ...secondaryButtonStyle,
+            ...secondaryButtonBase,
             background: active === tab.id ? "#0f172a" : "white",
             color: active === tab.id ? "white" : "#0f172a",
             borderColor: active === tab.id ? "#0f172a" : "#cbd5e1",

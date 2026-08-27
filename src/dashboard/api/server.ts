@@ -906,9 +906,14 @@ export function createApiServer() {
       });
 
       if (result.createdCount === 0) {
+        const personaNote =
+          result.personasAssigned && result.personasAssigned > 0
+            ? ` Assigned personas to ${result.personasAssigned} existing identities.`
+            : "";
         res.json({
-          message: "No additional identities needed for this campaign plan",
+          message: `No additional identities needed for this campaign plan.${personaNote}`,
           createdCount: 0,
+          personasAssigned: result.personasAssigned ?? 0,
           intensity: result.intensity,
         });
         return;

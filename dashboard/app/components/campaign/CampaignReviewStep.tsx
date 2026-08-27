@@ -316,22 +316,22 @@ export default function CampaignReviewStep({
 
         <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
           {!running && (
-            <button type="button" onClick={onBack} disabled={Boolean(busy)} style={secondaryButtonStyle}>
+            <button type="button" onClick={onBack} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
               Back
             </button>
           )}
           {!running && (
-            <button type="button" onClick={onReanalyze} disabled={Boolean(busy)} style={secondaryButtonStyle}>
+            <button type="button" onClick={onReanalyze} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
               {busy === "analyze" ? "Analyzing..." : "Re-analyze GSC"}
             </button>
           )}
           {!running && (
-            <button type="button" onClick={onPreflight} disabled={Boolean(busy)} style={secondaryButtonStyle}>
+            <button type="button" onClick={onPreflight} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
               {busy === "preflight" ? "Checking Google..." : "Validate on Google"}
             </button>
           )}
           {!running && (
-            <button type="button" onClick={onPreview} disabled={Boolean(busy)} style={secondaryButtonStyle}>
+            <button type="button" onClick={onPreview} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
               {busy === "preview" ? "Calculating..." : "Update preview"}
             </button>
           )}
@@ -340,7 +340,7 @@ export default function CampaignReviewStep({
               type="button"
               onClick={onSave}
               disabled={Boolean(busy) || !form.keyword || !form.targetUrl}
-              style={secondaryButtonStyle}
+              style={secondaryButtonStyle(Boolean(busy) || !form.keyword || !form.targetUrl)}
             >
               {busy === "save" ? "Saving..." : "Save campaign"}
             </button>
@@ -460,7 +460,7 @@ export default function CampaignReviewStep({
                 type="button"
                 onClick={onCreateIdentities}
                 disabled={Boolean(busy) || running}
-                style={primaryButtonStyle("#2563eb")}
+                style={primaryButtonStyle("#2563eb", Boolean(busy) || running)}
               >
                 {busy === "identities"
                   ? "Creating..."

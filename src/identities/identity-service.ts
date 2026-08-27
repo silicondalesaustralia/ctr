@@ -36,6 +36,28 @@ export async function countActiveIdentities(): Promise<number> {
   return prisma.identity.count({ where: { active: true } });
 }
 
+export async function assignMissingPersonas(): Promise<number> {
+  const identities = await prisma.identity.findMany({
+    where: { personaId: null },
+    orderBy: { externalId: "asc" },
+  });
+
+  let assigned = 0;
+  for (const identity of identities) {
+    const persona = assignPersona(identity.deviceClass, identity.externalId);
+    await prisma.identity.update({
+      where: { id: identity.id },
+      data: {
+        personaId: persona.id,
+        personaAssignedAt: new Date(),
+      },
+    });
+    assigned += 1;
+  }
+
+  return assigned;
+}
+
 async function createIdentityBatch(
   startIndex: number,
   count: number,
@@ -157,8 +179,6 @@ export async function createIdentities(
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
-        personaId: persona.id,
-        personaAssignedAt: new Date(),
       },
       create: {
         externalId,
@@ -177,7 +197,18 @@ export async function createIdentities(
       },
     });
 
-    created.push(identity);
+    if (!identity.personaId) {
+      const updated = await prisma.identity.update({
+        where: { id: identity.id },
+        data: {
+          personaId: persona.id,
+          personaAssignedAt: new Date(),
+        },
+      });
+      created.push(updated);
+    } else {
+      created.push(identity);
+    }
   }
 
   return created;

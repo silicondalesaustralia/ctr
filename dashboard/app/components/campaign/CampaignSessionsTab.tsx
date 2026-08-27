@@ -57,7 +57,7 @@ export default function CampaignSessionsTab({ campaignId }: Props) {
         }}
       >
         <h2 style={{ margin: 0 }}>Sessions</h2>
-        <button type="button" onClick={() => void load()} style={secondaryButtonStyle}>
+        <button type="button" onClick={() => void load()} style={secondaryButtonStyle()}>
           Refresh
         </button>
       </div>
