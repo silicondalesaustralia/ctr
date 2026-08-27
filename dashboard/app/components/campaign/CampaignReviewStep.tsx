@@ -1,6 +1,7 @@
 "use client";
 
 import type { CampaignFormState, IntensitySummary, PreflightSummary, QueryRow, SettingRationale } from "./shared";
+import HintLabel from "./HintLabel";
 import {
   cellStyle,
   inputStyle,
@@ -10,6 +11,25 @@ import {
   secondaryButtonStyle,
   thStyle,
 } from "./shared";
+
+const CAMPAIGN_SETTING_HINTS = {
+  duration:
+    "How many days the campaign runs. Search sessions are spread across this window to look like steady organic traffic.",
+  treatmentIntensity:
+    "Multiplier applied to expected baseline clicks from GSC. Low = 1.25×, Normal = 1.5×, Strong = 2×. Use Strong for deeper rankings.",
+  desktopPercent:
+    "Share of browser sessions that use a desktop profile vs mobile. Match how your GSC traffic splits if you know it.",
+  ctrSource:
+    "How expected click-through rate is estimated from ranking position. Default curve is industry average; GSC site curve uses your property history.",
+  maxShareOfSearchDemand:
+    "Safety cap: treatment sessions will not exceed this fraction of estimated total search volume for your query cluster (default 2%).",
+  adaptivePacing:
+    "When enabled, the session budget is recalculated during the campaign as GSC positions and impressions change.",
+  recalculateEveryDays:
+    "With rank-adaptive pacing on, how often the platform recalculates how many sessions each query should receive.",
+  maxShareOfGscImpressions:
+    "Safety cap: treatment sessions will not exceed this fraction of your page's GSC impressions in the last 28 days (default 5%).",
+} as const;
 
 interface Props {
   form: CampaignFormState;
@@ -185,7 +205,7 @@ export default function CampaignReviewStep({
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <label>
-              <span style={labelStyle}>Duration (days)</span>
+              <HintLabel label="Duration (days)" hint={CAMPAIGN_SETTING_HINTS.duration} />
               <input
                 style={inputStyle}
                 type="number"
@@ -196,7 +216,7 @@ export default function CampaignReviewStep({
               />
             </label>
             <label>
-              <span style={labelStyle}>Treatment intensity</span>
+              <HintLabel label="Treatment intensity" hint={CAMPAIGN_SETTING_HINTS.treatmentIntensity} />
               <select
                 style={inputStyle}
                 value={form.treatmentIntensity}
@@ -212,7 +232,7 @@ export default function CampaignReviewStep({
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
             <label>
-              <span style={labelStyle}>Desktop mix %</span>
+              <HintLabel label="Desktop mix %" hint={CAMPAIGN_SETTING_HINTS.desktopPercent} />
               <input
                 style={inputStyle}
                 type="number"
@@ -224,7 +244,7 @@ export default function CampaignReviewStep({
               />
             </label>
             <label>
-              <span style={labelStyle}>CTR source</span>
+              <HintLabel label="CTR source" hint={CAMPAIGN_SETTING_HINTS.ctrSource} />
               <select
                 style={inputStyle}
                 value={form.ctrSource}
@@ -236,7 +256,7 @@ export default function CampaignReviewStep({
               </select>
             </label>
             <label>
-              <span style={labelStyle}>Max share of demand</span>
+              <HintLabel label="Max share of demand" hint={CAMPAIGN_SETTING_HINTS.maxShareOfSearchDemand} />
               <input
                 style={inputStyle}
                 type="number"
@@ -258,10 +278,13 @@ export default function CampaignReviewStep({
                 onChange={(e) => onFormChange("adaptivePacing", e.target.checked)}
                 disabled={running}
               />
-              <span>Rank-adaptive pacing</span>
+              <HintLabel label="Rank-adaptive pacing" hint={CAMPAIGN_SETTING_HINTS.adaptivePacing} inline />
             </label>
             <label>
-              <span style={labelStyle}>Recalculate every (days)</span>
+              <HintLabel
+                label="Recalculate every (days)"
+                hint={CAMPAIGN_SETTING_HINTS.recalculateEveryDays}
+              />
               <input
                 style={inputStyle}
                 type="number"
@@ -272,7 +295,10 @@ export default function CampaignReviewStep({
               />
             </label>
             <label>
-              <span style={labelStyle}>Max share of GSC impressions</span>
+              <HintLabel
+                label="Max share of GSC impressions"
+                hint={CAMPAIGN_SETTING_HINTS.maxShareOfGscImpressions}
+              />
               <input
                 style={inputStyle}
                 type="number"
