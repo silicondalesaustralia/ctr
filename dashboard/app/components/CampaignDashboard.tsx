@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "../../lib/api";
 import AppLayout from "./AppLayout";
 import CampaignIdentitiesTab from "./campaign/CampaignIdentitiesTab";
+import CampaignIdentityPicker from "./campaign/CampaignIdentityPicker";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
@@ -92,6 +93,7 @@ const defaultForm = (): CampaignFormState => ({
   plannedSessionCap: null,
   targetIdentityCount: null,
   organicMaxSessionsPerIdentity: 2,
+  selectedIdentityIds: [],
 });
 
 function intensityFromPreview(preview: IntensityPreview): IntensitySummary {
@@ -233,6 +235,7 @@ export default function CampaignDashboard({
       plannedSessionCap: proposal.plannedSessionCap ?? proposal.intensity.totalAllocatedSessions,
       targetIdentityCount: proposal.targetIdentityCount ?? proposal.intensity.suggestedIdentities,
       organicMaxSessionsPerIdentity: proposal.organicMaxSessionsPerIdentity ?? 2,
+      selectedIdentityIds: prev.selectedIdentityIds,
     }));
     setIntensity(intensityFromPreview(proposal.intensity));
     setRationales(proposal.rationales);
@@ -263,6 +266,7 @@ export default function CampaignDashboard({
       plannedSessionCap: c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
       targetIdentityCount: c.intensity?.suggestedIdentities ?? null,
       organicMaxSessionsPerIdentity: 2,
+      selectedIdentityIds: [],
     });
     setIntensity(c.intensity);
     setCampaignActive(c.status === "active");
@@ -349,6 +353,7 @@ export default function CampaignDashboard({
       plannedSessionCap: form.plannedSessionCap,
       targetIdentityCount: form.targetIdentityCount,
       organicMaxSessionsPerIdentity: form.organicMaxSessionsPerIdentity,
+      selectedIdentityIds: form.selectedIdentityIds,
       queries: form.queries.map((q) => ({
         text: q.text,
         type: q.type,
@@ -655,7 +660,13 @@ export default function CampaignDashboard({
       {activeTab === "sessions" && campaignId ? (
         <CampaignSessionsTab campaignId={campaignId} />
       ) : activeTab === "identities" && campaignId ? (
-        <CampaignIdentitiesTab campaignId={campaignId} regionLabel={form.region} />
+        <CampaignIdentitiesTab
+          campaignId={campaignId}
+          regionLabel={form.region}
+          selectedIds={form.selectedIdentityIds}
+          onSelectionChange={(ids) => updateForm("selectedIdentityIds", ids)}
+          readonly={campaignActive}
+        />
       ) : step === "setup" && !campaignActive ? (
         <CampaignSetupStep
           keyword={form.keyword}
@@ -679,28 +690,39 @@ export default function CampaignDashboard({
           onAnalyze={() => void analyzeCampaign()}
         />
       ) : (
-        <CampaignReviewStep
-          form={form}
-          intensity={intensity}
-          rationales={rationales}
-          gscStatus={gscStatus}
-          preflightSummary={preflightSummary}
-          running={campaignActive}
-          busy={busy}
-          message={message}
-          error={error}
-          onFormChange={updateForm}
-          onQueryChange={updateQuery}
-          onToggleQueryActive={toggleQueryActive}
-          onBack={() => setStep("setup")}
-          onReanalyze={() => void analyzeCampaign()}
-          onPreflight={() => void runPreflight()}
-          onPreview={() => void previewIntensity()}
-          onCreateIdentities={() => void createIdentities()}
-          onSave={() => void saveCampaign()}
-          onSaveAndStart={() => void saveAndStart()}
-          onStop={() => void stopCampaignHandler()}
-        />
+        <>
+          <CampaignReviewStep
+            form={form}
+            intensity={intensity}
+            rationales={rationales}
+            gscStatus={gscStatus}
+            preflightSummary={preflightSummary}
+            running={campaignActive}
+            busy={busy}
+            message={message}
+            error={error}
+            onFormChange={updateForm}
+            onQueryChange={updateQuery}
+            onToggleQueryActive={toggleQueryActive}
+            onBack={() => setStep("setup")}
+            onReanalyze={() => void analyzeCampaign()}
+            onPreflight={() => void runPreflight()}
+            onPreview={() => void previewIntensity()}
+            onCreateIdentities={() => void createIdentities()}
+            onSave={() => void saveCampaign()}
+            onSaveAndStart={() => void saveAndStart()}
+            onStop={() => void stopCampaignHandler()}
+          />
+          <div style={{ marginTop: 16 }}>
+            <CampaignIdentityPicker
+              campaignId={campaignId ?? undefined}
+              regionLabel={form.region}
+              selectedIds={form.selectedIdentityIds}
+              onSelectionChange={(ids) => updateForm("selectedIdentityIds", ids)}
+              readonly={campaignActive}
+            />
+          </div>
+        </>
       )}
 
       {(message || error) && (

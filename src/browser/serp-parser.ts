@@ -26,7 +26,7 @@ function candidateMatchesTarget(candidate: SerpLinkCandidate, targetDomain: stri
   return citeHaystack.includes(normalizedTarget);
 }
 
-function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
+export function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
   const resolvedHref = resolveGoogleSerpHref(candidate.href);
   if (resolvedHref.startsWith("http") && !/google\.com/i.test(resolvedHref)) {
     return true;
@@ -46,7 +46,7 @@ const ORGANIC_SELECTORS = [
   "ol.organic-results li a[href]",
 ];
 
-async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[]> {
+export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[]> {
   for (const selector of ORGANIC_SELECTORS) {
     const candidate = page.locator(selector);
     if ((await candidate.count()) === 0) {

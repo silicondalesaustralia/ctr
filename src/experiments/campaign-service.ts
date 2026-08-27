@@ -20,6 +20,13 @@ import {
 } from "./query-generator.js";
 import { createExperimentFromInput, type CreateExperimentInput } from "./experiment-service.js";
 import { assignMissingPersonas, createAdditionalIdentities } from "../identities/identity-service.js";
+import {
+  computeWarmupProgress,
+  countEligibleIdentities,
+  getCampaignIdentityPool,
+  setCampaignIdentities,
+} from "../warmup/warmup-service.js";
+import { isWarmupExperiment } from "../warmup/warmup-experiment.js";
 
 export type CampaignWithQueries = Experiment & { queries: ExperimentQuery[] };
 
@@ -49,11 +56,12 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   plannedSessionCap?: number | null;
   targetIdentityCount?: number | null;
   organicMaxSessionsPerIdentity?: number;
+  selectedIdentityIds?: string[];
 }
 
 export async function getCurrentCampaign(): Promise<CampaignWithQueries | null> {
   const active = await prisma.experiment.findFirst({
-    where: { status: { in: ["active", "paused"] } },
+    where: { status: { in: ["active", "paused"] }, slug: { not: "__warmup__" } },
     include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -62,16 +70,18 @@ export async function getCurrentCampaign(): Promise<CampaignWithQueries | null> 
   }
 
   return prisma.experiment.findFirst({
+    where: { slug: { not: "__warmup__" } },
     include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function listCampaigns(): Promise<CampaignWithQueries[]> {
-  return prisma.experiment.findMany({
+  const campaigns = await prisma.experiment.findMany({
     include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
     orderBy: { updatedAt: "desc" },
   });
+  return campaigns.filter((campaign) => !isWarmupExperiment(campaign.slug));
 }
 
 export async function getCampaignById(id: string): Promise<CampaignWithQueries | null> {
@@ -155,7 +165,7 @@ export async function previewCampaignIntensity(
 
   queries = await enrichQueriesWithGsc(experimentId ?? null, input.targetUrl.trim(), queries);
 
-  const identityCount = await prisma.identity.count({ where: { active: true } });
+  const identityCount = await countEligibleIdentities(region === "ALL" ? null : region);
 
   const siteCurveData =
     input.ctrSource === "gsc_site_curve" && experimentId
@@ -266,6 +276,11 @@ async function saveCampaignConfig(
   });
 
   const persistedQueries = await persistQueries(experiment.id, queries, intensity);
+
+  if (input.selectedIdentityIds) {
+    await setCampaignIdentities(experiment.id, input.selectedIdentityIds);
+  }
+
   return { experiment, queries: persistedQueries, intensity };
 }
 
@@ -351,7 +366,10 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
   });
 
   if (scheduledCount === 0) {
-    const identities = await prisma.identity.findMany({ where: { active: true } });
+    const identities = await getCampaignIdentityPool(
+      experimentId,
+      existing.focusRegion,
+    );
     const fresh = await prisma.experiment.findUniqueOrThrow({
       where: { id: experimentId },
       include: { queries: { where: { active: true } } },
@@ -480,21 +498,44 @@ export interface CampaignIdentityRow {
   campaignBlocked: number;
   lastUsedForCampaign: string | null;
   inRegionPool: boolean;
+  selected: boolean;
+  warmup: ReturnType<typeof computeWarmupProgress>;
+  createdAt: string;
+  totalSessions: number;
+  googleSessions: number;
+  blockedSessions: number;
 }
 
 export async function getCampaignIdentities(experimentId: string): Promise<CampaignIdentityRow[]> {
   await assignMissingPersonas();
 
   const campaign = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
-  const sessions = await prisma.session.findMany({
-    where: { experimentId },
-    select: {
-      identityId: true,
-      status: true,
-      targetClicked: true,
-      createdAt: true,
-    },
-  });
+  const [sessions, selections, warmupRemaining, identities] = await Promise.all([
+    prisma.session.findMany({
+      where: { experimentId },
+      select: {
+        identityId: true,
+        status: true,
+        targetClicked: true,
+        createdAt: true,
+      },
+    }),
+    prisma.experimentIdentity.findMany({ where: { experimentId } }),
+    prisma.warmupSession.groupBy({
+      by: ["identityId"],
+      where: { status: "scheduled" },
+      _count: { _all: true },
+    }),
+    prisma.identity.findMany({ orderBy: { externalId: "asc" } }),
+  ]);
+
+  const selectedIds = new Set(
+    selections.filter((row) => row.selected).map((row) => row.identityId),
+  );
+  const hasExplicitSelection = selections.length > 0;
+  const warmupRemainingByIdentity = new Map(
+    warmupRemaining.map((row) => [row.identityId, row._count._all]),
+  );
 
   const usage = new Map<
     string,
@@ -517,32 +558,39 @@ export async function getCampaignIdentities(experimentId: string): Promise<Campa
     usage.set(session.identityId, row);
   }
 
-  const identities = await prisma.identity.findMany({ orderBy: { externalId: "asc" } });
   const focusRegion = campaign.focusRegion;
 
-  return identities
-    .map((identity) => {
-      const stats = usage.get(identity.id);
-      const inRegionPool = !focusRegion || identity.region === focusRegion;
-      const usedInCampaign = stats != null;
-      return {
-        id: identity.id,
-        externalId: identity.externalId,
-        region: identity.region,
-        city: identity.city,
-        deviceClass: identity.deviceClass,
-        personaId: identity.personaId,
-        active: identity.active,
-        campaignSessions: stats?.sessions ?? 0,
-        campaignClicks: stats?.clicks ?? 0,
-        campaignBlocked: stats?.blocked ?? 0,
-        lastUsedForCampaign: stats?.lastUsed?.toISOString() ?? null,
-        inRegionPool,
-        usedInCampaign,
-      };
-    })
-    .filter((row) => row.usedInCampaign || row.inRegionPool)
-    .map(({ usedInCampaign: _used, ...row }) => row);
+  return identities.map((identity) => {
+    const stats = usage.get(identity.id);
+    const inRegionPool = !focusRegion || identity.region === focusRegion;
+    const selected = hasExplicitSelection
+      ? selectedIds.has(identity.id)
+      : inRegionPool && computeWarmupProgress(identity).eligible;
+
+    return {
+      id: identity.id,
+      externalId: identity.externalId,
+      region: identity.region,
+      city: identity.city,
+      deviceClass: identity.deviceClass,
+      personaId: identity.personaId,
+      active: identity.active,
+      campaignSessions: stats?.sessions ?? 0,
+      campaignClicks: stats?.clicks ?? 0,
+      campaignBlocked: stats?.blocked ?? 0,
+      lastUsedForCampaign: stats?.lastUsed?.toISOString() ?? null,
+      inRegionPool,
+      selected,
+      warmup: computeWarmupProgress(
+        identity,
+        warmupRemainingByIdentity.get(identity.id) ?? 0,
+      ),
+      createdAt: identity.createdAt.toISOString(),
+      totalSessions: identity.totalSessions,
+      googleSessions: identity.googleSessions,
+      blockedSessions: identity.blockedSessions,
+    };
+  });
 }
 
 export async function serializeCampaignSummary(campaign: CampaignWithQueries) {

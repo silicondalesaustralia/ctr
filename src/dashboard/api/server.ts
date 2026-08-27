@@ -46,6 +46,7 @@ import {
 import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
+import { computeWarmupProgress, setCampaignIdentities } from "../../warmup/warmup-service.js";
 import {
   completeOAuthConnection,
   consumeOAuthState,
@@ -521,6 +522,29 @@ export function createApiServer() {
     }
   });
 
+  app.put("/campaigns/:id/identities", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const body = req.body as { identityIds?: string[] };
+    if (!Array.isArray(body.identityIds)) {
+      res.status(400).json({ error: "identityIds array is required" });
+      return;
+    }
+
+    try {
+      await setCampaignIdentities(campaign.id, body.identityIds);
+      const identities = await getCampaignIdentities(campaign.id);
+      res.json({ identities });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
   app.put("/campaign", async (req, res) => {
     const body = req.body as Partial<UpsertCampaignInput>;
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
@@ -959,8 +983,40 @@ export function createApiServer() {
   });
 
   app.get("/identities", async (_req, res) => {
-    const identities = await prisma.identity.findMany({ orderBy: { externalId: "asc" } });
-    res.json(identities);
+    const [identities, warmupRemaining] = await Promise.all([
+      prisma.identity.findMany({ orderBy: { externalId: "asc" } }),
+      prisma.warmupSession.groupBy({
+        by: ["identityId"],
+        where: { status: "scheduled" },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const warmupRemainingByIdentity = new Map(
+      warmupRemaining.map((row) => [row.identityId, row._count._all]),
+    );
+
+    res.json({
+      identities: identities.map((identity) => ({
+        id: identity.id,
+        externalId: identity.externalId,
+        region: identity.region,
+        city: identity.city,
+        deviceClass: identity.deviceClass,
+        personaId: identity.personaId,
+        active: identity.active,
+        createdAt: identity.createdAt.toISOString(),
+        lastUsedAt: identity.lastUsedAt?.toISOString() ?? null,
+        totalSessions: identity.totalSessions,
+        googleSessions: identity.googleSessions,
+        blockedSessions: identity.blockedSessions,
+        targetClicks: identity.targetClicks,
+        warmup: computeWarmupProgress(
+          identity,
+          warmupRemainingByIdentity.get(identity.id) ?? 0,
+        ),
+      })),
+    });
   });
 
   app.post("/identities/:id/disable", async (req, res) => {

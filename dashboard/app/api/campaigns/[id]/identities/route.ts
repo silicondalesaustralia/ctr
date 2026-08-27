@@ -66,3 +66,20 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 
   return proxyRailwayResponse(response);
 }
+
+export async function PUT(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+  const body = await request.text();
+  const response = await railwayFetch(`/campaigns/${id}/identities`, apiKey, {
+    method: "PUT",
+    body,
+    headers: { "Content-Type": "application/json" },
+  });
+
+  return proxyRailwayResponse(response);
+}

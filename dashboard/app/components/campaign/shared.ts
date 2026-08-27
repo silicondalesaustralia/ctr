@@ -74,6 +74,7 @@ export interface CampaignFormState {
   plannedSessionCap: number | null;
   targetIdentityCount: number | null;
   organicMaxSessionsPerIdentity: number;
+  selectedIdentityIds: string[];
 }
 
 export const inputStyle: React.CSSProperties = {

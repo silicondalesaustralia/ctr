@@ -8,6 +8,7 @@ import { apiGet } from "../../lib/api";
 
 const nav = [
   { href: "/", label: "Campaigns" },
+  { href: "/identities", label: "Identities" },
   { href: "/gsc", label: "GSC" },
 ];
 

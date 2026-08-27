@@ -95,6 +95,19 @@ enum CtrSource {
   gsc_site_curve
 }
 
+enum WarmupStatus {
+  warming
+  eligible
+}
+
+enum WarmupSessionStatus {
+  scheduled
+  running
+  completed
+  failed
+  cancelled
+}
+
 model Experiment {
   id                   String           @id @default(cuid())
   name                 String
@@ -139,6 +152,7 @@ model Experiment {
   rankingSnapshots RankingSnapshot[]
   notes            ExperimentNote[]
   gscConnection    GscConnection?   @relation(fields: [gscConnectionId], references: [id], onDelete: SetNull)
+  selectedIdentities ExperimentIdentity[]
 
   @@map("experiments")
 }
@@ -201,11 +215,47 @@ model Identity {
   lastUsedAt       DateTime?       @map("last_used_at")
   personaId        String?         @map("persona_id")
   personaAssignedAt DateTime?      @map("persona_assigned_at")
+  warmupStatus     WarmupStatus    @default(warming) @map("warmup_status")
+  warmupSessionsCompleted Int      @default(0) @map("warmup_sessions_completed")
+  warmupSiteClicks   Int             @default(0) @map("warmup_site_clicks")
+  warmupEligibleAt DateTime?       @map("warmup_eligible_at")
 
   scheduledSessions ScheduledSession[]
   sessions          Session[]
+  warmupSessions    WarmupSession[]
+  campaignSelections ExperimentIdentity[]
 
   @@map("identities")
+}
+
+model WarmupSession {
+  id           String              @id @default(cuid())
+  identityId   String              @map("identity_id")
+  queryText    String              @map("query_text")
+  scheduledAt  DateTime            @map("scheduled_at")
+  status       WarmupSessionStatus @default(scheduled)
+  attemptCount Int                 @default(0) @map("attempt_count")
+  sessionId    String?             @map("session_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@map("warmup_sessions")
+}
+
+model ExperimentIdentity {
+  experimentId String @map("experiment_id")
+  identityId   String @map("identity_id")
+  selected     Boolean @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  identity   Identity   @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@id([experimentId, identityId])
+  @@map("experiment_identities")
 }
 
 model ScheduledSession {

@@ -4,6 +4,7 @@ import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { getEnv } from "../config/env.js";
 import { AU_REGIONS, isRegionCoherent, pickWeightedRegion } from "./regions.js";
+import { isWarmupEligible, scheduleWarmupForIdentity } from "../warmup/warmup-service.js";
 
 export interface CreateIdentitiesOptions {
   count: number;
@@ -120,6 +121,7 @@ async function createIdentityBatch(
     });
 
     created.push(identity);
+    await scheduleWarmupForIdentity(identity);
   }
 
   return created;
@@ -206,8 +208,10 @@ export async function createIdentities(
         },
       });
       created.push(updated);
+      await scheduleWarmupForIdentity(updated);
     } else {
       created.push(identity);
+      await scheduleWarmupForIdentity(identity);
     }
   }
 
@@ -288,6 +292,7 @@ export async function isIdentityEligible(
 ): Promise<boolean> {
   const identity = await prisma.identity.findUnique({ where: { id: identityId } });
   if (!identity?.active) return false;
+  if (!isWarmupEligible(identity)) return false;
 
   const dayStart = new Date(scheduledAt);
   dayStart.setHours(0, 0, 0, 0);
