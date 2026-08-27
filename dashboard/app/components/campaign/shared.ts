@@ -120,14 +120,86 @@ export const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-export function primaryButtonStyle(color: string): React.CSSProperties {
+export function primaryButtonStyle(color: string, disabled = false): React.CSSProperties {
   return {
     padding: "10px 22px",
     borderRadius: 8,
     border: "none",
     background: color,
     color: "white",
-    cursor: "pointer",
+    cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 600,
+    opacity: disabled ? 0.55 : 1,
   };
+}
+
+export function hasGscSignal(row: QueryRow): boolean {
+  return (
+    (row.gscImpressions28d ?? 0) > 0 ||
+    (row.gscClicks28d ?? 0) > 0 ||
+    row.startingPosition != null
+  );
+}
+
+export function isQueryFindableLive(
+  row: QueryRow,
+  preflightSummary: PreflightSummary | null,
+): boolean {
+  if (row.preflightFound) return true;
+  if (!preflightSummary) return false;
+  const result = preflightSummary.results.find(
+    (item) => item.query.toLowerCase() === row.text.toLowerCase(),
+  );
+  return result?.found === true;
+}
+
+export function hasLiveCheck(row: QueryRow, preflightSummary: PreflightSummary | null): boolean {
+  if (hasGscSignal(row)) return true;
+  if (row.preflightStatus) return true;
+  if (!preflightSummary) return false;
+  return preflightSummary.results.some(
+    (item) => item.query.toLowerCase() === row.text.toLowerCase(),
+  );
+}
+
+export function canScheduleQuery(
+  row: QueryRow,
+  preflightSummary: PreflightSummary | null,
+): boolean {
+  if (!row.active) return false;
+  return hasGscSignal(row) || isQueryFindableLive(row, preflightSummary);
+}
+
+export function getStartCampaignBlockReason(
+  form: CampaignFormState,
+  preflightSummary: PreflightSummary | null,
+): string | null {
+  if (!form.keyword.trim() || !form.targetUrl.trim()) {
+    return "Keyword and target URL are required.";
+  }
+
+  const enabledQueries = form.queries.filter((row) => row.active);
+  if (enabledQueries.length === 0) {
+    return "Enable at least one query before starting.";
+  }
+
+  if (preflightSummary?.status === "blocked") {
+    return "Google blocked preflight — retry validation before starting.";
+  }
+
+  const hasSchedulableEnabled = enabledQueries.some((row) =>
+    canScheduleQuery(row, preflightSummary),
+  );
+  if (!hasSchedulableEnabled) {
+    return "Enable at least one query with GSC data or a live Google find.";
+  }
+
+  const needsLiveValidation = enabledQueries.some(
+    (row) => !hasLiveCheck(row, preflightSummary),
+  );
+  if (needsLiveValidation) {
+    return "Run Validate on Google before starting — some enabled queries have no GSC history.";
+  }
+
+  return null;
 }

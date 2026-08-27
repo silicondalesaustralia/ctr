@@ -4,6 +4,7 @@ import type { CampaignFormState, IntensitySummary, PreflightSummary, QueryRow, S
 import HintLabel from "./HintLabel";
 import {
   cellStyle,
+  getStartCampaignBlockReason,
   inputStyle,
   labelStyle,
   panelStyle,
@@ -85,28 +86,8 @@ export default function CampaignReviewStep({
   onSaveAndStart,
   onStop,
 }: Props) {
-  const enabledQueries = form.queries.filter((row) => row.active);
-
-  function isQueryFindableLive(row: QueryRow): boolean {
-    if (row.preflightFound) return true;
-    if (!preflightSummary) return false;
-    const result = preflightSummary.results.find(
-      (item) => item.query.toLowerCase() === row.text.toLowerCase(),
-    );
-    return result?.found === true;
-  }
-
-  const hasSchedulableEnabled = enabledQueries.some(
-    (row) => (row.gscImpressions28d ?? 0) > 0 || isQueryFindableLive(row),
-  );
-
-  const needsLiveValidation = enabledQueries.some((row) => (row.gscImpressions28d ?? 0) === 0);
-  const preflightBlocked = preflightSummary?.status === "blocked";
-
-  const preflightReady =
-    hasSchedulableEnabled &&
-    !preflightBlocked &&
-    (!needsLiveValidation || preflightSummary != null);
+  const startBlockReason = getStartCampaignBlockReason(form, preflightSummary);
+  const startDisabled = Boolean(busy) || Boolean(startBlockReason);
   const notFoundQueries =
     preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
   return (
@@ -368,8 +349,8 @@ export default function CampaignReviewStep({
             <button
               type="button"
               onClick={onSaveAndStart}
-              disabled={Boolean(busy) || !form.keyword || !form.targetUrl || !preflightReady}
-              style={primaryButtonStyle("#16a34a")}
+              disabled={startDisabled}
+              style={primaryButtonStyle("#16a34a", startDisabled)}
             >
               {busy === "run" ? "Starting..." : "Save & start campaign"}
             </button>
@@ -378,22 +359,14 @@ export default function CampaignReviewStep({
               type="button"
               onClick={onStop}
               disabled={Boolean(busy)}
-              style={primaryButtonStyle("#dc2626")}
+              style={primaryButtonStyle("#dc2626", Boolean(busy))}
             >
               {busy === "stop" ? "Stopping..." : "Stop campaign"}
             </button>
           )}
         </div>
-        {!running && !preflightReady && (
-          <p style={{ color: "#b45309", fontSize: 14, marginTop: 12 }}>
-            {preflightBlocked
-              ? "Google blocked preflight — retry validation before starting."
-              : !hasSchedulableEnabled
-                ? "Enable at least one query with GSC impressions or a live Google find."
-                : needsLiveValidation && !preflightSummary
-                  ? "Run Validate on Google before starting — some enabled queries have no GSC history."
-                  : "Cannot start yet — check query cluster and preflight status."}
-          </p>
+        {!running && startBlockReason && (
+          <p style={{ color: "#b45309", fontSize: 14, marginTop: 12 }}>{startBlockReason}</p>
         )}
       </section>
 

@@ -11,14 +11,15 @@ import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
-import type {
-  CampaignFormState,
-  CampaignTab,
-  IntensitySummary,
-  PreflightSummary,
-  QueryRow,
-  RegionOption,
-  SettingRationale,
+import {
+  getStartCampaignBlockReason,
+  type CampaignFormState,
+  type CampaignTab,
+  type IntensitySummary,
+  type PreflightSummary,
+  type QueryRow,
+  type RegionOption,
+  type SettingRationale,
 } from "./campaign/shared";
 
 interface QueryIntensityRow {
@@ -571,6 +572,12 @@ export default function CampaignDashboard({
   }
 
   async function saveAndStart() {
+    const blockReason = getStartCampaignBlockReason(form, preflightSummary);
+    if (blockReason) {
+      setError(blockReason);
+      return;
+    }
+
     setBusy("run");
     setError(null);
     setMessage(null);
