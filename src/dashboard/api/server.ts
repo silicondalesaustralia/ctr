@@ -34,8 +34,14 @@ import {
   upsertCampaign,
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
-import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
+import { buildCampaignProposal, type CampaignProposal } from "../../campaign/campaign-proposal.js";
 import { runKeywordPreflight } from "../../campaign/keyword-preflight.js";
+import {
+  completePreflightJob,
+  createPreflightJob,
+  failPreflightJob,
+  getPreflightJob,
+} from "../../campaign/preflight-jobs.js";
 import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
@@ -67,6 +73,78 @@ function authMiddleware(req: Request, res: Response, next: NextFunction): void {
 async function isRunnerEnabledSetting(): Promise<boolean> {
   const setting = await prisma.appSetting.findUnique({ where: { key: "runner_enabled" } });
   return setting?.value !== "false" && isRunnerEnabled();
+}
+
+type PreflightRequestBody = Partial<UpsertCampaignInput> & {
+  maxSerpPages?: number;
+  identityExternalId?: string;
+};
+
+async function buildBaseProposalForPreflight(body: PreflightRequestBody): Promise<CampaignProposal> {
+  const current = await getCurrentCampaign();
+  let baseProposal = await buildCampaignProposal({
+    keyword: body.keyword!,
+    targetUrl: body.targetUrl!,
+    region: body.region!,
+    gscConnectionId: body.gscConnectionId ?? null,
+    gscSiteUrl: body.gscSiteUrl ?? null,
+  });
+
+  if (body.queries?.length) {
+    const intensity = await previewCampaignIntensity(body as UpsertCampaignInput, current?.id);
+    baseProposal = {
+      ...baseProposal,
+      keyword: body.keyword!.trim(),
+      targetUrl: body.targetUrl!.trim(),
+      region: body.region!.trim().toUpperCase(),
+      campaignDurationDays: body.campaignDurationDays ?? baseProposal.campaignDurationDays,
+      treatmentIntensity: body.treatmentIntensity ?? baseProposal.treatmentIntensity,
+      adaptivePacing: body.adaptivePacing ?? baseProposal.adaptivePacing,
+      recalculateEveryDays: body.recalculateEveryDays ?? baseProposal.recalculateEveryDays,
+      maxShareOfSearchDemand: body.maxShareOfSearchDemand ?? baseProposal.maxShareOfSearchDemand,
+      maxShareOfGscImpressions:
+        body.maxShareOfGscImpressions ?? baseProposal.maxShareOfGscImpressions,
+      desktopPercent: body.desktopPercent ?? baseProposal.desktopPercent,
+      ctrSource: body.ctrSource ?? baseProposal.ctrSource,
+      queries: body.queries,
+      intensity,
+      plannedSessionCap: body.plannedSessionCap ?? null,
+      targetIdentityCount: body.targetIdentityCount ?? null,
+      organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
+    };
+  } else {
+    baseProposal = {
+      ...baseProposal,
+      plannedSessionCap: body.plannedSessionCap ?? null,
+      targetIdentityCount: body.targetIdentityCount ?? null,
+      organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
+    };
+  }
+
+  return baseProposal;
+}
+
+async function runPreflightJob(jobId: string, body: PreflightRequestBody): Promise<void> {
+  try {
+    const baseProposal = await buildBaseProposalForPreflight(body);
+    const proposal = await runKeywordPreflight(
+      {
+        proposal: baseProposal,
+        maxSerpPages: body.maxSerpPages ?? 3,
+        identityExternalId: body.identityExternalId,
+      },
+      (queries, context) =>
+        runSerpPreflightChecks({
+          queries,
+          ...context,
+          jobId,
+        }),
+    );
+    completePreflightJob(jobId, proposal);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    failPreflightJob(jobId, message);
+  }
 }
 
 export function createApiServer() {
@@ -491,10 +569,7 @@ export function createApiServer() {
   });
 
   app.post("/campaign/preflight", async (req, res) => {
-    const body = req.body as Partial<UpsertCampaignInput> & {
-      maxSerpPages?: number;
-      identityExternalId?: string;
-    };
+    const body = req.body as PreflightRequestBody;
 
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
@@ -509,68 +584,31 @@ export function createApiServer() {
     }
 
     try {
-      const current = await getCurrentCampaign();
-      let baseProposal = await buildCampaignProposal({
-        keyword: body.keyword,
-        targetUrl: body.targetUrl,
-        region: body.region,
-        gscConnectionId: body.gscConnectionId ?? null,
-        gscSiteUrl: body.gscSiteUrl ?? null,
-      });
-
-      if (body.queries?.length) {
-        const intensity = await previewCampaignIntensity(
-          body as UpsertCampaignInput,
-          current?.id,
-        );
-        baseProposal = {
-          ...baseProposal,
-          keyword: body.keyword.trim(),
-          targetUrl: body.targetUrl.trim(),
-          region: body.region.trim().toUpperCase(),
-          campaignDurationDays: body.campaignDurationDays ?? baseProposal.campaignDurationDays,
-          treatmentIntensity: body.treatmentIntensity ?? baseProposal.treatmentIntensity,
-          adaptivePacing: body.adaptivePacing ?? baseProposal.adaptivePacing,
-          recalculateEveryDays: body.recalculateEveryDays ?? baseProposal.recalculateEveryDays,
-          maxShareOfSearchDemand:
-            body.maxShareOfSearchDemand ?? baseProposal.maxShareOfSearchDemand,
-          maxShareOfGscImpressions:
-            body.maxShareOfGscImpressions ?? baseProposal.maxShareOfGscImpressions,
-          desktopPercent: body.desktopPercent ?? baseProposal.desktopPercent,
-          ctrSource: body.ctrSource ?? baseProposal.ctrSource,
-          queries: body.queries,
-          intensity,
-          plannedSessionCap: body.plannedSessionCap ?? null,
-          targetIdentityCount: body.targetIdentityCount ?? null,
-          organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
-        };
-      } else {
-        baseProposal = {
-          ...baseProposal,
-          plannedSessionCap: body.plannedSessionCap ?? null,
-          targetIdentityCount: body.targetIdentityCount ?? null,
-          organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
-        };
-      }
-
-      const proposal = await runKeywordPreflight(
-        {
-          proposal: baseProposal,
-          maxSerpPages: body.maxSerpPages ?? 3,
-          identityExternalId: body.identityExternalId,
-        },
-        (queries, context) =>
-          runSerpPreflightChecks({
-            queries,
-            ...context,
-          }),
-      );
-
-      res.json({ proposal });
+      const queryCount = body.queries?.length ?? (await buildBaseProposalForPreflight(body)).queries.length;
+      const job = createPreflightJob(queryCount);
+      void runPreflightJob(job.id, body);
+      res.status(202).json({ jobId: job.id });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });
     }
+  });
+
+  app.get("/campaign/preflight/jobs/:id", (req, res) => {
+    const job = getPreflightJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: "Preflight job not found" });
+      return;
+    }
+
+    res.json({
+      id: job.id,
+      status: job.status,
+      testedCount: job.testedCount,
+      totalCount: job.totalCount,
+      proposal: job.proposal,
+      error: job.error,
+    });
   });
 
   app.post("/campaign/preview-intensity", async (req, res) => {

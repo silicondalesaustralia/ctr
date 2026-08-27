@@ -25,7 +25,7 @@ export function getApiConfig() {
   };
 }
 
-const LONG_RUNNING_PATHS = ["/campaign/preflight"];
+const LONG_RUNNING_PATHS: string[] = [];
 
 function resolveFetchUrl(path: string): string {
   if (typeof window === "undefined") {
@@ -42,15 +42,26 @@ function resolveFetchUrl(path: string): string {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = resolveFetchUrl(path);
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      "x-api-key": resolveApiKey(),
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        "x-api-key": resolveApiKey(),
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "Failed to fetch") {
+      throw new Error(
+        "Network error talking to the API — the connection dropped or timed out. Retry in a moment.",
+      );
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;

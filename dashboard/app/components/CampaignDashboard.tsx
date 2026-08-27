@@ -338,24 +338,51 @@ export default function CampaignDashboard({
   async function runPreflight() {
     setBusy("preflight");
     setError(null);
-    setMessage("Validating queries on Google — this can take a few minutes...");
+    setMessage("Starting Google validation...");
     try {
-      const result = await apiPost<{ proposal: CampaignProposal }>(
-        "/campaign/preflight",
-        buildPayload(),
-      );
-      applyProposal(result.proposal);
-      if (result.proposal.preflight?.status === "blocked") {
-        setMessage("Google blocked preflight — try again later");
-      } else if (result.proposal.preflight?.findableCount === 0) {
-        setMessage("No queries were findable on Google within 3 pages");
-      } else {
-        setMessage(
-          result.proposal.preflight?.keywordAdjusted
-            ? `Preflight complete — keyword updated to "${result.proposal.keyword}"`
-            : "Preflight complete — plan recalculated from findable queries",
-        );
+      const start = await apiPost<{ jobId: string }>("/campaign/preflight", buildPayload());
+
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const job = await apiGet<{
+          status: "running" | "complete" | "error";
+          testedCount: number;
+          totalCount: number;
+          proposal: CampaignProposal | null;
+          error: string | null;
+        }>(`/campaign/preflight/jobs/${start.jobId}`);
+
+        if (job.status === "running") {
+          setMessage(
+            `Checking Google... ${job.testedCount}/${job.totalCount} queries (browser session running on Railway)`,
+          );
+          continue;
+        }
+
+        if (job.status === "error") {
+          throw new Error(job.error ?? "Google preflight failed");
+        }
+
+        if (!job.proposal) {
+          throw new Error("Preflight finished without a proposal");
+        }
+
+        applyProposal(job.proposal);
+        if (job.proposal.preflight?.status === "blocked") {
+          setMessage("Google blocked preflight — try again later");
+        } else if (job.proposal.preflight?.findableCount === 0) {
+          setMessage("No queries were findable on Google within 3 pages");
+        } else {
+          setMessage(
+            job.proposal.preflight?.keywordAdjusted
+              ? `Preflight complete — keyword updated to "${job.proposal.keyword}"`
+              : "Preflight complete — plan recalculated from findable queries",
+          );
+        }
+        return;
       }
+
+      throw new Error("Preflight timed out after 10 minutes — retry or reduce query count");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google preflight failed");
     } finally {

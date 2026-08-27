@@ -13,6 +13,7 @@ import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
+import { updatePreflightJobProgress } from "./preflight-jobs.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
   cleanupBrowserSession,
@@ -199,6 +200,7 @@ export async function runSerpPreflightChecks(input: {
   region: string;
   maxSerpPages: number;
   identityExternalId?: string;
+  jobId?: string;
 }): Promise<PreflightQueryResult[]> {
   const env = getEnv();
   const identity = await pickPreflightIdentity(input.region, input.identityExternalId);
@@ -296,6 +298,9 @@ export async function runSerpPreflightChecks(input: {
         traits,
       );
       results.push(result);
+      if (input.jobId) {
+        updatePreflightJobProgress(input.jobId, results.length);
+      }
 
       if (result.status === "blocked") {
         break;
