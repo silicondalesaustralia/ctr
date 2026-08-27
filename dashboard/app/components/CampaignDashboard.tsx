@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "../../lib/api";
 import AppLayout from "./AppLayout";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
@@ -138,13 +139,21 @@ function suggestSiteFromUrl(targetUrl: string, sites: GscSiteOption[]): string |
   }
 }
 
-export default function CampaignDashboard() {
+export default function CampaignDashboard({
+  campaignId,
+  isNew = false,
+}: {
+  campaignId?: string;
+  isNew?: boolean;
+}) {
+  const router = useRouter();
   const [form, setForm] = useState<CampaignFormState>(defaultForm());
   const [step, setStep] = useState<WizardStep>("setup");
   const [rationales, setRationales] = useState<SettingRationale[]>([]);
   const [gscStatus, setGscStatus] = useState<"live" | "unavailable" | null>(null);
   const [preflightSummary, setPreflightSummary] = useState<PreflightSummary | null>(null);
   const [intensity, setIntensity] = useState<IntensitySummary | null>(null);
+  const [campaignActive, setCampaignActive] = useState(false);
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
   const [gscSites, setGscSites] = useState<GscSiteOption[]>([]);
@@ -202,6 +211,7 @@ export default function CampaignDashboard() {
       queries: c.queries,
     });
     setIntensity(c.intensity);
+    setCampaignActive(c.status === "active");
     if (c.keyword && c.targetUrl) {
       setStep("review");
     }
@@ -224,9 +234,11 @@ export default function CampaignDashboard() {
   }, [form.targetUrl]);
 
   const loadCampaign = useCallback(async () => {
+    if (isNew || !campaignId) return;
+
     const [campaignRes, logRes] = await Promise.all([
-      apiGet<{ campaign: Campaign | null; running: boolean }>("/campaign"),
-      apiGet<{ entries: LogEntry[] }>("/campaign/log"),
+      apiGet<{ campaign: Campaign; running: boolean }>(`/campaigns/${campaignId}`),
+      apiGet<{ entries: LogEntry[] }>(`/campaigns/${campaignId}/log`),
     ]);
 
     if (campaignRes.campaign) {
@@ -234,8 +246,9 @@ export default function CampaignDashboard() {
     }
 
     setRunning(campaignRes.running);
+    setCampaignActive(campaignRes.campaign.status === "active");
     setLog(logRes.entries);
-  }, []);
+  }, [campaignId, isNew]);
 
   useEffect(() => {
     void (async () => {
@@ -246,14 +259,16 @@ export default function CampaignDashboard() {
         ]);
         setRegions(regionOptions);
         setGscConnections(connectionsRes.connections);
-        await loadCampaign();
+        if (!isNew) {
+          await loadCampaign();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load campaign");
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadCampaign]);
+  }, [loadCampaign, isNew]);
 
   useEffect(() => {
     if (!form.gscConnectionId) {
@@ -264,14 +279,14 @@ export default function CampaignDashboard() {
   }, [form.gscConnectionId, loadGscSites]);
 
   useEffect(() => {
-    if (!running) return;
+    if (!campaignActive || !campaignId) return;
     const timer = setInterval(() => {
-      void apiGet<{ entries: LogEntry[] }>("/campaign/log")
+      void apiGet<{ entries: LogEntry[] }>(`/campaigns/${campaignId}/log`)
         .then((result) => setLog(result.entries))
         .catch(() => undefined);
     }, 10000);
     return () => clearInterval(timer);
-  }, [running]);
+  }, [campaignActive, campaignId]);
 
   function buildPayload() {
     return {
@@ -395,7 +410,7 @@ export default function CampaignDashboard() {
     try {
       const result = await apiPost<{ message: string; intensity: IntensityPreview }>(
         "/campaign/create-identities",
-        buildPayload(),
+        { ...buildPayload(), experimentId: campaignId ?? null },
       );
       setIntensity(intensityFromPreview(result.intensity));
       setMessage(result.message);
@@ -406,16 +421,34 @@ export default function CampaignDashboard() {
     }
   }
 
+  async function saveCampaignRecord(): Promise<string> {
+    const payload = buildPayload();
+    if (isNew) {
+      const result = await apiPost<{ campaign: Campaign }>("/campaigns", payload);
+      return result.campaign.id;
+    }
+    if (!campaignId) {
+      throw new Error("Campaign id is missing");
+    }
+    await apiPut(`/campaigns/${campaignId}`, payload);
+    return campaignId;
+  }
+
   async function saveAndStart() {
     setBusy("run");
     setError(null);
     setMessage(null);
     try {
-      await apiPut("/campaign", buildPayload());
-      const result = await apiPost<{ campaign: Campaign; running: boolean }>("/campaign/run");
+      const id = await saveCampaignRecord();
+      if (isNew) {
+        router.replace(`/campaign/${id}`);
+      }
+      const result = await apiPost<{ campaign: Campaign; running: boolean }>(
+        `/campaigns/${id}/run`,
+      );
       setRunning(result.running);
+      setCampaignActive(true);
       applyCampaign(result.campaign);
-      setMessage("Campaign running — sessions scheduled from intensity model");
       await loadCampaign();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start campaign");
@@ -424,13 +457,17 @@ export default function CampaignDashboard() {
     }
   }
 
-  async function stopCampaign() {
+  async function stopCampaignHandler() {
+    if (!campaignId) return;
     setBusy("stop");
     setError(null);
     setMessage(null);
     try {
-      const result = await apiPost<{ campaign: Campaign; running: boolean }>("/campaign/stop");
+      const result = await apiPost<{ campaign: Campaign; running: boolean }>(
+        `/campaigns/${campaignId}/stop`,
+      );
       setRunning(result.running);
+      setCampaignActive(false);
       applyCampaign(result.campaign);
       setMessage("Campaign stopped");
     } catch (err) {
@@ -450,7 +487,12 @@ export default function CampaignDashboard() {
 
   return (
     <AppLayout>
-      {step === "setup" && !running ? (
+      <p style={{ margin: "0 0 16px" }}>
+        <Link href="/" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
+          ← All campaigns
+        </Link>
+      </p>
+      {step === "setup" && !campaignActive ? (
         <CampaignSetupStep
           keyword={form.keyword}
           targetUrl={form.targetUrl}
@@ -479,7 +521,7 @@ export default function CampaignDashboard() {
           rationales={rationales}
           gscStatus={gscStatus}
           preflightSummary={preflightSummary}
-          running={running}
+          running={campaignActive}
           busy={busy}
           onFormChange={updateForm}
           onQueryChange={updateQuery}
@@ -489,7 +531,7 @@ export default function CampaignDashboard() {
           onPreview={() => void previewIntensity()}
           onCreateIdentities={() => void createIdentities()}
           onSaveAndStart={() => void saveAndStart()}
-          onStop={() => void stopCampaign()}
+          onStop={() => void stopCampaignHandler()}
         />
       )}
 

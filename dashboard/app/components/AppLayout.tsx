@@ -7,7 +7,7 @@ import { clearStoredPassword } from "../../lib/auth";
 import { apiGet } from "../../lib/api";
 
 const nav = [
-  { href: "/", label: "Campaign" },
+  { href: "/", label: "Campaigns" },
   { href: "/gsc", label: "GSC" },
   { href: "/sessions", label: "Sessions" },
   { href: "/identities", label: "Identities" },
@@ -23,11 +23,18 @@ export default function AppLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [running, setRunning] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
 
   useEffect(() => {
-    void apiGet<{ running: boolean }>("/campaign")
-      .then((result) => setRunning(result.running))
-      .catch(() => setRunning(false));
+    void apiGet<{ running: boolean; activeCount?: number }>("/campaign")
+      .then((result) => {
+        setRunning(result.running);
+        setActiveCount(result.activeCount ?? 0);
+      })
+      .catch(() => {
+        setRunning(false);
+        setActiveCount(0);
+      });
   }, [pathname]);
 
   function logout() {
@@ -79,7 +86,11 @@ export default function AppLayout({
               background: running ? "#16a34a" : "#64748b",
             }}
           >
-            {running ? "Running" : "Stopped"}
+            {running
+              ? activeCount > 1
+                ? `${activeCount} running`
+                : "Running"
+              : "Stopped"}
           </span>
           <button
             type="button"

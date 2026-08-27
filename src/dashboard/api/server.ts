@@ -16,14 +16,20 @@ import {
 } from "../../experiments/query-generator.js";
 import {
   createIdentitiesForCampaign,
+  createCampaign,
+  countActiveCampaigns,
+  getCampaignById,
   getCampaignLog,
   getCurrentCampaign,
   getCampaignKeyword,
+  listCampaigns,
   previewCampaignIntensity,
   runCampaign,
   serializeCampaign,
+  serializeCampaignSummary,
   serializeLogEntry,
   stopCampaign,
+  updateCampaign,
   upsertCampaign,
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
@@ -72,7 +78,7 @@ export function createApiServer() {
       ok: true,
       runnerEnabled: isRunnerEnabled(),
       commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
-      features: ["campaign-analyze"],
+      features: ["campaign-analyze", "campaign-preflight", "multi-campaign"],
     });
   });
 
@@ -206,9 +212,11 @@ export function createApiServer() {
   });
 
   app.get("/campaign", async (_req, res) => {
+    const activeCount = await countActiveCampaigns();
+    const runnerOn = await isRunnerEnabledSetting();
     const campaign = await getCurrentCampaign();
     if (!campaign) {
-      res.json({ campaign: null, running: false });
+      res.json({ campaign: null, running: false, activeCount: 0 });
       return;
     }
 
@@ -245,8 +253,163 @@ export function createApiServer() {
 
     res.json({
       campaign: serializeCampaign(campaign, intensity),
-      running: campaign.status === "active" && (await isRunnerEnabledSetting()),
+      running: activeCount > 0 && runnerOn,
+      activeCount,
     });
+  });
+
+  app.get("/campaigns", async (_req, res) => {
+    const campaigns = await listCampaigns();
+    const activeCount = await countActiveCampaigns();
+    const runnerOn = await isRunnerEnabledSetting();
+    const summaries = await Promise.all(campaigns.map((campaign) => serializeCampaignSummary(campaign)));
+    res.json({
+      campaigns: summaries,
+      running: activeCount > 0 && runnerOn,
+      activeCount,
+    });
+  });
+
+  app.get("/campaigns/:id", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    let intensity = null;
+    try {
+      intensity = await previewCampaignIntensity(
+        {
+          keyword: getCampaignKeyword(campaign),
+          targetUrl: campaign.targetUrl,
+          region: campaign.focusRegion ?? "ALL",
+          campaignDurationDays: campaign.campaignDurationDays,
+          treatmentIntensity: campaign.treatmentIntensity,
+          adaptivePacing: campaign.adaptivePacing,
+          recalculateEveryDays: campaign.recalculateEveryDays,
+          maxShareOfSearchDemand: campaign.maxShareOfSearchDemand,
+          maxShareOfGscImpressions: campaign.maxShareOfGscImpressions,
+          desktopPercent: campaign.desktopPercent,
+          ctrSource: campaign.ctrSource,
+          queries: campaign.queries.map((q) => ({
+            text: q.query,
+            type: q.queryType,
+            weight: q.weight,
+            monthlySearchVolume: q.monthlySearchVolume,
+            startingPosition: q.startingPosition,
+            gscImpressions28d: q.gscImpressions28d,
+            gscClicks28d: q.gscClicks28d,
+          })),
+        },
+        campaign.id,
+      );
+    } catch {
+      intensity = null;
+    }
+
+    const activeCount = await countActiveCampaigns();
+    const runnerOn = await isRunnerEnabledSetting();
+    res.json({
+      campaign: serializeCampaign(campaign, intensity),
+      running: campaign.status === "active" && activeCount > 0 && runnerOn,
+      activeCount,
+    });
+  });
+
+  app.post("/campaigns", async (req, res) => {
+    const body = req.body as Partial<UpsertCampaignInput>;
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const result = await createCampaign(body as UpsertCampaignInput);
+      res.json({
+        campaign: serializeCampaign({ ...result.experiment, queries: result.queries }, result.intensity),
+        running: false,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.put("/campaigns/:id", async (req, res) => {
+    const body = req.body as Partial<UpsertCampaignInput>;
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const result = await updateCampaign(req.params.id, body as UpsertCampaignInput);
+      const activeCount = await countActiveCampaigns();
+      const runnerOn = await isRunnerEnabledSetting();
+      res.json({
+        campaign: serializeCampaign({ ...result.experiment, queries: result.queries }, result.intensity),
+        running: result.experiment.status === "active" && activeCount > 0 && runnerOn,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaigns/:id/run", async (req, res) => {
+    try {
+      const campaign = await runCampaign(req.params.id);
+      const activeCount = await countActiveCampaigns();
+      const runnerOn = await isRunnerEnabledSetting();
+      res.json({
+        campaign: serializeCampaign(campaign),
+        running: activeCount > 0 && runnerOn,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaigns/:id/stop", async (req, res) => {
+    try {
+      const campaign = await stopCampaign(req.params.id);
+      const activeCount = await countActiveCampaigns();
+      const runnerOn = await isRunnerEnabledSetting();
+      res.json({
+        campaign: serializeCampaign(campaign),
+        running: activeCount > 0 && runnerOn,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.get("/campaigns/:id/log", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    const sessions = await getCampaignLog(campaign.id);
+    res.json({ entries: sessions.map(serializeLogEntry) });
   });
 
   app.put("/campaign", async (req, res) => {
@@ -408,9 +571,11 @@ export function createApiServer() {
     }
 
     const campaign = await runCampaign(current.id);
+    const activeCount = await countActiveCampaigns();
+    const runnerOn = await isRunnerEnabledSetting();
     res.json({
       campaign: serializeCampaign(campaign),
-      running: true,
+      running: activeCount > 0 && runnerOn,
     });
   });
 
@@ -422,9 +587,11 @@ export function createApiServer() {
     }
 
     const campaign = await stopCampaign(current.id);
+    const activeCount = await countActiveCampaigns();
+    const runnerOn = await isRunnerEnabledSetting();
     res.json({
       campaign: serializeCampaign(campaign),
-      running: false,
+      running: activeCount > 0 && runnerOn,
     });
   });
 
@@ -623,7 +790,10 @@ export function createApiServer() {
   });
 
   app.post("/campaign/create-identities", async (req, res) => {
-    const body = req.body as Partial<UpsertCampaignInput> & { count?: number };
+    const body = req.body as Partial<UpsertCampaignInput> & {
+      count?: number;
+      experimentId?: string | null;
+    };
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
@@ -632,6 +802,7 @@ export function createApiServer() {
     try {
       const result = await createIdentitiesForCampaign(body as UpsertCampaignInput, {
         count: body.count,
+        experimentId: body.experimentId ?? null,
       });
 
       if (result.createdCount === 0) {

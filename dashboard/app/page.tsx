@@ -1,12 +1,12 @@
 "use client";
 
 import AuthGate from "./components/AuthGate";
-import CampaignDashboard from "./components/CampaignDashboard";
+import CampaignList from "./components/CampaignList";
 
 export default function HomePage() {
   return (
     <AuthGate>
-      <CampaignDashboard />
+      <CampaignList />
     </AuthGate>
   );
 }

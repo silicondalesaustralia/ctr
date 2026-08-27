@@ -62,6 +62,47 @@ export async function getCurrentCampaign(): Promise<CampaignWithQueries | null> 
   });
 }
 
+export async function listCampaigns(): Promise<CampaignWithQueries[]> {
+  return prisma.experiment.findMany({
+    include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
+export async function getCampaignById(id: string): Promise<CampaignWithQueries | null> {
+  return prisma.experiment.findUnique({
+    where: { id },
+    include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
+  });
+}
+
+export async function countActiveCampaigns(): Promise<number> {
+  return prisma.experiment.count({ where: { status: "active" } });
+}
+
+async function enableRunner(): Promise<void> {
+  await prisma.appSetting.upsert({
+    where: { key: "runner_enabled" },
+    update: { value: "true" },
+    create: { key: "runner_enabled", value: "true" },
+  });
+  process.env.EXPERIMENT_RUNNER_ENABLED = "true";
+}
+
+async function disableRunnerIfNoneActive(): Promise<void> {
+  const activeCount = await countActiveCampaigns();
+  if (activeCount > 0) {
+    return;
+  }
+
+  await prisma.appSetting.upsert({
+    where: { key: "runner_enabled" },
+    update: { value: "false" },
+    create: { key: "runner_enabled", value: "false" },
+  });
+  process.env.EXPERIMENT_RUNNER_ENABLED = "false";
+}
+
 export function getCampaignKeyword(campaign: CampaignWithQueries): string {
   const core = campaign.queries.find((query) => query.queryType === "core");
   return core?.query ?? campaign.queries[0]?.query ?? "";
@@ -173,10 +214,47 @@ async function persistQueries(
   return created;
 }
 
-export async function upsertCampaign(
+async function saveCampaignConfig(
+  experimentId: string,
+  input: UpsertCampaignInput,
+  queries: CampaignQueryInput[],
+  intensity: CampaignIntensityResult,
+  existing?: Experiment,
+): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
+  const keyword = input.keyword.trim();
+  const targetUrl = input.targetUrl.trim();
+  const region = input.region.trim().toUpperCase();
+
+  const experiment = await prisma.experiment.update({
+    where: { id: experimentId },
+    data: {
+      name: input.name?.trim() || buildExperimentName(keyword, region),
+      targetUrl,
+      targetDomain: extractTargetDomain(targetUrl),
+      focusRegion: region === "ALL" ? null : region,
+      scheduleTimezone: resolveRegionTimezone(region),
+      monthlySessionTarget: intensity.totalAllocatedSessions,
+      campaignDurationDays: input.campaignDurationDays ?? existing?.campaignDurationDays ?? 14,
+      treatmentIntensity: input.treatmentIntensity ?? existing?.treatmentIntensity ?? "normal",
+      adaptivePacing: input.adaptivePacing ?? existing?.adaptivePacing ?? true,
+      recalculateEveryDays: input.recalculateEveryDays ?? existing?.recalculateEveryDays ?? 3,
+      maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? existing?.maxShareOfSearchDemand ?? 0.02,
+      maxShareOfGscImpressions:
+        input.maxShareOfGscImpressions ?? existing?.maxShareOfGscImpressions ?? 0.05,
+      desktopPercent: input.desktopPercent ?? existing?.desktopPercent ?? 65,
+      ctrSource: input.ctrSource ?? existing?.ctrSource ?? "default_curve",
+      gscConnectionId: input.gscConnectionId ?? existing?.gscConnectionId ?? null,
+      gscSiteUrl: input.gscSiteUrl ?? existing?.gscSiteUrl ?? null,
+    },
+  });
+
+  const persistedQueries = await persistQueries(experiment.id, queries, intensity);
+  return { experiment, queries: persistedQueries, intensity };
+}
+
+export async function createCampaign(
   input: UpsertCampaignInput,
 ): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
-  const current = await getCurrentCampaign();
   const keyword = input.keyword.trim();
   const targetUrl = input.targetUrl.trim();
   const region = input.region.trim().toUpperCase();
@@ -189,67 +267,49 @@ export async function upsertCampaign(
       weight: q.weight,
     }));
 
-  queries = await enrichQueriesWithGsc(current?.id ?? null, targetUrl, queries);
+  queries = await enrichQueriesWithGsc(null, targetUrl, queries);
+  const intensity = await previewCampaignIntensity({ ...input, queries }, null);
 
-  const intensity = await previewCampaignIntensity(input, current?.id);
-
-  if (!current) {
-    const created = await createExperimentFromInput({
-      ...input,
-      activate: false,
-      sessionsPerMonth: intensity.totalAllocatedSessions,
-    });
-
-    await prisma.experiment.update({
-      where: { id: created.experiment.id },
-      data: {
-        campaignDurationDays: input.campaignDurationDays ?? 14,
-        treatmentIntensity: input.treatmentIntensity ?? "normal",
-        adaptivePacing: input.adaptivePacing ?? true,
-        recalculateEveryDays: input.recalculateEveryDays ?? 3,
-        maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? 0.02,
-        maxShareOfGscImpressions: input.maxShareOfGscImpressions ?? 0.05,
-        desktopPercent: input.desktopPercent ?? 65,
-        ctrSource: input.ctrSource ?? "default_curve",
-        gscConnectionId: input.gscConnectionId ?? null,
-        gscSiteUrl: input.gscSiteUrl ?? null,
-        monthlySessionTarget: intensity.totalAllocatedSessions,
-      },
-    });
-
-    const persistedQueries = await persistQueries(created.experiment.id, queries, intensity);
-    const experiment = await prisma.experiment.findUniqueOrThrow({
-      where: { id: created.experiment.id },
-    });
-
-    return { experiment, queries: persistedQueries, intensity };
-  }
-
-  const experiment = await prisma.experiment.update({
-    where: { id: current.id },
-    data: {
-      name: input.name?.trim() || buildExperimentName(keyword, region),
-      targetUrl,
-      targetDomain: extractTargetDomain(targetUrl),
-      focusRegion: region === "ALL" ? null : region,
-      scheduleTimezone: resolveRegionTimezone(region),
-      monthlySessionTarget: intensity.totalAllocatedSessions,
-      campaignDurationDays: input.campaignDurationDays ?? current.campaignDurationDays,
-      treatmentIntensity: input.treatmentIntensity ?? current.treatmentIntensity,
-      adaptivePacing: input.adaptivePacing ?? current.adaptivePacing,
-      recalculateEveryDays: input.recalculateEveryDays ?? current.recalculateEveryDays,
-      maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? current.maxShareOfSearchDemand,
-      maxShareOfGscImpressions:
-        input.maxShareOfGscImpressions ?? current.maxShareOfGscImpressions,
-      desktopPercent: input.desktopPercent ?? current.desktopPercent,
-      ctrSource: input.ctrSource ?? current.ctrSource,
-      gscConnectionId: input.gscConnectionId ?? current.gscConnectionId,
-      gscSiteUrl: input.gscSiteUrl ?? current.gscSiteUrl,
-    },
+  const created = await createExperimentFromInput({
+    ...input,
+    activate: false,
+    sessionsPerMonth: intensity.totalAllocatedSessions,
   });
 
-  const persistedQueries = await persistQueries(experiment.id, queries, intensity);
-  return { experiment, queries: persistedQueries, intensity };
+  return saveCampaignConfig(created.experiment.id, input, queries, intensity);
+}
+
+export async function updateCampaign(
+  experimentId: string,
+  input: UpsertCampaignInput,
+): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
+  const existing = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
+  const keyword = input.keyword.trim();
+  const targetUrl = input.targetUrl.trim();
+  const region = input.region.trim().toUpperCase();
+
+  let queries: CampaignQueryInput[] =
+    input.queries ??
+    generateQueryCluster(keyword, region).map((q) => ({
+      text: q.text,
+      type: q.type,
+      weight: q.weight,
+    }));
+
+  queries = await enrichQueriesWithGsc(experimentId, targetUrl, queries);
+  const intensity = await previewCampaignIntensity(input, experimentId);
+
+  return saveCampaignConfig(experimentId, input, queries, intensity, existing);
+}
+
+export async function upsertCampaign(
+  input: UpsertCampaignInput,
+): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
+  const current = await getCurrentCampaign();
+  if (!current) {
+    return createCampaign(input);
+  }
+  return updateCampaign(current.id, input);
 }
 
 export async function runCampaign(experimentId: string): Promise<CampaignWithQueries> {
@@ -267,12 +327,7 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
     },
   });
 
-  await prisma.appSetting.upsert({
-    where: { key: "runner_enabled" },
-    update: { value: "true" },
-    create: { key: "runner_enabled", value: "true" },
-  });
-  process.env.EXPERIMENT_RUNNER_ENABLED = "true";
+  await enableRunner();
 
   const scheduledCount = await prisma.scheduledSession.count({
     where: { experimentId, status: "scheduled" },
@@ -308,32 +363,30 @@ export async function stopCampaign(experimentId: string): Promise<CampaignWithQu
     include: { queries: { where: { active: true } } },
   });
 
-  await prisma.appSetting.upsert({
-    where: { key: "runner_enabled" },
-    update: { value: "false" },
-    create: { key: "runner_enabled", value: "false" },
-  });
-  process.env.EXPERIMENT_RUNNER_ENABLED = "false";
-
   await prisma.scheduledSession.updateMany({
     where: { experimentId, status: "scheduled" },
     data: { status: "cancelled" },
   });
+
+  await disableRunnerIfNoneActive();
 
   return experiment;
 }
 
 export async function createIdentitiesForCampaign(
   input: UpsertCampaignInput,
-  options?: { count?: number },
+  options?: { count?: number; experimentId?: string | null },
 ): Promise<{
   createdCount: number;
   fromExternalId: string | null;
   toExternalId: string | null;
   intensity: CampaignIntensityResult;
 }> {
-  const current = await getCurrentCampaign();
-  const intensity = await previewCampaignIntensity(input, current?.id);
+  const experimentId =
+    options?.experimentId ??
+    (await getCurrentCampaign())?.id ??
+    null;
+  const intensity = await previewCampaignIntensity(input, experimentId);
   const deficit = intensity.identityDeficit ?? 0;
   const toCreate = options?.count ?? deficit;
 
@@ -346,12 +399,16 @@ export async function createIdentitiesForCampaign(
     };
   }
 
+  const campaign = experimentId
+    ? await prisma.experiment.findUnique({ where: { id: experimentId } })
+    : null;
+
   const result = await createAdditionalIdentities({
     count: toCreate,
-    desktopPercent: input.desktopPercent ?? current?.desktopPercent ?? 65,
+    desktopPercent: input.desktopPercent ?? campaign?.desktopPercent ?? 65,
   });
 
-  const refreshed = await previewCampaignIntensity(input, current?.id);
+  const refreshed = await previewCampaignIntensity(input, experimentId);
 
   return {
     createdCount: result.created.length,
@@ -372,6 +429,32 @@ export async function getCampaignLog(experimentId: string, limit = 100) {
     orderBy: { createdAt: "desc" },
     take: limit,
   });
+}
+
+export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
+  const [completedSessions, scheduledSessions] = await Promise.all([
+    prisma.session.count({ where: { experimentId: campaign.id } }),
+    prisma.scheduledSession.count({
+      where: { experimentId: campaign.id, status: "scheduled" },
+    }),
+  ]);
+
+  return {
+    id: campaign.id,
+    name: campaign.name,
+    status: campaign.status,
+    keyword: getCampaignKeyword(campaign),
+    targetUrl: campaign.targetUrl,
+    region: campaign.focusRegion ?? "ALL",
+    campaignDurationDays: campaign.campaignDurationDays,
+    monthlySessionTarget: campaign.monthlySessionTarget,
+    queryCount: campaign.queries.length,
+    completedSessions,
+    scheduledSessions,
+    updatedAt: campaign.updatedAt.toISOString(),
+    startDate: campaign.startDate?.toISOString() ?? null,
+    endDate: campaign.endDate?.toISOString() ?? null,
+  };
 }
 
 export function serializeCampaign(

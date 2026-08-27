@@ -21,15 +21,15 @@ async function pollLoop(): Promise<void> {
     logger.info({ event: "due_sessions_enqueued", count });
   }
 
-  const active = await prisma.experiment.findFirst({
+  const activeExperiments = await prisma.experiment.findMany({
     where: { status: "active", adaptivePacing: true },
     orderBy: { updatedAt: "desc" },
   });
 
-  if (active) {
-    const recalculated = await maybeRecalculateAdaptivePacing(active.id);
+  for (const experiment of activeExperiments) {
+    const recalculated = await maybeRecalculateAdaptivePacing(experiment.id);
     if (recalculated) {
-      logger.info({ event: "adaptive_pacing_recalculated", experimentId: active.id });
+      logger.info({ event: "adaptive_pacing_recalculated", experimentId: experiment.id });
     }
   }
 }

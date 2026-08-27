@@ -12,6 +12,7 @@ COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
 COPY fixtures ./fixtures
+COPY config ./config
 COPY experiments ./experiments
 
 ENV NODE_ENV=production
