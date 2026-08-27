@@ -299,7 +299,7 @@ export async function runSerpPreflightChecks(input: {
       );
       results.push(result);
       if (input.jobId) {
-        updatePreflightJobProgress(input.jobId, results.length);
+        void updatePreflightJobProgress(input.jobId, results.length);
       }
 
       if (result.status === "blocked") {

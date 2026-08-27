@@ -169,7 +169,10 @@ export default function CampaignDashboard({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  function applyProposal(proposal: CampaignProposal) {
+  function applyProposal(proposal: CampaignProposal | null | undefined) {
+    if (!proposal?.keyword?.trim()) {
+      throw new Error("Server returned an invalid campaign proposal");
+    }
     setForm({
       keyword: proposal.keyword,
       targetUrl: proposal.targetUrl,
@@ -340,7 +343,30 @@ export default function CampaignDashboard({
     setError(null);
     setMessage("Starting Google validation...");
     try {
-      const start = await apiPost<{ jobId: string }>("/campaign/preflight", buildPayload());
+      const start = await apiPost<{ jobId?: string; proposal?: CampaignProposal }>(
+        "/campaign/preflight",
+        buildPayload(),
+      );
+
+      if (start.proposal) {
+        applyProposal(start.proposal);
+        if (start.proposal.preflight?.status === "blocked") {
+          setMessage("Google blocked preflight — try again later");
+        } else if (start.proposal.preflight?.findableCount === 0) {
+          setMessage("No queries were findable on Google within 3 pages");
+        } else {
+          setMessage(
+            start.proposal.preflight?.keywordAdjusted
+              ? `Preflight complete — keyword updated to "${start.proposal.keyword}"`
+              : "Preflight complete — plan recalculated from findable queries",
+          );
+        }
+        return;
+      }
+
+      if (!start.jobId) {
+        throw new Error("Unexpected preflight response — refresh the page and retry");
+      }
 
       for (let attempt = 0; attempt < 200; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -396,13 +422,16 @@ export default function CampaignDashboard({
     setMessage(null);
     setPreflightSummary(null);
     try {
-      const result = await apiPost<{ proposal: CampaignProposal }>("/campaign/analyze", {
+      const result = await apiPost<{ proposal?: CampaignProposal }>("/campaign/analyze", {
         keyword: form.keyword,
         targetUrl: form.targetUrl,
         region: form.region,
         gscConnectionId: form.gscConnectionId,
         gscSiteUrl: form.gscSiteUrl,
       });
+      if (!result?.proposal) {
+        throw new Error("Analysis did not return a campaign proposal");
+      }
       applyProposal(result.proposal);
       setMessage("Analysis complete — validating queries on Google...");
       await runPreflight();

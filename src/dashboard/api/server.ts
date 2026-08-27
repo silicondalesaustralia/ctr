@@ -140,10 +140,10 @@ async function runPreflightJob(jobId: string, body: PreflightRequestBody): Promi
           jobId,
         }),
     );
-    completePreflightJob(jobId, proposal);
+    await completePreflightJob(jobId, proposal);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    failPreflightJob(jobId, message);
+    await failPreflightJob(jobId, message);
   }
 }
 
@@ -585,7 +585,7 @@ export function createApiServer() {
 
     try {
       const queryCount = body.queries?.length ?? (await buildBaseProposalForPreflight(body)).queries.length;
-      const job = createPreflightJob(queryCount);
+      const job = await createPreflightJob(queryCount);
       void runPreflightJob(job.id, body);
       res.status(202).json({ jobId: job.id });
     } catch (error) {
@@ -594,8 +594,8 @@ export function createApiServer() {
     }
   });
 
-  app.get("/campaign/preflight/jobs/:id", (req, res) => {
-    const job = getPreflightJob(req.params.id);
+  app.get("/campaign/preflight/jobs/:id", async (req, res) => {
+    const job = await getPreflightJob(req.params.id);
     if (!job) {
       res.status(404).json({ error: "Preflight job not found" });
       return;
