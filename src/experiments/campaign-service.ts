@@ -390,6 +390,20 @@ export async function stopCampaign(experimentId: string): Promise<CampaignWithQu
   return experiment;
 }
 
+export async function deleteCampaign(experimentId: string): Promise<void> {
+  const existing = await prisma.experiment.findUnique({ where: { id: experimentId } });
+  if (!existing) {
+    throw new Error("Campaign not found");
+  }
+
+  if (existing.status === "active") {
+    await stopCampaign(experimentId);
+  }
+
+  await prisma.session.deleteMany({ where: { experimentId } });
+  await prisma.experiment.delete({ where: { id: experimentId } });
+}
+
 export async function createIdentitiesForCampaign(
   input: UpsertCampaignInput,
   options?: { count?: number; experimentId?: string | null },

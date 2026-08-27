@@ -67,3 +67,17 @@ export async function PUT(request: NextRequest, context: RouteContext): Promise<
 
   return proxyRailwayResponse(response);
 }
+
+export async function DELETE(request: NextRequest, context: RouteContext): Promise<NextResponse> {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+  const response = await railwayFetch(`/campaigns/${id}`, apiKey, {
+    method: "DELETE",
+  });
+
+  return proxyRailwayResponse(response);
+}

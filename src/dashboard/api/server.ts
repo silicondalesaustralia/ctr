@@ -30,6 +30,7 @@ import {
   serializeCampaignSummary,
   serializeLogEntry,
   stopCampaign,
+  deleteCampaign,
   updateCampaign,
   upsertCampaign,
   type UpsertCampaignInput,
@@ -479,6 +480,17 @@ export function createApiServer() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });
+    }
+  });
+
+  app.delete("/campaigns/:id", async (req, res) => {
+    try {
+      await deleteCampaign(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message === "Campaign not found" ? 404 : 400;
+      res.status(status).json({ error: message });
     }
   });
 

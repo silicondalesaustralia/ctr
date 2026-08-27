@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiPost } from "../../lib/api";
+import { apiDelete, apiGet, apiPost } from "../../lib/api";
 import AppLayout from "./AppLayout";
 import {
   cellStyle,
@@ -87,6 +87,28 @@ export default function CampaignList() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to stop campaign");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteCampaignHandler(id: string, keyword: string) {
+    const label = keyword.trim() || "this campaign";
+    if (
+      !window.confirm(
+        `Delete "${label}"? This removes the campaign, scheduled sessions, and session history. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(id);
+    setError(null);
+    try {
+      await apiDelete(`/campaigns/${id}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete campaign");
     } finally {
       setBusyId(null);
     }
@@ -204,6 +226,20 @@ export default function CampaignList() {
                             Start
                           </button>
                         )}
+                        <button
+                          type="button"
+                          disabled={busyId === campaign.id}
+                          onClick={() =>
+                            void deleteCampaignHandler(campaign.id, campaign.keyword || campaign.name)
+                          }
+                          style={{
+                            ...secondaryButtonStyle,
+                            color: "#b91c1c",
+                            borderColor: "#fecaca",
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
