@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CampaignProposal } from "../../src/campaign/campaign-proposal.js";
-import { rebuildProposalAfterPreflight } from "../../src/campaign/keyword-preflight.js";
+import { planningPosition, rebuildProposalAfterPreflight } from "../../src/campaign/keyword-preflight.js";
 
 vi.mock("../../src/db/client.js", () => ({
   prisma: {
@@ -24,7 +24,13 @@ function baseProposal(): CampaignProposal {
     desktopPercent: 65,
     ctrSource: "default_curve",
     queries: [
-      { text: "selling food from home mount barker sa", type: "core", weight: 0.35 },
+      {
+        text: "selling food from home mount barker sa",
+        type: "core",
+        weight: 0.35,
+        startingPosition: 8,
+        gscImpressions28d: 120,
+      },
       { text: "selling food from home mount barker sa online", type: "close_variation", weight: 0.2 },
       { text: "buy selling food from home mount barker sa", type: "long_tail", weight: 0.15 },
     ],
@@ -45,8 +51,40 @@ function baseProposal(): CampaignProposal {
   };
 }
 
+describe("planningPosition", () => {
+  it("prefers GSC position when impressions exist", () => {
+    const position = planningPosition(
+      { text: "test", startingPosition: 8, gscImpressions28d: 50 },
+      {
+        query: "test",
+        found: true,
+        serpPage: 1,
+        position: 1,
+        globalPosition: 1,
+        status: "found",
+      },
+    );
+    expect(position).toBe(8);
+  });
+
+  it("uses live preflight when no GSC data", () => {
+    const position = planningPosition(
+      { text: "test", startingPosition: null },
+      {
+        query: "test",
+        found: true,
+        serpPage: 2,
+        position: 4,
+        globalPosition: 14,
+        status: "found",
+      },
+    );
+    expect(position).toBe(14);
+  });
+});
+
 describe("rebuildProposalAfterPreflight", () => {
-  it("keeps only findable queries and recalculates sessions", async () => {
+  it("keeps all queries and preserves GSC positions", async () => {
     const proposal = baseProposal();
     const updated = await rebuildProposalAfterPreflight(proposal, [
       {
@@ -75,8 +113,9 @@ describe("rebuildProposalAfterPreflight", () => {
       },
     ]);
 
-    expect(updated.queries.length).toBe(1);
-    expect(updated.queries[0]?.text).toBe("selling food from home mount barker sa online");
+    expect(updated.queries.length).toBe(3);
+    expect(updated.queries[0]?.startingPosition).toBe(8);
+    expect(updated.queries[1]?.startingPosition).toBeUndefined();
     expect(updated.keyword).toBe("selling food from home mount barker sa online");
     expect(updated.preflight?.keywordAdjusted).toBe(true);
     expect(updated.preflight?.findableCount).toBe(1);
@@ -84,7 +123,7 @@ describe("rebuildProposalAfterPreflight", () => {
     expect(updated.rationales.some((r) => r.setting === "Google preflight")).toBe(true);
   });
 
-  it("returns zero sessions when nothing is findable", async () => {
+  it("keeps queries when nothing is findable live", async () => {
     const proposal = baseProposal();
     const updated = await rebuildProposalAfterPreflight(proposal, proposal.queries.map((q) => ({
       query: q.text,
@@ -95,8 +134,8 @@ describe("rebuildProposalAfterPreflight", () => {
       status: "not_found" as const,
     })));
 
-    expect(updated.queries.length).toBe(0);
-    expect(updated.intensity.totalAllocatedSessions).toBe(0);
+    expect(updated.queries.length).toBe(3);
+    expect(updated.queries[0]?.startingPosition).toBe(8);
     expect(updated.preflight?.status).toBe("none_found");
   });
 });

@@ -2,12 +2,42 @@ import type { TreatmentIntensity } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { extractTargetDomain } from "../experiments/query-generator.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
-import { calculateCampaignIntensity, applyIntensityPlanOverrides, normalizeQueryWeights } from "./intensity-calculator.js";
+import {
+  calculateCampaignIntensity,
+  applyIntensityPlanOverrides,
+  normalizeQueryWeights,
+} from "./intensity-calculator.js";
 import type { CampaignProposal } from "./campaign-proposal.js";
 import type { PreflightQueryResult, PreflightSummary } from "./preflight-types.js";
 
 function globalPosition(serpPage: number, position: number): number {
   return (serpPage - 1) * 10 + position;
+}
+
+function hasGscData(query: CampaignQueryInput): boolean {
+  return (query.gscImpressions28d ?? 0) > 0 || (query.gscClicks28d ?? 0) > 0;
+}
+
+function liveSerpPosition(result: PreflightQueryResult | undefined): number | null {
+  if (!result?.found || result.serpPage == null || result.position == null) {
+    return null;
+  }
+  return result.globalPosition ?? globalPosition(result.serpPage, result.position);
+}
+
+/** Position used for intensity planning — GSC when available, else live preflight. */
+export function planningPosition(
+  query: CampaignQueryInput,
+  result: PreflightQueryResult | undefined,
+): number {
+  if (hasGscData(query) && query.startingPosition != null) {
+    return query.startingPosition;
+  }
+  const live = liveSerpPosition(result);
+  if (live != null) {
+    return live;
+  }
+  return query.startingPosition ?? 30;
 }
 
 function normalizeQueryInputWeights(queries: CampaignQueryInput[]): CampaignQueryInput[] {
@@ -87,98 +117,62 @@ export async function rebuildProposalAfterPreflight(
     preflightResults.map((row) => [row.query.toLowerCase(), row]),
   );
 
-  const foundQueries: CampaignQueryInput[] = [];
-  for (const query of proposal.queries) {
-    const result = resultByQuery.get(query.text.toLowerCase());
-    if (!result?.found || result.serpPage == null || result.position == null) {
-      continue;
-    }
+  const mergedQueries: CampaignQueryInput[] = proposal.queries.map((query) => ({
+    ...query,
+    active: query.active !== false,
+  }));
 
-    foundQueries.push({
-      ...query,
-      startingPosition: result.globalPosition ?? globalPosition(result.serpPage, result.position),
-      type:
-        query.text.toLowerCase() === previousKeyword.toLowerCase()
-          ? "core"
-          : query.type ?? "close_variation",
-    });
-  }
+  const findableCount = preflightResults.filter((row) => row.found).length;
+  const notFoundCount = preflightResults.filter(
+    (row) => !row.found && row.status === "not_found",
+  ).length;
 
-  if (foundQueries.length === 0) {
-    const rationales = [
-      ...proposal.rationales.filter((row) => row.setting !== "Query cluster"),
-      {
-        setting: "Google preflight",
-        value: "No findable queries",
-        reason:
-          "None of the tested queries returned your site in the first 3 SERP pages. Fix rankings or keywords before starting treatment.",
-      },
-      {
-        setting: "Query cluster",
-        value: "0 queries",
-        reason: "All generated variations were not findable on Google within 3 pages.",
-      },
-      {
-        setting: "Planned sessions",
-        value: "0",
-        reason: "No findable queries — campaign cannot run search treatment sessions.",
-      },
-    ];
+  const enabledQueries = mergedQueries.filter((query) => query.active !== false);
+  const rankedFindable = enabledQueries
+    .map((query) => {
+      const result = resultByQuery.get(query.text.toLowerCase());
+      const live = liveSerpPosition(result);
+      if (live == null) return null;
+      return { text: query.text, globalPosition: live };
+    })
+    .filter((row): row is { text: string; globalPosition: number } => row != null);
 
-    return {
-      ...proposal,
-      queries: [],
-      intensity: {
-        ...proposal.intensity,
-        queries: [],
-        totalBaselineClicks: 0,
-        totalTreatmentSessions: 0,
-        totalAllocatedSessions: 0,
-        suggestedIdentities: 0,
-        identityDeficit: null,
-        feasibleSessions: 0,
-      },
-      rationales,
-      preflight: buildPreflightSummary(previousKeyword, previousKeyword, preflightResults),
-    };
-  }
-
-  const rankedFound = foundQueries.map((query) => {
-    const result = resultByQuery.get(query.text.toLowerCase())!;
-    return {
-      text: query.text,
-      globalPosition:
-        result.globalPosition ??
-        globalPosition(result.serpPage!, result.position!),
-    };
-  });
-
-  const keyword = pickPrimaryKeyword(previousKeyword, rankedFound);
+  const keyword =
+    rankedFindable.length > 0
+      ? pickPrimaryKeyword(previousKeyword, rankedFindable)
+      : previousKeyword;
   const keywordAdjusted = keyword.toLowerCase() !== previousKeyword.toLowerCase();
 
-  const normalizedInputs = normalizeQueryInputWeights(
-    foundQueries.map((query) => ({
-      ...query,
-      type:
-        query.text.toLowerCase() === keyword.toLowerCase()
-          ? "core"
-          : (query.type ?? "close_variation"),
-      weight: query.weight ?? 0,
-    })),
+  const planningInputs = normalizeQueryInputWeights(
+    enabledQueries.map((query) => {
+      const result = resultByQuery.get(query.text.toLowerCase());
+      return {
+        ...query,
+        type:
+          query.text.toLowerCase() === keyword.toLowerCase()
+            ? "core"
+            : (query.type ?? "close_variation"),
+        weight: query.weight ?? 0,
+        startingPosition: planningPosition(query, result),
+      };
+    }),
   );
 
-  const totalImpressions = normalizedInputs.reduce(
+  const totalImpressions = planningInputs.reduce(
     (sum, query) => sum + (query.gscImpressions28d ?? 0),
     0,
   );
   const weightedPosition =
-    totalImpressions > 0
-      ? normalizedInputs.reduce(
-          (sum, query) =>
-            sum + (query.startingPosition ?? 30) * (query.gscImpressions28d ?? 0),
-          0,
-        ) / totalImpressions
-      : rankedFound.reduce((sum, row) => sum + row.globalPosition, 0) / rankedFound.length;
+    planningInputs.length > 0
+      ? totalImpressions > 0
+        ? planningInputs.reduce(
+            (sum, query) =>
+              sum + (query.startingPosition ?? 30) * (query.gscImpressions28d ?? 0),
+            0,
+          ) / totalImpressions
+        : planningInputs.reduce((sum, query) => sum + (query.startingPosition ?? 30), 0) /
+          planningInputs.length
+      : 30;
 
   const campaignDurationDays = proposal.campaignDurationDays ?? recommendDuration(totalImpressions);
   const treatmentIntensity =
@@ -186,27 +180,39 @@ export async function rebuildProposalAfterPreflight(
 
   const identityCount = await prisma.identity.count({ where: { active: true } });
 
-  const baseIntensity = calculateCampaignIntensity({
-    queries: normalizedInputs.map((q) => ({
-      text: q.text,
-      type: q.type ?? "core",
-      weight: q.weight ?? 0,
-      monthlySearchVolume: q.monthlySearchVolume,
-      startingPosition: q.startingPosition,
-      gscImpressions28d: q.gscImpressions28d,
-      gscClicks28d: q.gscClicks28d,
-    })),
-    trafficModel: {
-      campaignDurationDays,
-      treatmentIntensity,
-      maxShareOfSearchDemand: proposal.maxShareOfSearchDemand,
-      maxShareOfGscImpressions: proposal.maxShareOfGscImpressions,
-      ctrSource: proposal.ctrSource,
-      desktopPercent: proposal.desktopPercent,
-    },
-    siteCurveData: null,
-    activeIdentityCount: identityCount,
-  });
+  const baseIntensity =
+    planningInputs.length > 0
+      ? calculateCampaignIntensity({
+          queries: planningInputs.map((q) => ({
+            text: q.text,
+            type: q.type ?? "core",
+            weight: q.weight ?? 0,
+            monthlySearchVolume: q.monthlySearchVolume,
+            startingPosition: q.startingPosition,
+            gscImpressions28d: q.gscImpressions28d,
+            gscClicks28d: q.gscClicks28d,
+          })),
+          trafficModel: {
+            campaignDurationDays,
+            treatmentIntensity,
+            maxShareOfSearchDemand: proposal.maxShareOfSearchDemand,
+            maxShareOfGscImpressions: proposal.maxShareOfGscImpressions,
+            ctrSource: proposal.ctrSource,
+            desktopPercent: proposal.desktopPercent,
+          },
+          siteCurveData: null,
+          activeIdentityCount: identityCount,
+        })
+      : {
+          ...proposal.intensity,
+          queries: [],
+          totalBaselineClicks: 0,
+          totalTreatmentSessions: 0,
+          totalAllocatedSessions: 0,
+          suggestedIdentities: 0,
+          identityDeficit: null,
+          feasibleSessions: 0,
+        };
 
   const intensity = applyIntensityPlanOverrides(baseIntensity, {
     plannedSessionCap: proposal.plannedSessionCap,
@@ -219,26 +225,28 @@ export async function rebuildProposalAfterPreflight(
   const normalized = normalizeQueryWeights(intensity.queries);
   const intensityByQuery = new Map(normalized.map((row) => [row.query.toLowerCase(), row]));
 
-  const finalQueries: CampaignQueryInput[] = normalizedInputs.map((query) => {
+  const finalQueries: CampaignQueryInput[] = mergedQueries.map((query) => {
     const calc = intensityByQuery.get(query.text.toLowerCase());
+    const original = proposal.queries.find(
+      (row) => row.text.toLowerCase() === query.text.toLowerCase(),
+    );
     return {
       ...query,
       weight: calc?.weight ?? query.weight,
-      startingPosition: calc?.startingPosition ?? query.startingPosition,
-      gscImpressions28d: calc?.gscImpressions28d ?? query.gscImpressions28d,
-      gscClicks28d: calc?.gscClicks28d ?? query.gscClicks28d,
+      startingPosition: original?.startingPosition ?? query.startingPosition,
+      gscImpressions28d: query.gscImpressions28d,
+      gscClicks28d: query.gscClicks28d,
     };
   });
 
-  const removedCount = proposal.queries.length - finalQueries.length;
   const rationales: CampaignProposal["rationales"] = [
     {
       setting: "Google preflight",
-      value: `${finalQueries.length} of ${proposal.queries.length} findable`,
+      value: `${findableCount} of ${preflightResults.length} findable live`,
       reason:
-        removedCount > 0
-          ? `Removed ${removedCount} queries that did not show your site within 3 SERP pages.`
-          : "Every tested query showed your site within 3 SERP pages.",
+        notFoundCount > 0
+          ? `${notFoundCount} queries were not found within 3 pages — disable them in the table if you do not want them scheduled. GSC data is unchanged.`
+          : "Every tested query showed your site within 3 SERP pages on live Google.",
     },
   ];
 
@@ -246,18 +254,17 @@ export async function rebuildProposalAfterPreflight(
     rationales.push({
       setting: "Primary keyword",
       value: keyword,
-      reason: `"${previousKeyword}" was not findable — using the best-ranked query from preflight instead.`,
+      reason: `"${previousKeyword}" was not findable live — suggested best-ranked enabled query as primary.`,
     });
   }
 
   rationales.push({
     setting: "Average position",
     value: weightedPosition.toFixed(1),
-    reason: keywordAdjusted
-      ? "Based on live SERP positions from preflight (not GSC estimates)."
-      : totalImpressions > 0
-        ? "Blended GSC and live SERP positions for findable queries."
-        : "Based on live SERP positions from preflight.",
+    reason:
+      totalImpressions > 0
+        ? "Planning average uses GSC positions where available, live Google elsewhere (enabled queries only)."
+        : "Planning average from live Google ranks for enabled queries without GSC history.",
   });
 
   rationales.push({
@@ -265,7 +272,7 @@ export async function rebuildProposalAfterPreflight(
     value: `${campaignDurationDays} days`,
     reason:
       totalImpressions < 400
-        ? "Low exposure — longer window, recalculated after preflight query filter."
+        ? "Low GSC exposure — longer window for meaningful signal."
         : "Standard treatment window based on GSC impression volume.",
   });
 
@@ -282,14 +289,15 @@ export async function rebuildProposalAfterPreflight(
 
   rationales.push({
     setting: "Query cluster",
-    value: `${finalQueries.length} queries`,
-    reason: "Only queries that passed Google preflight (site found within 3 pages).",
+    value: `${finalQueries.length} queries (${enabledQueries.length} enabled)`,
+    reason:
+      "All analyzed queries are kept. Disable rows you do not want in the campaign; sessions use enabled queries only.",
   });
 
   rationales.push({
     setting: "Planned sessions",
     value: String(intensity.totalAllocatedSessions),
-    reason: `Recalculated from ${finalQueries.length} findable queries × ${intensity.treatmentMultiplier}× treatment.`,
+    reason: `Recalculated from ${enabledQueries.length} enabled queries × ${intensity.treatmentMultiplier}× treatment.`,
   });
 
   if (intensity.identityDeficit && intensity.identityDeficit > 0) {

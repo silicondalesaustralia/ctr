@@ -11,6 +11,7 @@ export interface QueryRow {
   text: string;
   type: string;
   weight: number;
+  active: boolean;
   monthlySearchVolume: number | null;
   startingPosition: number | null;
   gscImpressions28d: number | null;

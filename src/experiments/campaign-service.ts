@@ -31,6 +31,7 @@ export interface CampaignQueryInput {
   startingPosition?: number | null;
   gscImpressions28d?: number | null;
   gscClicks28d?: number | null;
+  active?: boolean;
 }
 
 export interface UpsertCampaignInput extends CreateExperimentInput {
@@ -76,7 +77,7 @@ export async function listCampaigns(): Promise<CampaignWithQueries[]> {
 export async function getCampaignById(id: string): Promise<CampaignWithQueries | null> {
   return prisma.experiment.findUnique({
     where: { id },
-    include: { queries: { where: { active: true }, orderBy: { weight: "desc" } } },
+    include: { queries: { orderBy: { weight: "desc" } } },
   });
 }
 
@@ -150,6 +151,8 @@ export async function previewCampaignIntensity(
       weight: q.weight,
     }));
 
+  queries = queries.filter((query) => query.active !== false);
+
   queries = await enrichQueriesWithGsc(experimentId ?? null, input.targetUrl.trim(), queries);
 
   const identityCount = await prisma.identity.count({ where: { active: true } });
@@ -201,24 +204,25 @@ async function persistQueries(
   await prisma.experimentQuery.deleteMany({ where: { experimentId } });
 
   const normalized = normalizeQueryWeights(intensity.queries);
+  const intensityByQuery = new Map(normalized.map((row) => [row.query.toLowerCase(), row]));
   const created: ExperimentQuery[] = [];
 
-  for (let i = 0; i < queries.length; i += 1) {
-    const input = queries[i]!;
-    const calc = normalized[i]!;
+  for (const input of queries) {
+    const calc = intensityByQuery.get(input.text.toLowerCase());
 
     const row = await prisma.experimentQuery.create({
       data: {
         experimentId,
         query: input.text,
         queryType: (input.type ?? "core") as ExperimentQuery["queryType"],
-        weight: calc.weight,
-        active: true,
-        monthlySearchVolume: input.monthlySearchVolume ?? calc.monthlySearchVolume,
-        startingPosition: input.startingPosition ?? calc.startingPosition,
-        gscImpressions28d: input.gscImpressions28d ?? calc.gscImpressions28d,
-        gscClicks28d: input.gscClicks28d ?? calc.gscClicks28d,
-        allocatedSessions: calc.allocatedSessions,
+        weight: calc?.weight ?? input.weight ?? 0,
+        active: input.active !== false,
+        monthlySearchVolume: input.monthlySearchVolume ?? calc?.monthlySearchVolume,
+        startingPosition: input.startingPosition ?? calc?.startingPosition,
+        gscImpressions28d: input.gscImpressions28d ?? calc?.gscImpressions28d,
+        gscClicks28d: input.gscClicks28d ?? calc?.gscClicks28d,
+        allocatedSessions:
+          input.active === false ? 0 : (calc?.allocatedSessions ?? 0),
       },
     });
     created.push(row);
@@ -576,6 +580,7 @@ export function serializeCampaign(
       text: query.query,
       type: query.queryType,
       weight: query.weight,
+      active: query.active,
       monthlySearchVolume: query.monthlySearchVolume,
       startingPosition: query.startingPosition,
       gscImpressions28d: query.gscImpressions28d,

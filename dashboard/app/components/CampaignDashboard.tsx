@@ -105,17 +105,58 @@ function intensityFromPreview(preview: IntensityPreview): IntensitySummary {
   };
 }
 
-function queriesFromPreview(rows: QueryIntensityRow[]): QueryRow[] {
-  return rows.map((q) => ({
-    text: q.query,
-    type: q.type,
-    weight: q.weight,
-    monthlySearchVolume: q.monthlySearchVolume,
-    startingPosition: q.startingPosition,
-    gscImpressions28d: q.gscImpressions28d,
-    gscClicks28d: q.gscClicks28d,
-    allocatedSessions: q.allocatedSessions,
-  }));
+function queriesFromPreview(
+  rows: QueryIntensityRow[],
+  existing: QueryRow[] = [],
+): QueryRow[] {
+  const existingByText = new Map(existing.map((row) => [row.text.toLowerCase(), row]));
+  return rows.map((q) => {
+    const prev = existingByText.get(q.query.toLowerCase());
+    return {
+      text: q.query,
+      type: q.type,
+      weight: q.weight,
+      active: prev?.active ?? true,
+      monthlySearchVolume: q.monthlySearchVolume,
+      startingPosition: q.startingPosition,
+      gscImpressions28d: q.gscImpressions28d,
+      gscClicks28d: q.gscClicks28d,
+      allocatedSessions: q.allocatedSessions,
+      preflightFound: prev?.preflightFound,
+      preflightSerpPage: prev?.preflightSerpPage,
+      preflightPosition: prev?.preflightPosition,
+      preflightStatus: prev?.preflightStatus,
+    };
+  });
+}
+
+function mergeProposalQueries(
+  proposal: CampaignProposal,
+  existing: QueryRow[] = [],
+): QueryRow[] {
+  const existingByText = new Map(existing.map((row) => [row.text.toLowerCase(), row]));
+  return proposal.queries.map((q) => {
+    const prev = existingByText.get(q.text.toLowerCase());
+    const pf = proposal.preflight?.results.find(
+      (item) => item.query.toLowerCase() === q.text.toLowerCase(),
+    );
+    return {
+      text: q.text,
+      type: q.type,
+      weight: q.weight,
+      active: q.active === false ? false : (prev?.active ?? true),
+      monthlySearchVolume: q.monthlySearchVolume ?? null,
+      startingPosition: q.startingPosition ?? null,
+      gscImpressions28d: q.gscImpressions28d ?? null,
+      gscClicks28d: q.gscClicks28d ?? null,
+      allocatedSessions:
+        proposal.intensity.queries.find((row) => row.query === q.text)?.allocatedSessions ?? null,
+      preflightFound: pf?.found,
+      preflightSerpPage: pf?.serpPage,
+      preflightPosition: pf?.position,
+      preflightStatus: pf?.status,
+    };
+  });
 }
 
 function suggestSiteFromUrl(targetUrl: string, sites: GscSiteOption[]): string | null {
@@ -173,7 +214,7 @@ export default function CampaignDashboard({
     if (!proposal?.keyword?.trim()) {
       throw new Error("Server returned an invalid campaign proposal");
     }
-    setForm({
+    setForm((prev) => ({
       keyword: proposal.keyword,
       targetUrl: proposal.targetUrl,
       region: proposal.region,
@@ -187,15 +228,11 @@ export default function CampaignDashboard({
       maxShareOfGscImpressions: proposal.maxShareOfGscImpressions,
       desktopPercent: proposal.desktopPercent,
       ctrSource: proposal.ctrSource,
-      queries: proposal.queries.map((q) => ({
-        ...q,
-        allocatedSessions:
-          proposal.intensity.queries.find((row) => row.query === q.text)?.allocatedSessions ?? null,
-      })),
+      queries: mergeProposalQueries(proposal, prev.queries),
       plannedSessionCap: proposal.plannedSessionCap ?? proposal.intensity.totalAllocatedSessions,
       targetIdentityCount: proposal.targetIdentityCount ?? proposal.intensity.suggestedIdentities,
       organicMaxSessionsPerIdentity: proposal.organicMaxSessionsPerIdentity ?? 2,
-    });
+    }));
     setIntensity(intensityFromPreview(proposal.intensity));
     setRationales(proposal.rationales);
     setGscStatus(proposal.gscStatus);
@@ -218,7 +255,10 @@ export default function CampaignDashboard({
       maxShareOfGscImpressions: c.maxShareOfGscImpressions,
       desktopPercent: c.desktopPercent,
       ctrSource: c.ctrSource,
-      queries: c.queries,
+      queries: c.queries.map((q) => ({
+        ...q,
+        active: q.active ?? true,
+      })),
       plannedSessionCap: c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
       targetIdentityCount: c.intensity?.suggestedIdentities ?? null,
       organicMaxSessionsPerIdentity: 2,
@@ -312,6 +352,7 @@ export default function CampaignDashboard({
         text: q.text,
         type: q.type,
         weight: q.weight,
+        active: q.active,
         monthlySearchVolume: q.monthlySearchVolume,
         startingPosition: q.startingPosition,
         gscImpressions28d: q.gscImpressions28d,
@@ -338,6 +379,13 @@ export default function CampaignDashboard({
     }));
   }
 
+  function toggleQueryActive(index: number, active: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      queries: prev.queries.map((row, i) => (i === index ? { ...row, active } : row)),
+    }));
+  }
+
   async function runPreflight() {
     setBusy("preflight");
     setError(null);
@@ -358,7 +406,7 @@ export default function CampaignDashboard({
           setMessage(
             start.proposal.preflight?.keywordAdjusted
               ? `Preflight complete — keyword updated to "${start.proposal.keyword}"`
-              : "Preflight complete — plan recalculated from findable queries",
+              : "Preflight complete — live Google ranks added; GSC data unchanged",
           );
         }
         return;
@@ -409,7 +457,7 @@ export default function CampaignDashboard({
           setMessage(
             job.proposal.preflight?.keywordAdjusted
               ? `Preflight complete — keyword updated to "${job.proposal.keyword}"`
-              : "Preflight complete — plan recalculated from findable queries",
+              : "Preflight complete — live Google ranks added; GSC data unchanged",
           );
         }
         return;
@@ -461,7 +509,7 @@ export default function CampaignDashboard({
       setIntensity(intensityFromPreview(result.intensity));
       setForm((prev) => ({
         ...prev,
-        queries: queriesFromPreview(result.intensity.queries),
+        queries: queriesFromPreview(result.intensity.queries, prev.queries),
         plannedSessionCap: result.intensity.totalAllocatedSessions,
         targetIdentityCount: result.intensity.suggestedIdentities,
       }));
@@ -491,17 +539,35 @@ export default function CampaignDashboard({
     }
   }
 
-  async function saveCampaignRecord(): Promise<string> {
+  async function saveCampaignRecord(): Promise<{ id: string; campaign: Campaign }> {
     const payload = buildPayload();
     if (isNew) {
       const result = await apiPost<{ campaign: Campaign }>("/campaigns", payload);
-      return result.campaign.id;
+      return { id: result.campaign.id, campaign: result.campaign };
     }
     if (!campaignId) {
       throw new Error("Campaign id is missing");
     }
-    await apiPut(`/campaigns/${campaignId}`, payload);
-    return campaignId;
+    const result = await apiPut<{ campaign: Campaign }>(`/campaigns/${campaignId}`, payload);
+    return { id: campaignId, campaign: result.campaign };
+  }
+
+  async function saveCampaign() {
+    setBusy("save");
+    setError(null);
+    setMessage(null);
+    try {
+      const { id, campaign } = await saveCampaignRecord();
+      if (isNew) {
+        router.replace(`/campaign/${id}`);
+      }
+      applyCampaign(campaign);
+      setMessage("Campaign saved");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save campaign");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function saveAndStart() {
@@ -509,9 +575,11 @@ export default function CampaignDashboard({
     setError(null);
     setMessage(null);
     try {
-      const id = await saveCampaignRecord();
+      const { id, campaign } = await saveCampaignRecord();
       if (isNew) {
         router.replace(`/campaign/${id}`);
+      } else {
+        applyCampaign(campaign);
       }
       const result = await apiPost<{ campaign: Campaign; running: boolean }>(
         `/campaigns/${id}/run`,
@@ -616,11 +684,13 @@ export default function CampaignDashboard({
           error={error}
           onFormChange={updateForm}
           onQueryChange={updateQuery}
+          onToggleQueryActive={toggleQueryActive}
           onBack={() => setStep("setup")}
           onReanalyze={() => void analyzeCampaign()}
           onPreflight={() => void runPreflight()}
           onPreview={() => void previewIntensity()}
           onCreateIdentities={() => void createIdentities()}
+          onSave={() => void saveCampaign()}
           onSaveAndStart={() => void saveAndStart()}
           onStop={() => void stopCampaignHandler()}
         />

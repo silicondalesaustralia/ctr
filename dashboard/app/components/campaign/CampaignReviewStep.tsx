@@ -23,11 +23,13 @@ interface Props {
   error: string | null;
   onFormChange: <K extends keyof CampaignFormState>(key: K, value: CampaignFormState[K]) => void;
   onQueryChange: (index: number, field: keyof QueryRow, value: string) => void;
+  onToggleQueryActive: (index: number, active: boolean) => void;
   onBack: () => void;
   onReanalyze: () => void;
   onPreflight: () => void;
   onPreview: () => void;
   onCreateIdentities: () => void;
+  onSave: () => void;
   onSaveAndStart: () => void;
   onStop: () => void;
 }
@@ -53,19 +55,25 @@ export default function CampaignReviewStep({
   error,
   onFormChange,
   onQueryChange,
+  onToggleQueryActive,
   onBack,
   onReanalyze,
   onPreflight,
   onPreview,
   onCreateIdentities,
+  onSave,
   onSaveAndStart,
   onStop,
 }: Props) {
+  const enabledQueries = form.queries.filter((row) => row.active);
+  const hasSchedulableEnabled = enabledQueries.some(
+    (row) => row.preflightFound || (row.gscImpressions28d ?? 0) > 0,
+  );
   const preflightReady =
     preflightSummary != null &&
-    preflightSummary.findableCount > 0 &&
-    preflightSummary.status !== "blocked";
-  const removedQueries =
+    preflightSummary.status !== "blocked" &&
+    hasSchedulableEnabled;
+  const notFoundQueries =
     preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
   return (
     <>
@@ -74,7 +82,7 @@ export default function CampaignReviewStep({
         <h2 style={{ margin: "0 0 8px" }}>Review recommended plan</h2>
         <p style={{ color: "#64748b", margin: "0 0 20px", fontSize: 15 }}>
           Settings were chosen from GSC data and your keyword cluster. Adjust anything below,
-          then save and start when ready.
+          save your draft, then validate on Google before starting.
         </p>
 
         {(message || error) && (
@@ -306,6 +314,16 @@ export default function CampaignReviewStep({
               {busy === "preview" ? "Calculating..." : "Update preview"}
             </button>
           )}
+          {!running && (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={Boolean(busy) || !form.keyword || !form.targetUrl}
+              style={secondaryButtonStyle}
+            >
+              {busy === "save" ? "Saving..." : "Save campaign"}
+            </button>
+          )}
           {!running ? (
             <button
               type="button"
@@ -328,7 +346,9 @@ export default function CampaignReviewStep({
         </div>
         {!running && !preflightReady && (
           <p style={{ color: "#b45309", fontSize: 14, marginTop: 12 }}>
-            Run Validate on Google before starting — only findable queries can be scheduled.
+            {preflightSummary
+              ? "Enable at least one query with GSC data or a live Google find before starting."
+              : "Run Validate on Google before starting — live findability is required for queries without GSC history."}
           </p>
         )}
       </section>
@@ -434,12 +454,16 @@ export default function CampaignReviewStep({
         </section>
       )}
 
-      {(form.queries.length > 0 || (preflightSummary?.results.length ?? 0) > 0) && (
+      {form.queries.length > 0 && (
         <section style={{ ...panelStyle, marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 16px" }}>Query cluster</h2>
-          {removedQueries.length > 0 && (
+          <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
+            GSC columns stay from analyze. Google column shows live preflight only. Disable rows you
+            do not want scheduled.
+          </p>
+          {notFoundQueries.length > 0 && (
             <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
-              Removed after preflight: {removedQueries.join(", ")}
+              Not found live on Google (3 pages): {notFoundQueries.join(", ")}
             </p>
           )}
           <div style={{ overflowX: "auto" }}>
@@ -447,11 +471,12 @@ export default function CampaignReviewStep({
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
                   {[
+                    "Use",
                     "Query",
                     "Type",
-                    "Google",
+                    "Google live",
                     "Volume/mo",
-                    "Position",
+                    "GSC position",
                     "GSC impr.",
                     "GSC clicks",
                     "Sessions",
@@ -464,44 +489,51 @@ export default function CampaignReviewStep({
               </thead>
               <tbody>
                 {form.queries.map((row, index) => {
-                  const preflight = preflightSummary?.results.find(
-                    (item) => item.query.toLowerCase() === row.text.toLowerCase(),
-                  );
                   const googleLabel =
-                    preflight?.found
-                      ? `p${preflight.serpPage} #${preflight.position}`
-                      : preflight
+                    row.preflightFound && row.preflightSerpPage != null && row.preflightPosition != null
+                      ? `p${row.preflightSerpPage} #${row.preflightPosition}`
+                      : row.preflightStatus
                         ? "Not found"
                         : "—";
+                  const rowStyle = row.active ? undefined : { opacity: 0.55 };
                   return (
-                    <tr key={row.text}>
+                    <tr key={row.text} style={rowStyle}>
+                      <td style={cellStyle}>
+                        <input
+                          type="checkbox"
+                          checked={row.active}
+                          onChange={(e) => onToggleQueryActive(index, e.target.checked)}
+                          disabled={running}
+                          aria-label={`Include ${row.text}`}
+                        />
+                      </td>
                       <td style={cellStyle}>{row.text}</td>
                       <td style={cellStyle}>{row.type}</td>
                       <td style={cellStyle}>{googleLabel}</td>
-                    <td style={cellStyle}>
-                      <input
-                        style={{ ...inputStyle, padding: "6px 8px", width: 90 }}
-                        type="number"
-                        value={row.monthlySearchVolume ?? ""}
-                        onChange={(e) => onQueryChange(index, "monthlySearchVolume", e.target.value)}
-                        disabled={running}
-                        placeholder="—"
-                      />
-                    </td>
-                    <td style={cellStyle}>
-                      <input
-                        style={{ ...inputStyle, padding: "6px 8px", width: 70 }}
-                        type="number"
-                        step={0.1}
-                        value={row.startingPosition ?? ""}
-                        onChange={(e) => onQueryChange(index, "startingPosition", e.target.value)}
-                        disabled={running}
-                        placeholder="—"
-                      />
-                    </td>
-                    <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
-                    <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
-                      <td style={cellStyle}>{row.allocatedSessions ?? "—"}</td>
+                      <td style={cellStyle}>
+                        <input
+                          style={{ ...inputStyle, padding: "6px 8px", width: 90 }}
+                          type="number"
+                          value={row.monthlySearchVolume ?? ""}
+                          onChange={(e) => onQueryChange(index, "monthlySearchVolume", e.target.value)}
+                          disabled={running || !row.active}
+                          placeholder="—"
+                        />
+                      </td>
+                      <td style={cellStyle}>
+                        <input
+                          style={{ ...inputStyle, padding: "6px 8px", width: 70 }}
+                          type="number"
+                          step={0.1}
+                          value={row.startingPosition ?? ""}
+                          onChange={(e) => onQueryChange(index, "startingPosition", e.target.value)}
+                          disabled={running || !row.active}
+                          placeholder="—"
+                        />
+                      </td>
+                      <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
+                      <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
+                      <td style={cellStyle}>{row.active ? (row.allocatedSessions ?? "—") : "—"}</td>
                     </tr>
                   );
                 })}
