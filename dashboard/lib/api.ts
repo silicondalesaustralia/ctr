@@ -1,5 +1,7 @@
 import { getStoredPassword } from "./auth";
 import { buildApiUrl, resolveApiBaseUrl } from "./api-base";
+import { resolveRailwayOrigin } from "./api-origin";
+import { fetchRailwayHealth, preflightUnavailableMessage } from "./railway-health";
 
 function resolveApiKey(): string {
   const stored = getStoredPassword()?.trim();
@@ -30,13 +32,8 @@ function resolveFetchUrl(path: string): string {
     return buildApiUrl(path);
   }
 
-  const railwayOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-  if (
-    railwayOrigin &&
-    /^https?:\/\//.test(railwayOrigin) &&
-    !railwayOrigin.includes("localhost") &&
-    LONG_RUNNING_PATHS.some((prefix) => path.startsWith(prefix))
-  ) {
+  const railwayOrigin = resolveRailwayOrigin();
+  if (railwayOrigin && LONG_RUNNING_PATHS.some((prefix) => path.startsWith(prefix))) {
     return `${railwayOrigin}${path.startsWith("/") ? path : `/${path}`}`;
   }
 
@@ -57,6 +54,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (path.startsWith("/campaign/preflight") && response.status === 404) {
+      const health = await fetchRailwayHealth(resolveRailwayOrigin() ?? undefined);
+      throw new Error(preflightUnavailableMessage(health));
+    }
     throw new Error(payload?.error ?? `API error ${response.status} for ${url}`);
   }
 
