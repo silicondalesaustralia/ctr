@@ -192,6 +192,111 @@ export function calculateCampaignIntensity(
   };
 }
 
+export function scaleSessionAllocations(
+  queries: QueryIntensityResult[],
+  targetTotal: number,
+): QueryIntensityResult[] {
+  const currentTotal = queries.reduce((sum, q) => sum + q.allocatedSessions, 0);
+  if (currentTotal <= 0 || targetTotal <= 0 || targetTotal === currentTotal) {
+    return queries.map((q) => ({ ...q }));
+  }
+
+  const scaled = queries.map((q) => ({
+    ...q,
+    allocatedSessions: Math.max(
+      MIN_SESSIONS_PER_QUERY,
+      Math.round((q.allocatedSessions / currentTotal) * targetTotal),
+    ),
+  }));
+
+  let total = scaled.reduce((sum, q) => sum + q.allocatedSessions, 0);
+  let guard = 0;
+  while (total > targetTotal && guard < 1000) {
+    const row = scaled.find((q) => q.allocatedSessions > MIN_SESSIONS_PER_QUERY);
+    if (!row) break;
+    row.allocatedSessions -= 1;
+    total -= 1;
+    guard += 1;
+  }
+  guard = 0;
+  while (total < targetTotal && guard < 1000) {
+    const row = scaled.reduce((best, q) =>
+      q.allocatedSessions > best.allocatedSessions ? q : best,
+    );
+    row.allocatedSessions += 1;
+    total += 1;
+    guard += 1;
+  }
+
+  return scaled;
+}
+
+export interface IntensityPlanOverrides {
+  plannedSessionCap?: number | null;
+  targetIdentityCount?: number | null;
+  organicMaxSessionsPerIdentity?: number;
+  activeIdentityCount?: number | null;
+  campaignDays?: number;
+  maxSessionsPerIdentityPerDay?: number;
+  repeatIdentityMinGapDays?: number;
+}
+
+export function applyIntensityPlanOverrides(
+  intensity: CampaignIntensityResult,
+  overrides: IntensityPlanOverrides,
+): CampaignIntensityResult {
+  const organicMax =
+    overrides.organicMaxSessionsPerIdentity ?? ORGANIC_MAX_SESSIONS_PER_IDENTITY;
+  let queries = intensity.queries.map((q) => ({ ...q }));
+
+  if (
+    overrides.plannedSessionCap != null &&
+    overrides.plannedSessionCap > 0 &&
+    overrides.plannedSessionCap !== intensity.totalAllocatedSessions
+  ) {
+    queries = scaleSessionAllocations(queries, overrides.plannedSessionCap);
+  }
+
+  const totalAllocatedSessions = queries.reduce((sum, q) => sum + q.allocatedSessions, 0);
+  const activeCount = overrides.activeIdentityCount ?? intensity.activeIdentityCount ?? null;
+  const campaignDays = overrides.campaignDays ?? 14;
+  const maxPerDay = overrides.maxSessionsPerIdentityPerDay ?? 1;
+  const minGapDays = overrides.repeatIdentityMinGapDays ?? 2;
+
+  let suggestedIdentities = Math.ceil(totalAllocatedSessions / Math.max(organicMax, 1));
+  let feasibleSessions: number | null = intensity.feasibleSessions;
+
+  if (activeCount != null) {
+    const feasibility = estimateFeasibleSessions(
+      totalAllocatedSessions,
+      activeCount,
+      campaignDays,
+      maxPerDay,
+      minGapDays,
+      organicMax,
+    );
+    suggestedIdentities = feasibility.suggestedIdentities;
+    feasibleSessions = feasibility.feasibleSessions;
+  }
+
+  if (overrides.targetIdentityCount != null && overrides.targetIdentityCount > 0) {
+    suggestedIdentities = overrides.targetIdentityCount;
+  }
+
+  const identityDeficit =
+    activeCount != null ? Math.max(0, suggestedIdentities - activeCount) : null;
+
+  return {
+    ...intensity,
+    queries,
+    totalAllocatedSessions,
+    suggestedIdentities,
+    activeIdentityCount: activeCount,
+    identityDeficit,
+    feasibleSessions,
+  };
+}
+
 export function normalizeQueryWeights(results: QueryIntensityResult[]): QueryIntensityResult[] {
   const total = results.reduce((sum, q) => sum + q.allocatedSessions, 0);
   if (total <= 0) return results;

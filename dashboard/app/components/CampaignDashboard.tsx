@@ -66,6 +66,7 @@ interface Campaign {
   ctrSource: string;
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
+  monthlySessionTarget: number;
   queries: QueryRow[];
   intensity: IntensitySummary | null;
 }
@@ -87,6 +88,9 @@ const defaultForm = (): CampaignFormState => ({
   desktopPercent: 65,
   ctrSource: "default_curve",
   queries: [],
+  plannedSessionCap: null,
+  targetIdentityCount: null,
+  organicMaxSessionsPerIdentity: 2,
 });
 
 function intensityFromPreview(preview: IntensityPreview): IntensitySummary {
@@ -185,6 +189,9 @@ export default function CampaignDashboard({
         allocatedSessions:
           proposal.intensity.queries.find((row) => row.query === q.text)?.allocatedSessions ?? null,
       })),
+      plannedSessionCap: proposal.plannedSessionCap ?? proposal.intensity.totalAllocatedSessions,
+      targetIdentityCount: proposal.targetIdentityCount ?? proposal.intensity.suggestedIdentities,
+      organicMaxSessionsPerIdentity: proposal.organicMaxSessionsPerIdentity ?? 2,
     });
     setIntensity(intensityFromPreview(proposal.intensity));
     setRationales(proposal.rationales);
@@ -209,6 +216,9 @@ export default function CampaignDashboard({
       desktopPercent: c.desktopPercent,
       ctrSource: c.ctrSource,
       queries: c.queries,
+      plannedSessionCap: c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
+      targetIdentityCount: c.intensity?.suggestedIdentities ?? null,
+      organicMaxSessionsPerIdentity: 2,
     });
     setIntensity(c.intensity);
     setCampaignActive(c.status === "active");
@@ -292,6 +302,9 @@ export default function CampaignDashboard({
       maxShareOfGscImpressions: form.maxShareOfGscImpressions,
       desktopPercent: form.desktopPercent,
       ctrSource: form.ctrSource,
+      plannedSessionCap: form.plannedSessionCap,
+      targetIdentityCount: form.targetIdentityCount,
+      organicMaxSessionsPerIdentity: form.organicMaxSessionsPerIdentity,
       queries: form.queries.map((q) => ({
         text: q.text,
         type: q.type,
@@ -325,14 +338,12 @@ export default function CampaignDashboard({
   async function runPreflight() {
     setBusy("preflight");
     setError(null);
+    setMessage("Validating queries on Google — this can take a few minutes...");
     try {
-      const result = await apiPost<{ proposal: CampaignProposal }>("/campaign/preflight", {
-        keyword: form.keyword,
-        targetUrl: form.targetUrl,
-        region: form.region,
-        gscConnectionId: form.gscConnectionId,
-        gscSiteUrl: form.gscSiteUrl,
-      });
+      const result = await apiPost<{ proposal: CampaignProposal }>(
+        "/campaign/preflight",
+        buildPayload(),
+      );
       applyProposal(result.proposal);
       if (result.proposal.preflight?.status === "blocked") {
         setMessage("Google blocked preflight — try again later");
@@ -383,7 +394,12 @@ export default function CampaignDashboard({
         buildPayload(),
       );
       setIntensity(intensityFromPreview(result.intensity));
-      setForm((prev) => ({ ...prev, queries: queriesFromPreview(result.intensity.queries) }));
+      setForm((prev) => ({
+        ...prev,
+        queries: queriesFromPreview(result.intensity.queries),
+        plannedSessionCap: result.intensity.totalAllocatedSessions,
+        targetIdentityCount: result.intensity.suggestedIdentities,
+      }));
       setMessage("Preview updated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed");
@@ -531,6 +547,8 @@ export default function CampaignDashboard({
           preflightSummary={preflightSummary}
           running={campaignActive}
           busy={busy}
+          message={message}
+          error={error}
           onFormChange={updateForm}
           onQueryChange={updateQuery}
           onBack={() => setStep("setup")}

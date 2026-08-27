@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseExternalIdNumber } from "../../src/identities/identity-service.js";
-import { calculateCampaignIntensity } from "../../src/campaign/intensity-calculator.js";
+import { calculateCampaignIntensity, applyIntensityPlanOverrides } from "../../src/campaign/intensity-calculator.js";
 
 describe("parseExternalIdNumber", () => {
   it("parses au_ prefixed ids", () => {
@@ -90,12 +90,15 @@ describe("identityDeficit", () => {
       activeIdentityCount: 10,
     });
 
-    expect(result.suggestedIdentities).toBe(
-      Math.ceil(result.totalAllocatedSessions / 2),
-    );
-    expect(result.feasibleSessions).toBe(result.totalAllocatedSessions);
-    expect(result.identityDeficit).toBe(
-      Math.max(0, result.suggestedIdentities - 10),
-    );
+    const adjusted = applyIntensityPlanOverrides(result, {
+      plannedSessionCap: 17,
+      organicMaxSessionsPerIdentity: 1,
+      activeIdentityCount: 10,
+      campaignDays: 14,
+    });
+
+    expect(adjusted.totalAllocatedSessions).toBe(17);
+    expect(adjusted.suggestedIdentities).toBe(17);
+    expect(adjusted.identityDeficit).toBe(7);
   });
 });

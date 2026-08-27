@@ -19,6 +19,8 @@ interface Props {
   preflightSummary: PreflightSummary | null;
   running: boolean;
   busy: string | null;
+  message: string | null;
+  error: string | null;
   onFormChange: <K extends keyof CampaignFormState>(key: K, value: CampaignFormState[K]) => void;
   onQueryChange: (index: number, field: keyof QueryRow, value: string) => void;
   onBack: () => void;
@@ -47,6 +49,8 @@ export default function CampaignReviewStep({
   preflightSummary,
   running,
   busy,
+  message,
+  error,
   onFormChange,
   onQueryChange,
   onBack,
@@ -72,6 +76,22 @@ export default function CampaignReviewStep({
           Settings were chosen from GSC data and your keyword cluster. Adjust anything below,
           then save and start when ready.
         </p>
+
+        {(message || error) && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderRadius: 8,
+              marginBottom: 20,
+              background: error ? "#fef2f2" : "#eff6ff",
+              border: `1px solid ${error ? "#fecaca" : "#bfdbfe"}`,
+              fontSize: 14,
+              color: error ? "#b91c1c" : "#1d4ed8",
+            }}
+          >
+            {error ?? message}
+          </div>
+        )}
 
         {preflightSummary && (
           <div
@@ -321,17 +341,59 @@ export default function CampaignReviewStep({
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
               gap: 16,
+              marginBottom: 16,
             }}
           >
             <Stat label="Baseline clicks" value={String(intensity.totalBaselineClicks)} />
-            <Stat label="Planned sessions" value={String(intensity.totalAllocatedSessions)} />
             <Stat label="Treatment ×" value={String(intensity.treatmentMultiplier)} />
             <Stat label="Active identities" value={String(intensity.activeIdentityCount ?? "—")} />
-            <Stat label="Suggested identities" value={String(intensity.suggestedIdentities)} />
             {intensity.feasibleSessions != null && (
               <Stat label="Feasible w/ pool" value={String(intensity.feasibleSessions)} />
             )}
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <label>
+              <span style={labelStyle}>Planned sessions</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={form.plannedSessionCap ?? intensity.totalAllocatedSessions}
+                onChange={(e) => onFormChange("plannedSessionCap", Number(e.target.value))}
+                disabled={running}
+              />
+            </label>
+            <label>
+              <span style={labelStyle}>Target identities</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                value={form.targetIdentityCount ?? intensity.suggestedIdentities}
+                onChange={(e) => onFormChange("targetIdentityCount", Number(e.target.value))}
+                disabled={running}
+              />
+            </label>
+            <label>
+              <span style={labelStyle}>Max sessions per identity</span>
+              <input
+                style={inputStyle}
+                type="number"
+                min={1}
+                max={10}
+                value={form.organicMaxSessionsPerIdentity}
+                onChange={(e) =>
+                  onFormChange("organicMaxSessionsPerIdentity", Number(e.target.value))
+                }
+                disabled={running}
+              />
+            </label>
+          </div>
+          <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 13 }}>
+            Organic traffic is mostly unique visitors. Use 1 for all-unique sessions, or 2 if a few
+            may return. Click Update preview after changing these.
+          </p>
 
           {intensity.identityDeficit != null && intensity.identityDeficit > 0 && (
             <div

@@ -6,6 +6,7 @@ import {
   matchGscMetrics,
 } from "../campaign/gsc-demand.js";
 import {
+  applyIntensityPlanOverrides,
   calculateCampaignIntensity,
   normalizeQueryWeights,
 } from "../campaign/intensity-calculator.js";
@@ -44,6 +45,9 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   gscConnectionId?: string | null;
   gscSiteUrl?: string | null;
   queries?: CampaignQueryInput[];
+  plannedSessionCap?: number | null;
+  targetIdentityCount?: number | null;
+  organicMaxSessionsPerIdentity?: number;
 }
 
 export async function getCurrentCampaign(): Promise<CampaignWithQueries | null> {
@@ -155,7 +159,8 @@ export async function previewCampaignIntensity(
       ? await buildSiteCurveFromExperiment(experimentId)
       : null;
 
-  return calculateCampaignIntensity({
+  const campaignDays = input.campaignDurationDays ?? 14;
+  const base = calculateCampaignIntensity({
     queries: queries.map((q) => ({
       text: q.text,
       type: q.type ?? "core",
@@ -166,7 +171,7 @@ export async function previewCampaignIntensity(
       gscClicks28d: q.gscClicks28d,
     })),
     trafficModel: {
-      campaignDurationDays: input.campaignDurationDays ?? 14,
+      campaignDurationDays: campaignDays,
       treatmentIntensity: input.treatmentIntensity ?? "normal",
       maxShareOfSearchDemand: input.maxShareOfSearchDemand ?? 0.02,
       maxShareOfGscImpressions: input.maxShareOfGscImpressions ?? 0.05,
@@ -177,6 +182,14 @@ export async function previewCampaignIntensity(
     activeIdentityCount: identityCount,
     maxSessionsPerIdentityPerDay: 1,
     repeatIdentityMinGapDays: 2,
+  });
+
+  return applyIntensityPlanOverrides(base, {
+    plannedSessionCap: input.plannedSessionCap,
+    targetIdentityCount: input.targetIdentityCount,
+    organicMaxSessionsPerIdentity: input.organicMaxSessionsPerIdentity,
+    activeIdentityCount: identityCount,
+    campaignDays,
   });
 }
 

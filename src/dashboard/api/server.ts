@@ -491,12 +491,7 @@ export function createApiServer() {
   });
 
   app.post("/campaign/preflight", async (req, res) => {
-    const body = req.body as {
-      keyword?: string;
-      targetUrl?: string;
-      region?: string;
-      gscConnectionId?: string | null;
-      gscSiteUrl?: string | null;
+    const body = req.body as Partial<UpsertCampaignInput> & {
       maxSerpPages?: number;
       identityExternalId?: string;
     };
@@ -514,13 +509,49 @@ export function createApiServer() {
     }
 
     try {
-      const baseProposal = await buildCampaignProposal({
+      const current = await getCurrentCampaign();
+      let baseProposal = await buildCampaignProposal({
         keyword: body.keyword,
         targetUrl: body.targetUrl,
         region: body.region,
         gscConnectionId: body.gscConnectionId ?? null,
         gscSiteUrl: body.gscSiteUrl ?? null,
       });
+
+      if (body.queries?.length) {
+        const intensity = await previewCampaignIntensity(
+          body as UpsertCampaignInput,
+          current?.id,
+        );
+        baseProposal = {
+          ...baseProposal,
+          keyword: body.keyword.trim(),
+          targetUrl: body.targetUrl.trim(),
+          region: body.region.trim().toUpperCase(),
+          campaignDurationDays: body.campaignDurationDays ?? baseProposal.campaignDurationDays,
+          treatmentIntensity: body.treatmentIntensity ?? baseProposal.treatmentIntensity,
+          adaptivePacing: body.adaptivePacing ?? baseProposal.adaptivePacing,
+          recalculateEveryDays: body.recalculateEveryDays ?? baseProposal.recalculateEveryDays,
+          maxShareOfSearchDemand:
+            body.maxShareOfSearchDemand ?? baseProposal.maxShareOfSearchDemand,
+          maxShareOfGscImpressions:
+            body.maxShareOfGscImpressions ?? baseProposal.maxShareOfGscImpressions,
+          desktopPercent: body.desktopPercent ?? baseProposal.desktopPercent,
+          ctrSource: body.ctrSource ?? baseProposal.ctrSource,
+          queries: body.queries,
+          intensity,
+          plannedSessionCap: body.plannedSessionCap ?? null,
+          targetIdentityCount: body.targetIdentityCount ?? null,
+          organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
+        };
+      } else {
+        baseProposal = {
+          ...baseProposal,
+          plannedSessionCap: body.plannedSessionCap ?? null,
+          targetIdentityCount: body.targetIdentityCount ?? null,
+          organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
+        };
+      }
 
       const proposal = await runKeywordPreflight(
         {

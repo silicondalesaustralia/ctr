@@ -6,6 +6,8 @@ import {
   railwayFetch,
 } from "../../../../lib/railway-proxy";
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const apiKey = getApiKey(request);
   if (!apiKey) {

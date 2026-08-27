@@ -70,6 +70,9 @@ export interface CampaignFormState {
   desktopPercent: number;
   ctrSource: string;
   queries: QueryRow[];
+  plannedSessionCap: number | null;
+  targetIdentityCount: number | null;
+  organicMaxSessionsPerIdentity: number;
 }
 
 export const inputStyle: React.CSSProperties = {

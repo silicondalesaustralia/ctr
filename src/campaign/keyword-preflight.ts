@@ -2,7 +2,7 @@ import type { TreatmentIntensity } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { extractTargetDomain } from "../experiments/query-generator.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
-import { calculateCampaignIntensity, normalizeQueryWeights } from "./intensity-calculator.js";
+import { calculateCampaignIntensity, applyIntensityPlanOverrides, normalizeQueryWeights } from "./intensity-calculator.js";
 import type { CampaignProposal } from "./campaign-proposal.js";
 import type { PreflightQueryResult, PreflightSummary } from "./preflight-types.js";
 
@@ -180,12 +180,13 @@ export async function rebuildProposalAfterPreflight(
         ) / totalImpressions
       : rankedFound.reduce((sum, row) => sum + row.globalPosition, 0) / rankedFound.length;
 
-  const campaignDurationDays = recommendDuration(totalImpressions);
-  const treatmentIntensity = recommendIntensity(weightedPosition);
+  const campaignDurationDays = proposal.campaignDurationDays ?? recommendDuration(totalImpressions);
+  const treatmentIntensity =
+    proposal.treatmentIntensity ?? recommendIntensity(weightedPosition);
 
   const identityCount = await prisma.identity.count({ where: { active: true } });
 
-  const intensity = calculateCampaignIntensity({
+  const baseIntensity = calculateCampaignIntensity({
     queries: normalizedInputs.map((q) => ({
       text: q.text,
       type: q.type ?? "core",
@@ -205,6 +206,14 @@ export async function rebuildProposalAfterPreflight(
     },
     siteCurveData: null,
     activeIdentityCount: identityCount,
+  });
+
+  const intensity = applyIntensityPlanOverrides(baseIntensity, {
+    plannedSessionCap: proposal.plannedSessionCap,
+    targetIdentityCount: proposal.targetIdentityCount,
+    organicMaxSessionsPerIdentity: proposal.organicMaxSessionsPerIdentity,
+    activeIdentityCount: identityCount,
+    campaignDays: campaignDurationDays,
   });
 
   const normalized = normalizeQueryWeights(intensity.queries);

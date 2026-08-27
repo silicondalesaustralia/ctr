@@ -23,8 +23,28 @@ export function getApiConfig() {
   };
 }
 
+const LONG_RUNNING_PATHS = ["/campaign/preflight"];
+
+function resolveFetchUrl(path: string): string {
+  if (typeof window === "undefined") {
+    return buildApiUrl(path);
+  }
+
+  const railwayOrigin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (
+    railwayOrigin &&
+    /^https?:\/\//.test(railwayOrigin) &&
+    !railwayOrigin.includes("localhost") &&
+    LONG_RUNNING_PATHS.some((prefix) => path.startsWith(prefix))
+  ) {
+    return `${railwayOrigin}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+
+  return buildApiUrl(path);
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = buildApiUrl(path);
+  const url = resolveFetchUrl(path);
   const response = await fetch(url, {
     ...init,
     headers: {

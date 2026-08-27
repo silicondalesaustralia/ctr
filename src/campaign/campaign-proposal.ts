@@ -42,6 +42,9 @@ export interface CampaignProposal {
   gscStatus: "live" | "unavailable";
   gscQueryCount: number;
   preflight?: PreflightSummary;
+  plannedSessionCap?: number | null;
+  targetIdentityCount?: number | null;
+  organicMaxSessionsPerIdentity?: number;
 }
 
 function classifyQueryType(query: string, keyword: string): CampaignQueryInput["type"] {
