@@ -1,6 +1,6 @@
 "use client";
 
-import type { CampaignFormState, IntensitySummary, QueryRow, SettingRationale } from "./shared";
+import type { CampaignFormState, IntensitySummary, PreflightSummary, QueryRow, SettingRationale } from "./shared";
 import {
   cellStyle,
   inputStyle,
@@ -16,12 +16,14 @@ interface Props {
   intensity: IntensitySummary | null;
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable" | null;
+  preflightSummary: PreflightSummary | null;
   running: boolean;
   busy: string | null;
   onFormChange: <K extends keyof CampaignFormState>(key: K, value: CampaignFormState[K]) => void;
   onQueryChange: (index: number, field: keyof QueryRow, value: string) => void;
   onBack: () => void;
   onReanalyze: () => void;
+  onPreflight: () => void;
   onPreview: () => void;
   onCreateIdentities: () => void;
   onSaveAndStart: () => void;
@@ -42,17 +44,25 @@ export default function CampaignReviewStep({
   intensity,
   rationales,
   gscStatus,
+  preflightSummary,
   running,
   busy,
   onFormChange,
   onQueryChange,
   onBack,
   onReanalyze,
+  onPreflight,
   onPreview,
   onCreateIdentities,
   onSaveAndStart,
   onStop,
 }: Props) {
+  const preflightReady =
+    preflightSummary != null &&
+    preflightSummary.findableCount > 0 &&
+    preflightSummary.status !== "blocked";
+  const removedQueries =
+    preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
   return (
     <>
       <section style={panelStyle}>
@@ -62,6 +72,40 @@ export default function CampaignReviewStep({
           Settings were chosen from GSC data and your keyword cluster. Adjust anything below,
           then save and start when ready.
         </p>
+
+        {preflightSummary && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderRadius: 8,
+              marginBottom: 20,
+              background:
+                preflightSummary.status === "blocked"
+                  ? "#fef2f2"
+                  : preflightSummary.findableCount > 0
+                    ? "#ecfdf5"
+                    : "#fffbeb",
+              border: `1px solid ${
+                preflightSummary.status === "blocked"
+                  ? "#fecaca"
+                  : preflightSummary.findableCount > 0
+                    ? "#6ee7b7"
+                    : "#fcd34d"
+              }`,
+              fontSize: 14,
+            }}
+          >
+            {preflightSummary.status === "blocked"
+              ? "Google blocked the preflight browser session (CAPTCHA). Retry later or switch identity."
+              : preflightSummary.findableCount > 0
+                ? `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 3 pages.${
+                    preflightSummary.keywordAdjusted
+                      ? ` Primary keyword updated to "${form.keyword}".`
+                      : ""
+                  }`
+                : "Google preflight: none of the queries showed your site in the first 3 SERP pages."}
+          </div>
+        )}
 
         {gscStatus && (
           <div
@@ -233,6 +277,11 @@ export default function CampaignReviewStep({
             </button>
           )}
           {!running && (
+            <button type="button" onClick={onPreflight} disabled={Boolean(busy)} style={secondaryButtonStyle}>
+              {busy === "preflight" ? "Checking Google..." : "Validate on Google"}
+            </button>
+          )}
+          {!running && (
             <button type="button" onClick={onPreview} disabled={Boolean(busy)} style={secondaryButtonStyle}>
               {busy === "preview" ? "Calculating..." : "Update preview"}
             </button>
@@ -241,7 +290,7 @@ export default function CampaignReviewStep({
             <button
               type="button"
               onClick={onSaveAndStart}
-              disabled={Boolean(busy) || !form.keyword || !form.targetUrl}
+              disabled={Boolean(busy) || !form.keyword || !form.targetUrl || !preflightReady}
               style={primaryButtonStyle("#16a34a")}
             >
               {busy === "run" ? "Starting..." : "Save & start campaign"}
@@ -257,6 +306,11 @@ export default function CampaignReviewStep({
             </button>
           )}
         </div>
+        {!running && !preflightReady && (
+          <p style={{ color: "#b45309", fontSize: 14, marginTop: 12 }}>
+            Run Validate on Google before starting — only findable queries can be scheduled.
+          </p>
+        )}
       </section>
 
       {intensity && (
@@ -317,27 +371,50 @@ export default function CampaignReviewStep({
         </section>
       )}
 
-      {form.queries.length > 0 && (
+      {(form.queries.length > 0 || (preflightSummary?.results.length ?? 0) > 0) && (
         <section style={{ ...panelStyle, marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 16px" }}>Query cluster</h2>
+          {removedQueries.length > 0 && (
+            <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
+              Removed after preflight: {removedQueries.join(", ")}
+            </p>
+          )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Query", "Type", "Volume/mo", "Position", "GSC impr.", "GSC clicks", "Sessions"].map(
-                    (h) => (
-                      <th key={h} style={thStyle}>
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    "Query",
+                    "Type",
+                    "Google",
+                    "Volume/mo",
+                    "Position",
+                    "GSC impr.",
+                    "GSC clicks",
+                    "Sessions",
+                  ].map((h) => (
+                    <th key={h} style={thStyle}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {form.queries.map((row, index) => (
-                  <tr key={row.text}>
-                    <td style={cellStyle}>{row.text}</td>
-                    <td style={cellStyle}>{row.type}</td>
+                {form.queries.map((row, index) => {
+                  const preflight = preflightSummary?.results.find(
+                    (item) => item.query.toLowerCase() === row.text.toLowerCase(),
+                  );
+                  const googleLabel =
+                    preflight?.found
+                      ? `p${preflight.serpPage} #${preflight.position}`
+                      : preflight
+                        ? "Not found"
+                        : "—";
+                  return (
+                    <tr key={row.text}>
+                      <td style={cellStyle}>{row.text}</td>
+                      <td style={cellStyle}>{row.type}</td>
+                      <td style={cellStyle}>{googleLabel}</td>
                     <td style={cellStyle}>
                       <input
                         style={{ ...inputStyle, padding: "6px 8px", width: 90 }}
@@ -361,9 +438,10 @@ export default function CampaignReviewStep({
                     </td>
                     <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
                     <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
-                    <td style={cellStyle}>{row.allocatedSessions ?? "—"}</td>
-                  </tr>
-                ))}
+                      <td style={cellStyle}>{row.allocatedSessions ?? "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

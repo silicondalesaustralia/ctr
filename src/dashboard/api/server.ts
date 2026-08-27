@@ -28,6 +28,8 @@ import {
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
 import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
+import { runKeywordPreflight } from "../../campaign/keyword-preflight.js";
+import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
 import {
@@ -301,6 +303,58 @@ export function createApiServer() {
         gscConnectionId: body.gscConnectionId ?? null,
         gscSiteUrl: body.gscSiteUrl ?? null,
       });
+      res.json({ proposal });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post("/campaign/preflight", async (req, res) => {
+    const body = req.body as {
+      keyword?: string;
+      targetUrl?: string;
+      region?: string;
+      gscConnectionId?: string | null;
+      gscSiteUrl?: string | null;
+      maxSerpPages?: number;
+      identityExternalId?: string;
+    };
+
+    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+      return;
+    }
+
+    try {
+      new URL(body.targetUrl);
+    } catch {
+      res.status(400).json({ error: "targetUrl must be a valid URL" });
+      return;
+    }
+
+    try {
+      const baseProposal = await buildCampaignProposal({
+        keyword: body.keyword,
+        targetUrl: body.targetUrl,
+        region: body.region,
+        gscConnectionId: body.gscConnectionId ?? null,
+        gscSiteUrl: body.gscSiteUrl ?? null,
+      });
+
+      const proposal = await runKeywordPreflight(
+        {
+          proposal: baseProposal,
+          maxSerpPages: body.maxSerpPages ?? 3,
+          identityExternalId: body.identityExternalId,
+        },
+        (queries, context) =>
+          runSerpPreflightChecks({
+            queries,
+            ...context,
+          }),
+      );
+
       res.json({ proposal });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

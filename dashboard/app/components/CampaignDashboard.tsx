@@ -10,6 +10,7 @@ import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetu
 import type {
   CampaignFormState,
   IntensitySummary,
+  PreflightSummary,
   QueryRow,
   RegionOption,
   SettingRationale,
@@ -42,6 +43,7 @@ interface CampaignProposal extends CampaignFormState {
   intensity: IntensityPreview;
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable";
+  preflight?: PreflightSummary;
 }
 
 interface Campaign {
@@ -141,6 +143,7 @@ export default function CampaignDashboard() {
   const [step, setStep] = useState<WizardStep>("setup");
   const [rationales, setRationales] = useState<SettingRationale[]>([]);
   const [gscStatus, setGscStatus] = useState<"live" | "unavailable" | null>(null);
+  const [preflightSummary, setPreflightSummary] = useState<PreflightSummary | null>(null);
   const [intensity, setIntensity] = useState<IntensitySummary | null>(null);
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
@@ -177,6 +180,7 @@ export default function CampaignDashboard() {
     setIntensity(intensityFromPreview(proposal.intensity));
     setRationales(proposal.rationales);
     setGscStatus(proposal.gscStatus);
+    setPreflightSummary(proposal.preflight ?? null);
     setStep("review");
   }
 
@@ -314,10 +318,41 @@ export default function CampaignDashboard() {
     }));
   }
 
+  async function runPreflight() {
+    setBusy("preflight");
+    setError(null);
+    try {
+      const result = await apiPost<{ proposal: CampaignProposal }>("/campaign/preflight", {
+        keyword: form.keyword,
+        targetUrl: form.targetUrl,
+        region: form.region,
+        gscConnectionId: form.gscConnectionId,
+        gscSiteUrl: form.gscSiteUrl,
+      });
+      applyProposal(result.proposal);
+      if (result.proposal.preflight?.status === "blocked") {
+        setMessage("Google blocked preflight — try again later");
+      } else if (result.proposal.preflight?.findableCount === 0) {
+        setMessage("No queries were findable on Google within 3 pages");
+      } else {
+        setMessage(
+          result.proposal.preflight?.keywordAdjusted
+            ? `Preflight complete — keyword updated to "${result.proposal.keyword}"`
+            : "Preflight complete — plan recalculated from findable queries",
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google preflight failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function analyzeCampaign() {
     setBusy("analyze");
     setError(null);
     setMessage(null);
+    setPreflightSummary(null);
     try {
       const result = await apiPost<{ proposal: CampaignProposal }>("/campaign/analyze", {
         keyword: form.keyword,
@@ -327,10 +362,10 @@ export default function CampaignDashboard() {
         gscSiteUrl: form.gscSiteUrl,
       });
       applyProposal(result.proposal);
-      setMessage("Analysis complete — review settings below");
+      setMessage("Analysis complete — validating queries on Google...");
+      await runPreflight();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
-    } finally {
       setBusy(null);
     }
   }
@@ -443,12 +478,14 @@ export default function CampaignDashboard() {
           intensity={intensity}
           rationales={rationales}
           gscStatus={gscStatus}
+          preflightSummary={preflightSummary}
           running={running}
           busy={busy}
           onFormChange={updateForm}
           onQueryChange={updateQuery}
           onBack={() => setStep("setup")}
           onReanalyze={() => void analyzeCampaign()}
+          onPreflight={() => void runPreflight()}
           onPreview={() => void previewIntensity()}
           onCreateIdentities={() => void createIdentities()}
           onSaveAndStart={() => void saveAndStart()}

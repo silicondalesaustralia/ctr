@@ -14,6 +14,27 @@ export interface QueryRow {
   gscImpressions28d: number | null;
   gscClicks28d: number | null;
   allocatedSessions: number | null;
+  preflightFound?: boolean;
+  preflightSerpPage?: number | null;
+  preflightPosition?: number | null;
+  preflightStatus?: string;
+}
+
+export interface PreflightSummary {
+  status: "complete" | "none_found" | "blocked" | "error";
+  testedCount: number;
+  findableCount: number;
+  keywordAdjusted: boolean;
+  previousKeyword: string;
+  results: Array<{
+    query: string;
+    found: boolean;
+    serpPage: number | null;
+    position: number | null;
+    globalPosition: number | null;
+    status: string;
+    errorMessage?: string;
+  }>;
 }
 
 export interface SettingRationale {

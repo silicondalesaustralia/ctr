@@ -8,6 +8,8 @@ import { generateQueryCluster } from "../experiments/query-generator.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
 import { prisma } from "../db/client.js";
 
+import type { PreflightSummary } from "./preflight-types.js";
+
 export interface SettingRationale {
   setting: string;
   value: string;
@@ -39,6 +41,7 @@ export interface CampaignProposal {
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable";
   gscQueryCount: number;
+  preflight?: PreflightSummary;
 }
 
 function classifyQueryType(query: string, keyword: string): CampaignQueryInput["type"] {
