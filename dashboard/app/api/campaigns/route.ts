@@ -14,7 +14,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const response = await railwayFetch("/campaigns", apiKey);
+  let response: Response;
+  try {
+    response = await railwayFetch("/campaigns", apiKey);
+  } catch {
+    return NextResponse.json(
+      { error: `Cannot reach API at ${process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "Railway"}` },
+      { status: 502 },
+    );
+  }
   if (response.ok) {
     return proxyRailwayResponse(response);
   }

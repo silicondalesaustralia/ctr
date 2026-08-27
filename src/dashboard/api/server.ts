@@ -341,15 +341,29 @@ export function createApiServer() {
   });
 
   app.get("/campaigns", async (_req, res) => {
-    const campaigns = await listCampaigns();
-    const activeCount = await countActiveCampaigns();
-    const runnerOn = await isRunnerEnabledSetting();
-    const summaries = await Promise.all(campaigns.map((campaign) => serializeCampaignSummary(campaign)));
-    res.json({
-      campaigns: summaries,
-      running: activeCount > 0 && runnerOn,
-      activeCount,
-    });
+    try {
+      const campaigns = await listCampaigns();
+      const activeCount = await countActiveCampaigns();
+      const runnerOn = await isRunnerEnabledSetting();
+      const summaries = await Promise.all(
+        campaigns.map((campaign) => serializeCampaignSummary(campaign)),
+      );
+      res.json({
+        campaigns: summaries,
+        running: activeCount > 0 && runnerOn,
+        activeCount,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[api] GET /campaigns failed:", message);
+      res.status(500).json({
+        error: message.includes("require_warmup_identities") ||
+          message.includes("warmup_sessions") ||
+          message.includes("warmup_status")
+          ? "Database schema is out of date. Run npm run db:push on the API service."
+          : message,
+      });
+    }
   });
 
   app.get("/campaigns/:id", async (req, res) => {
