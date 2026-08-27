@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AuthGate from "../components/AuthGate";
 import AppLayout from "../components/AppLayout";
 import { apiGet, apiPost } from "../../lib/api";
 import { cellStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle, thStyle } from "../components/campaign/shared";
@@ -28,7 +29,29 @@ function warmupLabel(warmup: WarmupProgress): string {
   return `${warmup.sessionsCompleted}/${warmup.minSessions} sessions · ${warmup.siteClicks}/${warmup.minSiteClicks} clicks · ${warmup.ageDays}/${warmup.minDays}d`;
 }
 
-export default function IdentitiesPage() {
+function normalizeIdentitiesResponse(payload: unknown): IdentityRow[] {
+  if (Array.isArray(payload)) {
+    return payload as IdentityRow[];
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { identities?: IdentityRow[] }).identities)
+  ) {
+    return (payload as { identities: IdentityRow[] }).identities;
+  }
+  return [];
+}
+
+export default function IdentitiesPageWrapper() {
+  return (
+    <AuthGate>
+      <IdentitiesPage />
+    </AuthGate>
+  );
+}
+
+function IdentitiesPage() {
   const [identities, setIdentities] = useState<IdentityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -38,8 +61,8 @@ export default function IdentitiesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await apiGet<{ identities: IdentityRow[] }>("/identities");
-      setIdentities(result.identities);
+      const result = await apiGet<{ identities?: IdentityRow[] } | IdentityRow[]>("/identities");
+      setIdentities(normalizeIdentitiesResponse(result));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load identities");
@@ -122,6 +145,11 @@ export default function IdentitiesPage() {
 
         {loading ? (
           <p style={{ color: "#64748b" }}>Loading...</p>
+        ) : error ? (
+          <p style={{ color: "#64748b" }}>
+            Could not load identities. Check that you are logged in and the API is deployed with the
+            latest schema (<code>npm run db:push</code>).
+          </p>
         ) : identities.length === 0 ? (
           <p style={{ color: "#64748b" }}>No identities yet.</p>
         ) : (

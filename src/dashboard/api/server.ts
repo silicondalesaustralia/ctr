@@ -46,7 +46,7 @@ import {
 import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
-import { computeWarmupProgress, setCampaignIdentities } from "../../warmup/warmup-service.js";
+import { computeWarmupProgress, setCampaignIdentities, backfillWarmupForExistingIdentities } from "../../warmup/warmup-service.js";
 import {
   completeOAuthConnection,
   consumeOAuthState,
@@ -983,40 +983,50 @@ export function createApiServer() {
   });
 
   app.get("/identities", async (_req, res) => {
-    const [identities, warmupRemaining] = await Promise.all([
-      prisma.identity.findMany({ orderBy: { externalId: "asc" } }),
-      prisma.warmupSession.groupBy({
-        by: ["identityId"],
-        where: { status: "scheduled" },
-        _count: { _all: true },
-      }),
-    ]);
+    try {
+      await backfillWarmupForExistingIdentities();
 
-    const warmupRemainingByIdentity = new Map(
-      warmupRemaining.map((row) => [row.identityId, row._count._all]),
-    );
+      const identities = await prisma.identity.findMany({ orderBy: { externalId: "asc" } });
 
-    res.json({
-      identities: identities.map((identity) => ({
-        id: identity.id,
-        externalId: identity.externalId,
-        region: identity.region,
-        city: identity.city,
-        deviceClass: identity.deviceClass,
-        personaId: identity.personaId,
-        active: identity.active,
-        createdAt: identity.createdAt.toISOString(),
-        lastUsedAt: identity.lastUsedAt?.toISOString() ?? null,
-        totalSessions: identity.totalSessions,
-        googleSessions: identity.googleSessions,
-        blockedSessions: identity.blockedSessions,
-        targetClicks: identity.targetClicks,
-        warmup: computeWarmupProgress(
-          identity,
-          warmupRemainingByIdentity.get(identity.id) ?? 0,
-        ),
-      })),
-    });
+      let warmupRemainingByIdentity = new Map<string, number>();
+      try {
+        const warmupRemaining = await prisma.warmupSession.groupBy({
+          by: ["identityId"],
+          where: { status: "scheduled" },
+          _count: { _all: true },
+        });
+        warmupRemainingByIdentity = new Map(
+          warmupRemaining.map((row) => [row.identityId, row._count._all]),
+        );
+      } catch {
+        // warmup_sessions table may not exist until db:push is run
+      }
+
+      res.json({
+        identities: identities.map((identity) => ({
+          id: identity.id,
+          externalId: identity.externalId,
+          region: identity.region,
+          city: identity.city,
+          deviceClass: identity.deviceClass,
+          personaId: identity.personaId,
+          active: identity.active,
+          createdAt: identity.createdAt.toISOString(),
+          lastUsedAt: identity.lastUsedAt?.toISOString() ?? null,
+          totalSessions: identity.totalSessions,
+          googleSessions: identity.googleSessions,
+          blockedSessions: identity.blockedSessions,
+          targetClicks: identity.targetClicks,
+          warmup: computeWarmupProgress(
+            identity,
+            warmupRemainingByIdentity.get(identity.id) ?? 0,
+          ),
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
   });
 
   app.post("/identities/:id/disable", async (req, res) => {
