@@ -12,6 +12,7 @@ import { findTargetInSerp, findTargetOnCurrentPage } from "../browser/serp-parse
 import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
+import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
   cleanupBrowserSession,
@@ -45,6 +46,30 @@ export async function pickPreflightIdentity(
   region: string,
   identityExternalId?: string,
 ): Promise<Identity> {
+  const requireGoLogin = getEnv().BROWSER_PROFILE_PROVIDER === "gologin";
+
+  function assertGoLoginProfile(identity: Identity): Identity {
+    if (requireGoLogin && !isValidGoLoginProfileId(identity.externalProfileId)) {
+      throw new Error(
+        `Identity ${identity.externalId} has an invalid GoLogin profile ID. Run: npm run gologin:repair`,
+      );
+    }
+    return identity;
+  }
+
+  function filterPool(identities: Identity[]): Identity[] {
+    if (!requireGoLogin) return identities;
+    const valid = identities.filter((identity) =>
+      isValidGoLoginProfileId(identity.externalProfileId),
+    );
+    if (valid.length === 0) {
+      throw new Error(
+        "No identities with valid GoLogin profile IDs. Run: npm run gologin:repair",
+      );
+    }
+    return valid;
+  }
+
   if (identityExternalId) {
     const identity = await prisma.identity.findUnique({
       where: { externalId: identityExternalId },
@@ -52,10 +77,10 @@ export async function pickPreflightIdentity(
     if (!identity?.active) {
       throw new Error(`Identity not found or inactive: ${identityExternalId}`);
     }
-    return identity;
+    return assertGoLoginProfile(identity);
   }
 
-  const identities = await prisma.identity.findMany({ where: { active: true } });
+  const identities = filterPool(await prisma.identity.findMany({ where: { active: true } }));
   if (identities.length === 0) {
     throw new Error("No active identities available for Google preflight.");
   }

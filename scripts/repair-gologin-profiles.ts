@@ -3,13 +3,8 @@ import { Command } from "commander";
 import { DeviceClass, ProfileProvider } from "@prisma/client";
 import { prisma } from "../src/db/client.js";
 import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";
+import { isValidGoLoginProfileId } from "../src/providers/browser/gologin-utils.js";
 import { getEnv } from "../src/config/env.js";
-
-const GOLOGIN_PROFILE_ID = /^[a-f0-9]{24}$/;
-
-function isValidGoLoginProfileId(profileId: string | null | undefined): boolean {
-  return Boolean(profileId && GOLOGIN_PROFILE_ID.test(profileId));
-}
 
 const program = new Command();
 

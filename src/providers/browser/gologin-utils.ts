@@ -4,6 +4,12 @@ export interface GoLoginStartResponse {
   url?: string;
 }
 
+const GOLOGIN_PROFILE_ID = /^[a-f0-9]{24}$/;
+
+export function isValidGoLoginProfileId(profileId: string | null | undefined): boolean {
+  return Boolean(profileId && GOLOGIN_PROFILE_ID.test(profileId));
+}
+
 export function buildCloudConnectUrl(profileId: string, apiToken: string): string {
   return `wss://cloudbrowser.gologin.com/connect?token=${encodeURIComponent(apiToken)}&profile=${encodeURIComponent(profileId)}`;
 }
