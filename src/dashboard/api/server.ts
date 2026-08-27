@@ -6,6 +6,7 @@ import { generateExperimentReport, analyseExperiment } from "../../analytics/rep
 import { importGscFile } from "../../analytics/gsc.js";
 import { processScheduledSession } from "../../scheduler/worker.js";
 import { shouldRetry } from "../../scheduler/retry-policy.js";
+import { jsonSafe } from "../../utils/helpers.js";
 import {
   createExperimentFromInput,
   type CreateExperimentInput,
@@ -843,26 +844,38 @@ export function createApiServer() {
   });
 
   app.get("/sessions", async (req, res) => {
-    const experimentId = req.query.experimentId as string | undefined;
-    const sessions = await prisma.session.findMany({
-      where: experimentId ? { experimentId } : undefined,
-      include: { identity: true, experiment: true },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
-    res.json(sessions);
+    try {
+      const experimentId = req.query.experimentId as string | undefined;
+      const sessions = await prisma.session.findMany({
+        where: experimentId ? { experimentId } : undefined,
+        include: { identity: true, experiment: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      res.json(jsonSafe(sessions));
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load sessions",
+      });
+    }
   });
 
   app.get("/sessions/:id", async (req, res) => {
-    const session = await prisma.session.findUnique({
-      where: { id: req.params.id },
-      include: { events: { orderBy: { timestamp: "asc" } }, identity: true, experiment: true },
-    });
-    if (!session) {
-      res.status(404).json({ error: "Not found" });
-      return;
+    try {
+      const session = await prisma.session.findUnique({
+        where: { id: req.params.id },
+        include: { events: { orderBy: { timestamp: "asc" } }, identity: true, experiment: true },
+      });
+      if (!session) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      res.json(jsonSafe(session));
+    } catch (error) {
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to load session",
+      });
     }
-    res.json(session);
   });
 
   app.get("/sessions/export.csv", async (req, res) => {

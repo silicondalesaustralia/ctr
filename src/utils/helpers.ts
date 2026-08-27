@@ -94,3 +94,10 @@ export function endOfMonth(date: Date): Date {
 export function daysInMonth(date: Date): number {
   return endOfMonth(date).getDate();
 }
+
+/** Convert BigInt fields so Express res.json() can serialize Prisma rows. */
+export function jsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item) => (typeof item === "bigint" ? Number(item) : item)),
+  ) as T;
+}
