@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Identity } from "@prisma/client";
 import {
   computeWarmupProgress,
+  identityAllowedForCampaign,
   isWarmupEligible,
 } from "../../src/warmup/warmup-service.js";
 
@@ -69,5 +70,11 @@ describe("warmup eligibility", () => {
     expect(progress.sessionsCompleted).toBe(4);
     expect(progress.siteClicks).toBe(1);
     expect(progress.scheduledRemaining).toBe(6);
+  });
+
+  it("allows cold identities when campaign does not require warmup", () => {
+    const cold = makeIdentity({ warmupSessionsCompleted: 0, warmupSiteClicks: 0 });
+    expect(identityAllowedForCampaign(cold, false)).toBe(true);
+    expect(identityAllowedForCampaign(cold, true)).toBe(false);
   });
 });

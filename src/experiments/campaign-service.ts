@@ -165,7 +165,17 @@ export async function previewCampaignIntensity(
 
   queries = await enrichQueriesWithGsc(experimentId ?? null, input.targetUrl.trim(), queries);
 
-  const identityCount = await countEligibleIdentities(region === "ALL" ? null : region);
+  const experiment = experimentId
+    ? await prisma.experiment.findUnique({
+        where: { id: experimentId },
+        select: { requireWarmupIdentities: true },
+      })
+    : null;
+  const requireWarmup = experiment?.requireWarmupIdentities ?? true;
+  const identityCount = await countEligibleIdentities(
+    region === "ALL" ? null : region,
+    requireWarmup,
+  );
 
   const siteCurveData =
     input.ctrSource === "gsc_site_curve" && experimentId
@@ -565,7 +575,8 @@ export async function getCampaignIdentities(experimentId: string): Promise<Campa
     const inRegionPool = !focusRegion || identity.region === focusRegion;
     const selected = hasExplicitSelection
       ? selectedIds.has(identity.id)
-      : inRegionPool && computeWarmupProgress(identity).eligible;
+      : inRegionPool &&
+        (!campaign.requireWarmupIdentities || computeWarmupProgress(identity).eligible);
 
     return {
       id: identity.id,

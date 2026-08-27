@@ -8,7 +8,7 @@ import { cleanupStaleSessions } from "../src/sessions/session-cleanup.js";
 import { logger } from "../src/config/logger.js";
 import { prisma } from "../src/db/client.js";
 import { maybeRecalculateAdaptivePacing } from "../src/campaign/adaptive-pacing.js";
-import { backfillWarmupForExistingIdentities } from "../src/warmup/warmup-service.js";
+import { backfillWarmupForExistingIdentities, backfillCampaignWarmupRequirements } from "../src/warmup/warmup-service.js";
 
 const worker = createSessionWorker();
 const warmupWorker = createWarmupWorker();
@@ -66,6 +66,16 @@ backfillWarmupForExistingIdentities()
     }
   })
   .catch((error) => logger.error({ event: "warmup_backfill_failed", error: String(error) }));
+
+backfillCampaignWarmupRequirements()
+  .then((count) => {
+    if (count > 0) {
+      logger.info({ event: "campaign_warmup_requirement_backfill", campaigns: count });
+    }
+  })
+  .catch((error) =>
+    logger.error({ event: "campaign_warmup_backfill_failed", error: String(error) }),
+  );
 
 cleanupStaleSessions().catch((error) =>
   logger.error({ event: "stale_session_cleanup_failed", error: String(error) }),

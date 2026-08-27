@@ -143,6 +143,7 @@ model Experiment {
   gscConnectionId      String?          @map("gsc_connection_id")
   gscSiteUrl           String?          @map("gsc_site_url")
   lastPacingRecalcAt   DateTime?        @map("last_pacing_recalc_at")
+  requireWarmupIdentities Boolean       @default(true) @map("require_warmup_identities")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 

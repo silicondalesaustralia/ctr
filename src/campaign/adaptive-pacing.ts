@@ -7,6 +7,7 @@ import {
 } from "./intensity-calculator.js";
 import type { QueryDemandInput, TrafficModelInput } from "./types.js";
 import { generateCampaignSchedule } from "../scheduler/schedule-generator.js";
+import { getCampaignIdentityPool } from "../warmup/warmup-service.js";
 
 export async function getLatestPositionsForQueries(
   experimentId: string,
@@ -143,13 +144,13 @@ export async function recalculateCampaignPacing(
       data: { status: "cancelled" },
     });
 
-    const identities = await prisma.identity.findMany({ where: { active: true } });
     const refreshed = await prisma.experiment.findUnique({
       where: { id: experimentId },
       include: { queries: { where: { active: true } } },
     });
 
     if (refreshed) {
+      const identities = await getCampaignIdentityPool(experimentId, refreshed.focusRegion);
       updated = await generateCampaignSchedule({
         experiment: refreshed,
         queries: refreshed.queries,

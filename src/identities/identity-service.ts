@@ -292,7 +292,12 @@ export async function isIdentityEligible(
 ): Promise<boolean> {
   const identity = await prisma.identity.findUnique({ where: { id: identityId } });
   if (!identity?.active) return false;
-  if (!isWarmupEligible(identity)) return false;
+
+  const experiment = await prisma.experiment.findUnique({
+    where: { id: experimentId },
+    select: { requireWarmupIdentities: true },
+  });
+  if (experiment?.requireWarmupIdentities && !isWarmupEligible(identity)) return false;
 
   const dayStart = new Date(scheduledAt);
   dayStart.setHours(0, 0, 0, 0);

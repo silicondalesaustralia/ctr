@@ -50,6 +50,15 @@ export function isWarmupEligible(identity: Identity): boolean {
   return computeWarmupProgress(identity).eligible;
 }
 
+export function identityAllowedForCampaign(
+  identity: Identity,
+  requireWarmup: boolean,
+): boolean {
+  if (!identity.active) return false;
+  if (!requireWarmup) return true;
+  return isWarmupEligible(identity);
+}
+
 export async function refreshWarmupEligibility(identityId: string): Promise<Identity> {
   const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
   if (identity.warmupStatus === "eligible") {
@@ -145,7 +154,10 @@ export async function scheduleWarmupForIdentity(identity: Identity): Promise<num
   return rows.length;
 }
 
-export async function countEligibleIdentities(region?: string | null): Promise<number> {
+export async function countEligibleIdentities(
+  region?: string | null,
+  requireWarmup = true,
+): Promise<number> {
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
@@ -153,13 +165,20 @@ export async function countEligibleIdentities(region?: string | null): Promise<n
     },
   });
 
-  return identities.filter((identity) => isWarmupEligible(identity)).length;
+  return identities.filter((identity) => identityAllowedForCampaign(identity, requireWarmup))
+    .length;
 }
 
 export async function getCampaignIdentityPool(
   experimentId: string,
   focusRegion?: string | null,
 ): Promise<Identity[]> {
+  const experiment = await prisma.experiment.findUniqueOrThrow({
+    where: { id: experimentId },
+    select: { requireWarmupIdentities: true },
+  });
+  const requireWarmup = experiment.requireWarmupIdentities;
+
   const selections = await prisma.experimentIdentity.findMany({
     where: { experimentId, selected: true },
     include: { identity: true },
@@ -168,7 +187,7 @@ export async function getCampaignIdentityPool(
   if (selections.length > 0) {
     return selections
       .map((row) => row.identity)
-      .filter((identity) => identity.active && isWarmupEligible(identity));
+      .filter((identity) => identityAllowedForCampaign(identity, requireWarmup));
   }
 
   const identities = await prisma.identity.findMany({
@@ -178,7 +197,7 @@ export async function getCampaignIdentityPool(
     },
   });
 
-  return identities.filter((identity) => isWarmupEligible(identity));
+  return identities.filter((identity) => identityAllowedForCampaign(identity, requireWarmup));
 }
 
 export async function setCampaignIdentities(
@@ -217,4 +236,16 @@ export async function backfillWarmupForExistingIdentities(): Promise<number> {
   }
 
   return scheduled;
+}
+
+/** Grandfather active/paused campaigns so they can keep using cold identities. */
+export async function backfillCampaignWarmupRequirements(): Promise<number> {
+  const result = await prisma.experiment.updateMany({
+    where: {
+      status: { in: ["active", "paused"] },
+      slug: { not: "__warmup__" },
+    },
+    data: { requireWarmupIdentities: false },
+  });
+  return result.count;
 }
