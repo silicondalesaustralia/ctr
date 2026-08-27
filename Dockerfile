@@ -15,8 +15,9 @@ COPY fixtures ./fixtures
 COPY config ./config
 COPY experiments ./experiments
 
+RUN chmod +x scripts/railway-start.sh
+
 ENV NODE_ENV=production
 EXPOSE 8080
 
-# Default: run API. Override CMD for worker, e.g. npm run worker
-CMD ["npm", "run", "api"]
+CMD ["bash", "scripts/railway-start.sh"]

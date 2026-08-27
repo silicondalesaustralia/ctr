@@ -2,5 +2,5 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "npm run api"
+startCommand = "bash scripts/railway-start.sh"
 restartPolicyType = "on_failure"

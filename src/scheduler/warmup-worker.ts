@@ -1,18 +1,17 @@
 import { Queue, Worker, type Job } from "bullmq";
-import { Redis } from "ioredis";
-import { getEnv } from "../config/env.js";
+import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { runWarmupSession } from "../sessions/warmup-runner.js";
 import { logger } from "../config/logger.js";
 
 const QUEUE_NAME = "warmup-jobs";
 
-let connection: Redis | null = null;
+let connection: ReturnType<typeof createRedisConnection> | null = null;
 let queue: Queue | null = null;
 
-function getConnection(): Redis {
+function getConnection() {
   if (!connection) {
-    connection = new Redis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
+    connection = createRedisConnection();
   }
   return connection;
 }

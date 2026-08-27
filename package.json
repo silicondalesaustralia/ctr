@@ -23,6 +23,8 @@
     "personas:assign": "tsx scripts/assign-personas.ts",
     "sessions:cleanup-stale": "tsx scripts/cleanup-stale-sessions.ts",
     "worker": "tsx scripts/run-worker.ts",
+    "warmup:status": "tsx scripts/check-warmup-status.ts",
+    "railway:worker:create": "bash scripts/create-railway-worker.sh",
     "gsc:import": "tsx scripts/import-gsc.ts",
     "experiment:analyse": "tsx scripts/analyse-experiment.ts",
     "api": "tsx src/dashboard/api/server.ts",

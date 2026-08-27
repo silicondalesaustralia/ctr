@@ -1,6 +1,6 @@
 import { Queue, Worker, type Job } from "bullmq";
-import { Redis } from "ioredis";
 import { getEnv, isRunnerEnabledAsync } from "../config/env.js";
+import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { runSession } from "../sessions/session-runner.js";
 import { cleanupStaleSessions } from "../sessions/session-cleanup.js";
@@ -10,12 +10,12 @@ import { logger } from "../config/logger.js";
 
 const QUEUE_NAME = "session-jobs";
 
-let connection: Redis | null = null;
+let connection: ReturnType<typeof createRedisConnection> | null = null;
 let queue: Queue | null = null;
 
-function getConnection(): Redis {
+function getConnection() {
   if (!connection) {
-    connection = new Redis(getEnv().REDIS_URL, { maxRetriesPerRequest: null });
+    connection = createRedisConnection();
   }
   return connection;
 }
