@@ -1,5 +1,7 @@
 import type React from "react";
 
+export type CampaignTab = "plan" | "sessions" | "identities";
+
 export interface RegionOption {
   code: string;
   label: string;

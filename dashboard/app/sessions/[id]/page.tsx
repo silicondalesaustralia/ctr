@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { apiGet } from "../../../lib/api";
 import AppLayout from "../../components/AppLayout";
 import AuthGate from "../../components/AuthGate";
@@ -26,13 +26,15 @@ interface SessionDetail {
   queriesUsedJson: string | null;
   sessionTraitsJson: string | null;
   identity: { externalId: string; region: string; deviceClass: string; personaId: string | null };
-  experiment: { name: string; targetUrl: string };
+  experiment: { id: string; name: string; targetUrl: string };
   events: Array<{ timestamp: string; eventType: string; metadataJson: string | null }>;
 }
 
 export default function SessionDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const sessionId = params.id;
+  const campaignId = searchParams.get("campaign");
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +59,15 @@ export default function SessionDetailPage() {
     <AuthGate>
       <AppLayout title="Session detail">
         <p style={{ marginTop: 0 }}>
-          <Link href="/sessions">← Back to sessions</Link>
+          {campaignId ? (
+            <Link href={`/campaign/${campaignId}?tab=sessions`}>← Back to campaign sessions</Link>
+          ) : session?.experiment.id ? (
+            <Link href={`/campaign/${session.experiment.id}?tab=sessions`}>
+              ← Back to campaign sessions
+            </Link>
+          ) : (
+            <Link href="/">← Back to campaigns</Link>
+          )}
         </p>
 
         {error && (

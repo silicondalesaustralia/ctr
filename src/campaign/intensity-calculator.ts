@@ -16,6 +16,9 @@ export const TREATMENT_MULTIPLIERS: Record<TreatmentIntensity, number> = {
 
 const MIN_SESSIONS_PER_QUERY = 1;
 
+/** Max times one identity should run in a campaign for organic-realistic traffic. */
+export const ORGANIC_MAX_SESSIONS_PER_IDENTITY = 2;
+
 export interface IntensityCalculatorOptions {
   queries: QueryDemandInput[];
   trafficModel: TrafficModelInput;
@@ -126,10 +129,14 @@ export function estimateFeasibleSessions(
   campaignDays: number,
   maxPerDay: number,
   minGapDays: number,
+  organicMaxSessionsPerIdentity: number = ORGANIC_MAX_SESSIONS_PER_IDENTITY,
 ): { suggestedIdentities: number; feasibleSessions: number } {
-  const sessionsPerIdentity = Math.floor(campaignDays / (minGapDays + 1)) * maxPerDay;
-  const feasibleFromPool = identityCount * Math.max(sessionsPerIdentity, 1);
-  const suggestedIdentities = Math.ceil(totalSessions / Math.max(sessionsPerIdentity, 1));
+  const poolCapacityPerIdentity =
+    Math.floor(campaignDays / (minGapDays + 1)) * maxPerDay;
+  const feasibleFromPool = identityCount * Math.max(poolCapacityPerIdentity, 1);
+  const suggestedIdentities = Math.ceil(
+    totalSessions / Math.max(organicMaxSessionsPerIdentity, 1),
+  );
 
   return {
     suggestedIdentities,
@@ -151,7 +158,9 @@ export function calculateCampaignIntensity(
   const totalTreatmentSessions = queries.reduce((sum, q) => sum + q.rawTreatmentSessions, 0);
   const totalAllocatedSessions = queries.reduce((sum, q) => sum + q.allocatedSessions, 0);
 
-  let suggestedIdentities = Math.ceil(totalAllocatedSessions / 3);
+  let suggestedIdentities = Math.ceil(
+    totalAllocatedSessions / ORGANIC_MAX_SESSIONS_PER_IDENTITY,
+  );
   let feasibleSessions: number | null = null;
   const activeCount = options.activeIdentityCount ?? null;
 

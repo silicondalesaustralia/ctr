@@ -351,9 +351,10 @@ export default function CampaignReviewStep({
               <div>
                 <strong>Need {intensity.identityDeficit} more identities</strong>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-                  You have {intensity.activeIdentityCount} active but this campaign needs{" "}
-                  {intensity.suggestedIdentities}. Only {intensity.feasibleSessions} of{" "}
-                  {intensity.totalAllocatedSessions} sessions can run with the current pool.
+                  You have {intensity.activeIdentityCount} active but organic traffic needs about{" "}
+                  {intensity.suggestedIdentities} mostly-unique visitors (max 2 sessions each). The
+                  pool can still schedule {intensity.feasibleSessions} of{" "}
+                  {intensity.totalAllocatedSessions} sessions with identity reuse.
                 </p>
               </div>
               <button

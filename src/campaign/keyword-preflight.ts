@@ -287,7 +287,7 @@ export async function rebuildProposalAfterPreflight(
     rationales.push({
       setting: "Identities",
       value: `Need ${intensity.identityDeficit} more`,
-      reason: `${intensity.activeIdentityCount} active identities can deliver ~${intensity.feasibleSessions} of ${intensity.totalAllocatedSessions} planned sessions.`,
+      reason: `${intensity.activeIdentityCount} active identities can schedule ~${intensity.feasibleSessions} sessions with reuse, but organic traffic needs ~${intensity.suggestedIdentities} mostly-unique visitors (max 2 sessions each).`,
     });
   }
 

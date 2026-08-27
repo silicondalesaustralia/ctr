@@ -9,8 +9,6 @@ import { apiGet } from "../../lib/api";
 const nav = [
   { href: "/", label: "Campaigns" },
   { href: "/gsc", label: "GSC" },
-  { href: "/sessions", label: "Sessions" },
-  { href: "/identities", label: "Identities" },
 ];
 
 export default function AppLayout({

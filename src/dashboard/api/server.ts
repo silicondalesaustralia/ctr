@@ -19,6 +19,7 @@ import {
   createCampaign,
   countActiveCampaigns,
   getCampaignById,
+  getCampaignIdentities,
   getCampaignLog,
   getCurrentCampaign,
   getCampaignKeyword,
@@ -410,6 +411,22 @@ export function createApiServer() {
 
     const sessions = await getCampaignLog(campaign.id);
     res.json({ entries: sessions.map(serializeLogEntry) });
+  });
+
+  app.get("/campaigns/:id/identities", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    try {
+      const identities = await getCampaignIdentities(campaign.id);
+      res.json({ identities });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
   });
 
   app.put("/campaign", async (req, res) => {

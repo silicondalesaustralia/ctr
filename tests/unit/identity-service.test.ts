@@ -60,4 +60,42 @@ describe("identityDeficit", () => {
 
     expect(result.identityDeficit).toBe(0);
   });
+
+  it("suggests mostly-unique identities for organic traffic", () => {
+    const result = calculateCampaignIntensity({
+      queries: [
+        {
+          text: "query a",
+          type: "core",
+          weight: 0.5,
+          monthlySearchVolume: 800,
+          startingPosition: 18,
+        },
+        {
+          text: "query b",
+          type: "close_variation",
+          weight: 0.5,
+          monthlySearchVolume: 400,
+          startingPosition: 22,
+        },
+      ],
+      trafficModel: {
+        campaignDurationDays: 14,
+        treatmentIntensity: "normal",
+        maxShareOfSearchDemand: 0.02,
+        maxShareOfGscImpressions: 0.05,
+        ctrSource: "default_curve",
+        desktopPercent: 65,
+      },
+      activeIdentityCount: 10,
+    });
+
+    expect(result.suggestedIdentities).toBe(
+      Math.ceil(result.totalAllocatedSessions / 2),
+    );
+    expect(result.feasibleSessions).toBe(result.totalAllocatedSessions);
+    expect(result.identityDeficit).toBe(
+      Math.max(0, result.suggestedIdentities - 10),
+    );
+  });
 });

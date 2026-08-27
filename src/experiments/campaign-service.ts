@@ -431,6 +431,82 @@ export async function getCampaignLog(experimentId: string, limit = 100) {
   });
 }
 
+export interface CampaignIdentityRow {
+  id: string;
+  externalId: string;
+  region: string;
+  city: string;
+  deviceClass: string;
+  personaId: string | null;
+  active: boolean;
+  campaignSessions: number;
+  campaignClicks: number;
+  campaignBlocked: number;
+  lastUsedForCampaign: string | null;
+  inRegionPool: boolean;
+}
+
+export async function getCampaignIdentities(experimentId: string): Promise<CampaignIdentityRow[]> {
+  const campaign = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
+  const sessions = await prisma.session.findMany({
+    where: { experimentId },
+    select: {
+      identityId: true,
+      status: true,
+      targetClicked: true,
+      createdAt: true,
+    },
+  });
+
+  const usage = new Map<
+    string,
+    { sessions: number; clicks: number; blocked: number; lastUsed: Date | null }
+  >();
+
+  for (const session of sessions) {
+    const row = usage.get(session.identityId) ?? {
+      sessions: 0,
+      clicks: 0,
+      blocked: 0,
+      lastUsed: null,
+    };
+    row.sessions += 1;
+    if (session.targetClicked) row.clicks += 1;
+    if (session.status === "blocked") row.blocked += 1;
+    if (!row.lastUsed || session.createdAt > row.lastUsed) {
+      row.lastUsed = session.createdAt;
+    }
+    usage.set(session.identityId, row);
+  }
+
+  const identities = await prisma.identity.findMany({ orderBy: { externalId: "asc" } });
+  const focusRegion = campaign.focusRegion;
+
+  return identities
+    .map((identity) => {
+      const stats = usage.get(identity.id);
+      const inRegionPool = !focusRegion || identity.region === focusRegion;
+      const usedInCampaign = stats != null;
+      return {
+        id: identity.id,
+        externalId: identity.externalId,
+        region: identity.region,
+        city: identity.city,
+        deviceClass: identity.deviceClass,
+        personaId: identity.personaId,
+        active: identity.active,
+        campaignSessions: stats?.sessions ?? 0,
+        campaignClicks: stats?.clicks ?? 0,
+        campaignBlocked: stats?.blocked ?? 0,
+        lastUsedForCampaign: stats?.lastUsed?.toISOString() ?? null,
+        inRegionPool,
+        usedInCampaign,
+      };
+    })
+    .filter((row) => row.usedInCampaign || row.inRegionPool)
+    .map(({ usedInCampaign: _used, ...row }) => row);
+}
+
 export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
   const [completedSessions, scheduledSessions] = await Promise.all([
     prisma.session.count({ where: { experimentId: campaign.id } }),

@@ -2,21 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "../../lib/api";
 import AppLayout from "./AppLayout";
+import CampaignIdentitiesTab from "./campaign/CampaignIdentitiesTab";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
+import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
+import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
 import type {
   CampaignFormState,
+  CampaignTab,
   IntensitySummary,
   PreflightSummary,
   QueryRow,
   RegionOption,
   SettingRationale,
 } from "./campaign/shared";
-import { cellStyle, panelStyle, secondaryButtonStyle, thStyle } from "./campaign/shared";
 
 interface QueryIntensityRow {
   query: string;
@@ -65,20 +68,6 @@ interface Campaign {
   gscSiteUrl: string | null;
   queries: QueryRow[];
   intensity: IntensitySummary | null;
-}
-
-interface LogEntry {
-  id: string;
-  time: string;
-  query: string;
-  status: string;
-  serpPosition: number | null;
-  serpPage: number | null;
-  clicked: boolean;
-  skipped: boolean;
-  region: string;
-  device: string;
-  durationSeconds: number;
 }
 
 type WizardStep = "setup" | "review";
@@ -147,6 +136,17 @@ export default function CampaignDashboard({
   isNew?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab: CampaignTab =
+    searchParams.get("tab") === "sessions" || searchParams.get("tab") === "identities"
+      ? (searchParams.get("tab") as CampaignTab)
+      : "plan";
+
+  function setActiveTab(tab: CampaignTab) {
+    if (!campaignId) return;
+    router.replace(`/campaign/${campaignId}?tab=${tab}`);
+  }
+
   const [form, setForm] = useState<CampaignFormState>(defaultForm());
   const [step, setStep] = useState<WizardStep>("setup");
   const [rationales, setRationales] = useState<SettingRationale[]>([]);
@@ -154,12 +154,12 @@ export default function CampaignDashboard({
   const [preflightSummary, setPreflightSummary] = useState<PreflightSummary | null>(null);
   const [intensity, setIntensity] = useState<IntensitySummary | null>(null);
   const [campaignActive, setCampaignActive] = useState(false);
+  const [campaignStatus, setCampaignStatus] = useState("draft");
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
   const [gscSites, setGscSites] = useState<GscSiteOption[]>([]);
   const [gscSitesLoading, setGscSitesLoading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [log, setLog] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +212,7 @@ export default function CampaignDashboard({
     });
     setIntensity(c.intensity);
     setCampaignActive(c.status === "active");
+    setCampaignStatus(c.status);
     if (c.keyword && c.targetUrl) {
       setStep("review");
     }
@@ -236,10 +237,9 @@ export default function CampaignDashboard({
   const loadCampaign = useCallback(async () => {
     if (isNew || !campaignId) return;
 
-    const [campaignRes, logRes] = await Promise.all([
-      apiGet<{ campaign: Campaign; running: boolean }>(`/campaigns/${campaignId}`),
-      apiGet<{ entries: LogEntry[] }>(`/campaigns/${campaignId}/log`),
-    ]);
+    const campaignRes = await apiGet<{ campaign: Campaign; running: boolean }>(
+      `/campaigns/${campaignId}`,
+    );
 
     if (campaignRes.campaign) {
       applyCampaign(campaignRes.campaign);
@@ -247,7 +247,6 @@ export default function CampaignDashboard({
 
     setRunning(campaignRes.running);
     setCampaignActive(campaignRes.campaign.status === "active");
-    setLog(logRes.entries);
   }, [campaignId, isNew]);
 
   useEffect(() => {
@@ -277,16 +276,6 @@ export default function CampaignDashboard({
     }
     void loadGscSites(form.gscConnectionId, form.targetUrl);
   }, [form.gscConnectionId, loadGscSites]);
-
-  useEffect(() => {
-    if (!campaignActive || !campaignId) return;
-    const timer = setInterval(() => {
-      void apiGet<{ entries: LogEntry[] }>(`/campaigns/${campaignId}/log`)
-        .then((result) => setLog(result.entries))
-        .catch(() => undefined);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [campaignActive, campaignId]);
 
   function buildPayload() {
     return {
@@ -487,12 +476,31 @@ export default function CampaignDashboard({
 
   return (
     <AppLayout>
-      <p style={{ margin: "0 0 16px" }}>
+      <p style={{ margin: "0 0 8px" }}>
         <Link href="/" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
           ← All campaigns
         </Link>
       </p>
-      {step === "setup" && !campaignActive ? (
+
+      {campaignId && !isNew && (
+        <div style={{ marginBottom: 16 }}>
+          <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>{form.keyword || "Campaign"}</h1>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>
+            {form.targetUrl} · {form.region}
+            {campaignActive ? " · Running" : ` · ${campaignStatus}`}
+          </p>
+        </div>
+      )}
+
+      {campaignId && !isNew && (
+        <CampaignTabBar active={activeTab} onChange={setActiveTab} showPlan />
+      )}
+
+      {activeTab === "sessions" && campaignId ? (
+        <CampaignSessionsTab campaignId={campaignId} />
+      ) : activeTab === "identities" && campaignId ? (
+        <CampaignIdentitiesTab campaignId={campaignId} regionLabel={form.region} />
+      ) : step === "setup" && !campaignActive ? (
         <CampaignSetupStep
           keyword={form.keyword}
           targetUrl={form.targetUrl}
@@ -541,65 +549,6 @@ export default function CampaignDashboard({
           {error && <p style={{ color: "#b91c1c", margin: message ? "8px 0 0" : 0 }}>{error}</p>}
         </div>
       )}
-
-      <section style={{ ...panelStyle, marginTop: 24 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <h2 style={{ margin: 0 }}>Campaign log</h2>
-          <button type="button" onClick={() => void loadCampaign()} style={secondaryButtonStyle}>
-            Refresh
-          </button>
-        </div>
-
-        {log.length === 0 ? (
-          <p style={{ color: "#64748b" }}>No sessions yet. Start the campaign to begin searching.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead>
-                <tr style={{ background: "#f8fafc" }}>
-                  {["Time", "Query", "Position", "Clicked", "Status", "Region", "Device", "Duration", ""].map(
-                    (header) => (
-                      <th key={header} style={thStyle}>
-                        {header}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {log.map((entry) => (
-                  <tr key={entry.id}>
-                    <td style={cellStyle}>{new Date(entry.time).toLocaleString()}</td>
-                    <td style={cellStyle}>{entry.query}</td>
-                    <td style={cellStyle}>
-                      {entry.serpPosition ? `#${entry.serpPosition} p${entry.serpPage ?? 1}` : "—"}
-                    </td>
-                    <td style={cellStyle}>
-                      {entry.clicked ? "Yes" : entry.skipped ? "Skipped" : "No"}
-                    </td>
-                    <td style={cellStyle}>{entry.status}</td>
-                    <td style={cellStyle}>{entry.region}</td>
-                    <td style={cellStyle}>{entry.device}</td>
-                    <td style={cellStyle}>
-                      {entry.durationSeconds > 0 ? `${entry.durationSeconds}s` : "—"}
-                    </td>
-                    <td style={cellStyle}>
-                      <Link href={`/sessions/${entry.id}`}>View</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </AppLayout>
   );
 }

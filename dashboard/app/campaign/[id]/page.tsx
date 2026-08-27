@@ -1,8 +1,16 @@
 "use client";
 
-import { use } from "react";
+import { Suspense, use } from "react";
 import AuthGate from "../../components/AuthGate";
 import CampaignDashboard from "../../components/CampaignDashboard";
+
+function CampaignPageInner({ id }: { id: string }) {
+  return (
+    <AuthGate>
+      <CampaignDashboard campaignId={id} />
+    </AuthGate>
+  );
+}
 
 export default function CampaignPage({
   params,
@@ -11,8 +19,8 @@ export default function CampaignPage({
 }) {
   const { id } = use(params);
   return (
-    <AuthGate>
-      <CampaignDashboard campaignId={id} />
-    </AuthGate>
+    <Suspense fallback={<p>Loading...</p>}>
+      <CampaignPageInner id={id} />
+    </Suspense>
   );
 }
