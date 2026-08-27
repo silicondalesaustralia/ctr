@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Redis } from "ioredis";
-import { getEnv } from "../config/env.js";
+import { prisma } from "../db/client.js";
 import { logger } from "../config/logger.js";
 import type { CampaignProposal } from "./campaign-proposal.js";
 
@@ -26,42 +25,15 @@ interface StoredPreflightJob {
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
+  expiresAt: string;
 }
 
 const memoryJobs = new Map<string, PreflightJob>();
-const TTL_SECONDS = 60 * 60;
-const KEY_PREFIX = "preflight:job:";
+const TTL_MS = 60 * 60 * 1000;
+const KEY_PREFIX = "preflight_job:";
 
-let redis: Redis | null = null;
-let redisDisabled = false;
-
-function disableRedis(reason: string, error: unknown): void {
-  if (redisDisabled) return;
-  redisDisabled = true;
-  redis?.disconnect();
-  redis = null;
-  const message = error instanceof Error ? error.message : String(error);
-  logger.warn({
-    event: "preflight_redis_disabled",
-    reason,
-    error: message,
-  });
-}
-
-function getRedis(): Redis | null {
-  if (redisDisabled) return null;
-  if (redis) return redis;
-
-  const url = getEnv().REDIS_URL.trim();
-  if (!url || url === "redis://localhost:6379") {
-    return null;
-  }
-
-  redis = new Redis(url, { maxRetriesPerRequest: null });
-  redis.on("error", (error) => {
-    disableRedis("connection_error", error);
-  });
-  return redis;
+function storageKey(id: string): string {
+  return `${KEY_PREFIX}${id}`;
 }
 
 function serializeJob(job: PreflightJob): StoredPreflightJob {
@@ -74,10 +46,15 @@ function serializeJob(job: PreflightJob): StoredPreflightJob {
     error: job.error,
     startedAt: job.startedAt.toISOString(),
     finishedAt: job.finishedAt?.toISOString() ?? null,
+    expiresAt: new Date(Date.now() + TTL_MS).toISOString(),
   };
 }
 
-function deserializeJob(stored: StoredPreflightJob): PreflightJob {
+function deserializeJob(stored: StoredPreflightJob): PreflightJob | null {
+  if (new Date(stored.expiresAt).getTime() < Date.now()) {
+    return null;
+  }
+
   return {
     id: stored.id,
     status: stored.status,
@@ -93,13 +70,24 @@ function deserializeJob(stored: StoredPreflightJob): PreflightJob {
 async function persistJob(job: PreflightJob): Promise<void> {
   memoryJobs.set(job.id, job);
 
-  const client = getRedis();
-  if (!client) return;
-
   try {
-    await client.setex(`${KEY_PREFIX}${job.id}`, TTL_SECONDS, JSON.stringify(serializeJob(job)));
+    await prisma.appSetting.upsert({
+      where: { key: storageKey(job.id) },
+      create: {
+        key: storageKey(job.id),
+        value: JSON.stringify(serializeJob(job)),
+      },
+      update: {
+        value: JSON.stringify(serializeJob(job)),
+      },
+    });
   } catch (error) {
-    disableRedis("persist_failed", error);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn({
+      event: "preflight_job_persist_failed",
+      jobId: job.id,
+      error: message,
+    });
   }
 }
 
@@ -122,17 +110,24 @@ export async function getPreflightJob(id: string): Promise<PreflightJob | null> 
   const cached = memoryJobs.get(id);
   if (cached) return cached;
 
-  const client = getRedis();
-  if (!client) return null;
-
   try {
-    const raw = await client.get(`${KEY_PREFIX}${id}`);
-    if (!raw) return null;
-    const job = deserializeJob(JSON.parse(raw) as StoredPreflightJob);
+    const row = await prisma.appSetting.findUnique({
+      where: { key: storageKey(id) },
+    });
+    if (!row) return null;
+
+    const job = deserializeJob(JSON.parse(row.value) as StoredPreflightJob);
+    if (!job) return null;
+
     memoryJobs.set(id, job);
     return job;
   } catch (error) {
-    disableRedis("read_failed", error);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn({
+      event: "preflight_job_read_failed",
+      jobId: id,
+      error: message,
+    });
     return memoryJobs.get(id) ?? null;
   }
 }

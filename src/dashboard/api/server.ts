@@ -587,7 +587,7 @@ export function createApiServer() {
       const queryCount = body.queries?.length ?? (await buildBaseProposalForPreflight(body)).queries.length;
       const job = await createPreflightJob(queryCount);
       void runPreflightJob(job.id, body);
-      res.status(202).json({ jobId: job.id });
+      res.status(202).json({ jobId: job.id, totalCount: job.totalCount });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });

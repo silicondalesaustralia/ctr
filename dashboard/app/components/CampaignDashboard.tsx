@@ -343,7 +343,7 @@ export default function CampaignDashboard({
     setError(null);
     setMessage("Starting Google validation...");
     try {
-      const start = await apiPost<{ jobId?: string; proposal?: CampaignProposal }>(
+      const start = await apiPost<{ jobId?: string; totalCount?: number; proposal?: CampaignProposal }>(
         "/campaign/preflight",
         buildPayload(),
       );
@@ -368,8 +368,13 @@ export default function CampaignDashboard({
         throw new Error("Unexpected preflight response — refresh the page and retry");
       }
 
-      for (let attempt = 0; attempt < 200; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+      const pollIntervalMs = 3000;
+      const queryCount = start.totalCount ?? form.queries.length ?? 5;
+      const estimatedMs = 120_000 + queryCount * 120_000;
+      const maxAttempts = Math.max(200, Math.ceil(estimatedMs / pollIntervalMs));
+
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         const job = await apiGet<{
           status: "running" | "complete" | "error";
           testedCount: number;
@@ -379,9 +384,11 @@ export default function CampaignDashboard({
         }>(`/campaign/preflight/jobs/${start.jobId}`);
 
         if (job.status === "running") {
-          setMessage(
-            `Checking Google... ${job.testedCount}/${job.totalCount} queries (browser session running on Railway)`,
-          );
+          const progress =
+            job.testedCount === 0
+              ? "Starting GoLogin browser on Railway..."
+              : `Checking Google... ${job.testedCount}/${job.totalCount} queries`;
+          setMessage(`${progress} (about 2 min per query)`);
           continue;
         }
 
@@ -408,7 +415,9 @@ export default function CampaignDashboard({
         return;
       }
 
-      throw new Error("Preflight timed out after 10 minutes — retry or reduce query count");
+      throw new Error(
+        `Preflight timed out after ${Math.round((maxAttempts * pollIntervalMs) / 60_000)} minutes — retry or reduce query count`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google preflight failed");
     } finally {
