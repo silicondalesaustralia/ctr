@@ -85,6 +85,112 @@ export function parseTimeToMinutes(time: string): number {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 }
 
+export interface CalendarDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+function readTimezoneParts(instant: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+
+  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    hour: read("hour"),
+    minute: read("minute"),
+    second: read("second"),
+  };
+}
+
+export function getCalendarDateInTimezone(instant: Date, timeZone: string): CalendarDate {
+  const parts = readTimezoneParts(instant, timeZone);
+  return { year: parts.year, month: parts.month, day: parts.day };
+}
+
+export function addCalendarDays(date: CalendarDate, days: number): CalendarDate {
+  const shifted = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function timezoneOffsetMs(instant: Date, timeZone: string): number {
+  const parts = readTimezoneParts(instant, timeZone);
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+  return asUtc - instant.getTime();
+}
+
+export function zonedLocalTimeToUtc(
+  calendarDate: CalendarDate,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string,
+): Date {
+  let utcMs = Date.UTC(
+    calendarDate.year,
+    calendarDate.month - 1,
+    calendarDate.day,
+    hour,
+    minute,
+    second,
+  );
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    utcMs = Date.UTC(
+      calendarDate.year,
+      calendarDate.month - 1,
+      calendarDate.day,
+      hour,
+      minute,
+      second,
+    ) - timezoneOffsetMs(new Date(utcMs), timeZone);
+  }
+
+  return new Date(utcMs);
+}
+
+export function randomTimeInTimezoneWindow(
+  calendarDate: CalendarDate,
+  start: string,
+  end: string,
+  timeZone: string,
+): Date {
+  const startMinutes = parseTimeToMinutes(start);
+  const endMinutes = parseTimeToMinutes(end);
+  const minute = randomBetween(startMinutes, endMinutes);
+  const hour = Math.floor(minute / 60);
+  const min = minute % 60;
+  const second = randomBetween(0, 59);
+  return zonedLocalTimeToUtc(calendarDate, hour, min, second, timeZone);
+}
+
+export function localHourMinute(instant: Date, timeZone: string): { hour: number; minute: number } {
+  const parts = readTimezoneParts(instant, timeZone);
+  return { hour: parts.hour, minute: parts.minute };
+}
+
 export function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000);
 }

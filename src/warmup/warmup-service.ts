@@ -8,7 +8,13 @@ import {
   WARMUP_SESSION_COUNT,
   WARMUP_SPREAD_DAYS,
 } from "./warmup-config.js";
-import { addMinutes, parseTimeToMinutes, randomBetween } from "../utils/helpers.js";
+import {
+  addMinutes,
+  addCalendarDays,
+  getCalendarDateInTimezone,
+  randomBetween,
+  randomTimeInTimezoneWindow,
+} from "../utils/helpers.js";
 
 export interface WarmupProgress {
   status: WarmupStatus;
@@ -108,16 +114,6 @@ export async function recordWarmupSessionResult(
   });
 }
 
-function randomWarmupTime(baseDate: Date, timezone: string): Date {
-  const startMinutes = parseTimeToMinutes("07:00");
-  const endMinutes = parseTimeToMinutes("22:00");
-  const minute = randomBetween(startMinutes, endMinutes);
-  const result = new Date(baseDate);
-  result.setHours(Math.floor(minute / 60), minute % 60, randomBetween(0, 59), 0);
-  void timezone;
-  return result;
-}
-
 export async function scheduleWarmupForIdentity(identity: Identity): Promise<number> {
   const existing = await prisma.warmupSession.count({
     where: { identityId: identity.id, status: { not: "cancelled" } },
@@ -132,11 +128,10 @@ export async function scheduleWarmupForIdentity(identity: Identity): Promise<num
 
   for (let i = 0; i < WARMUP_SESSION_COUNT; i += 1) {
     const dayOffset = Math.floor((i / WARMUP_SESSION_COUNT) * WARMUP_SPREAD_DAYS);
-    const dayDate = new Date(now);
-    dayDate.setDate(dayDate.getDate() + dayOffset);
-    dayDate.setHours(0, 0, 0, 0);
+    const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
+    const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
 
-    let scheduledAt = randomWarmupTime(dayDate, identity.timezone);
+    let scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
     if (scheduledAt <= now) {
       scheduledAt = addMinutes(now, randomBetween(30, 180));
     }

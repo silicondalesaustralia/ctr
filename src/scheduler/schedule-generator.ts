@@ -3,10 +3,12 @@ import { prisma } from "../db/client.js";
 import { selectWeightedQuery } from "../experiments/experiment-service.js";
 import {
   addMinutes,
+  addCalendarDays,
   daysInMonth,
   endOfMonth,
-  parseTimeToMinutes,
+  getCalendarDateInTimezone,
   randomBetween,
+  randomTimeInTimezoneWindow,
   startOfMonth,
 } from "../utils/helpers.js";
 import { isIdentityEligible } from "../identities/identity-service.js";
@@ -37,15 +39,6 @@ function distributeMonthlyTotal(total: number, days: number): number[] {
   }
 
   return daily;
-}
-
-function randomTimeInWindow(date: Date, start: string, end: string): Date {
-  const startMinutes = parseTimeToMinutes(start);
-  const endMinutes = parseTimeToMinutes(end);
-  const minute = randomBetween(startMinutes, endMinutes);
-  const result = new Date(date);
-  result.setHours(Math.floor(minute / 60), minute % 60, randomBetween(0, 59), 0);
-  return result;
 }
 
 export async function generateMonthlySchedule(
@@ -133,10 +126,11 @@ export async function generateCampaignSchedule(
 
   let lastGlobalTime: Date | null = null;
   const identityLastScheduled = new Map<string, Date>();
+  const scheduleTimezone = input.experiment.scheduleTimezone;
+  const startCalendar = getCalendarDateInTimezone(startDate, scheduleTimezone);
 
   for (let day = 0; day < durationDays; day += 1) {
-    const dayDate = new Date(startDate);
-    dayDate.setDate(dayDate.getDate() + day);
+    const dayCalendar = addCalendarDays(startCalendar, day);
     const countForDay = dailyTotals[day] ?? 0;
 
     for (let i = 0; i < countForDay; i += 1) {
@@ -157,10 +151,11 @@ export async function generateCampaignSchedule(
 
       const eligible = [];
       for (const identity of pool.length > 0 ? pool : identities) {
-        let scheduledAt = randomTimeInWindow(
-          dayDate,
+        let scheduledAt = randomTimeInTimezoneWindow(
+          dayCalendar,
           input.experiment.scheduleStart,
           input.experiment.scheduleEnd,
+          scheduleTimezone,
         );
 
         if (lastGlobalTime) {
