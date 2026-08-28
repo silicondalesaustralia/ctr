@@ -26,7 +26,8 @@ interface IdentityRow {
 
 function warmupLabel(warmup: WarmupProgress): string {
   if (warmup.eligible) return "Eligible";
-  return `${warmup.sessionsCompleted}/${warmup.minSessions} sessions · ${warmup.siteClicks}/${warmup.minSiteClicks} clicks · ${warmup.ageDays}/${warmup.minDays}d`;
+  const graduation = warmup.graduationPassed ? "graduation done" : "graduation pending";
+  return `${warmup.siteClicks}/${warmup.minSiteClicks} opens · ${graduation} · ${warmup.ageDays}/${warmup.minDays}d`;
 }
 
 function normalizeIdentitiesResponse(payload: unknown): IdentityRow[] {

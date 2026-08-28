@@ -8,6 +8,7 @@ export interface WarmupProgress {
   status: string;
   sessionsCompleted: number;
   siteClicks: number;
+  graduationPassed: boolean;
   ageDays: number;
   minDays: number;
   minSessions: number;
@@ -48,7 +49,8 @@ interface Props {
 
 function warmupLabel(warmup: WarmupProgress): string {
   if (warmup.eligible) return "Eligible";
-  return `Warming (${warmup.sessionsCompleted}/${warmup.minSessions} sessions, ${warmup.siteClicks}/${warmup.minSiteClicks} clicks, ${warmup.ageDays}/${warmup.minDays}d)`;
+  const graduation = warmup.graduationPassed ? "graduation done" : "graduation pending";
+  return `Warming (${warmup.siteClicks}/${warmup.minSiteClicks} site opens, ${graduation}, ${warmup.ageDays}/${warmup.minDays}d)`;
 }
 
 function warmupColor(warmup: WarmupProgress): string {
@@ -166,9 +168,9 @@ export default function CampaignIdentityPicker({
       <h2 style={{ margin: "0 0 8px" }}>Campaign identities</h2>
       <p style={{ color: "#64748b", margin: "0 0 16px", fontSize: 14 }}>
         Select warmed-up browser profiles for this campaign. Identities start warming automatically
-        when created — eligible after {identities[0]?.warmup.minDays ?? 2} days,{" "}
-        {identities[0]?.warmup.minSessions ?? 10} Google sessions, and{" "}
-        {identities[0]?.warmup.minSiteClicks ?? 2} site clicks.
+        when created — eligible after {identities[0]?.warmup.minDays ?? 4} days,{" "}
+        {identities[0]?.warmup.minSiteClicks ?? 3} benign site opens, and a passing commercial
+        graduation search.
       </p>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>

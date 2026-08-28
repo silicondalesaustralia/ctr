@@ -5,6 +5,13 @@ import {
   identityAllowedForCampaign,
   isWarmupEligible,
 } from "../../src/warmup/warmup-service.js";
+import {
+  graduationQueryPoolSize,
+  pickBenignWarmupQuery,
+  pickGraduationQuery,
+  WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_MIN_DAYS,
+} from "../../src/warmup/warmup-config.js";
 
 function makeIdentity(overrides: Partial<Identity> = {}): Identity {
   return {
@@ -27,54 +34,82 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
     blockedSessions: 0,
     lastQuery: null,
     lastExperimentId: null,
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
     lastUsedAt: null,
     personaId: "persona1",
     personaAssignedAt: new Date(),
     warmupStatus: "warming",
     warmupSessionsCompleted: 0,
     warmupSiteClicks: 0,
+    warmupGraduationPassed: false,
     warmupEligibleAt: null,
     ...overrides,
   };
 }
 
 describe("warmup eligibility", () => {
-  it("requires age, sessions, and site clicks", () => {
+  it("requires age, benign site clicks, and graduation pass", () => {
     const fresh = makeIdentity({
       createdAt: new Date(),
-      warmupSessionsCompleted: 10,
-      warmupSiteClicks: 2,
+      warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS,
+      warmupGraduationPassed: true,
     });
     expect(isWarmupEligible(fresh)).toBe(false);
 
-    const almost = makeIdentity({
-      warmupSessionsCompleted: 10,
-      warmupSiteClicks: 1,
+    const noGraduation = makeIdentity({
+      warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS,
+      warmupGraduationPassed: false,
     });
-    expect(isWarmupEligible(almost)).toBe(false);
+    expect(isWarmupEligible(noGraduation)).toBe(false);
+
+    const notEnoughClicks = makeIdentity({
+      warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS - 1,
+      warmupGraduationPassed: true,
+    });
+    expect(isWarmupEligible(notEnoughClicks)).toBe(false);
 
     const ready = makeIdentity({
-      warmupSessionsCompleted: 10,
-      warmupSiteClicks: 2,
+      warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS,
+      warmupGraduationPassed: true,
     });
     expect(isWarmupEligible(ready)).toBe(true);
   });
 
   it("reports progress fields for the dashboard", () => {
     const progress = computeWarmupProgress(
-      makeIdentity({ warmupSessionsCompleted: 4, warmupSiteClicks: 1 }),
-      6,
+      makeIdentity({ warmupSiteClicks: 2, warmupGraduationPassed: false }),
+      2,
     );
     expect(progress.eligible).toBe(false);
-    expect(progress.sessionsCompleted).toBe(4);
-    expect(progress.siteClicks).toBe(1);
-    expect(progress.scheduledRemaining).toBe(6);
+    expect(progress.siteClicks).toBe(2);
+    expect(progress.minSiteClicks).toBe(WARMUP_BENIGN_SITE_CLICKS);
+    expect(progress.minDays).toBe(WARMUP_MIN_DAYS);
+    expect(progress.graduationPassed).toBe(false);
+    expect(progress.scheduledRemaining).toBe(2);
   });
 
   it("allows cold identities when campaign does not require warmup", () => {
-    const cold = makeIdentity({ warmupSessionsCompleted: 0, warmupSiteClicks: 0 });
+    const cold = makeIdentity({ warmupSiteClicks: 0, warmupGraduationPassed: false });
     expect(identityAllowedForCampaign(cold, false)).toBe(true);
     expect(identityAllowedForCampaign(cold, true)).toBe(false);
+  });
+});
+
+describe("warmup query selection", () => {
+  it("assigns a stable commercial graduation query per identity", () => {
+    const first = pickGraduationQuery("au_010", "Perth");
+    const second = pickGraduationQuery("au_010", "Perth");
+    const other = pickGraduationQuery("au_014", "Perth");
+    expect(first).toBe(second);
+    expect(first).not.toBe(other);
+    expect(first.length).toBeGreaterThan(5);
+  });
+
+  it("uses benign queries for early warmup sessions", () => {
+    expect(pickBenignWarmupQuery("Sydney", 0)).toMatch(/sydney|weather|news/i);
+  });
+
+  it("has a large graduation query pool", () => {
+    expect(graduationQueryPoolSize()).toBeGreaterThanOrEqual(50);
   });
 });

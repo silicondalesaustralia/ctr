@@ -9,7 +9,7 @@ async function main() {
   console.log("=== IDENTITIES ===");
   for (const identity of identities) {
     console.log(
-      `${identity.externalId} warmup=${identity.warmupStatus} completed=${identity.warmupSessionsCompleted} clicks=${identity.warmupSiteClicks} google=${identity.googleSessions}`,
+      `${identity.externalId} warmup=${identity.warmupStatus} clicks=${identity.warmupSiteClicks} graduation=${identity.warmupGraduationPassed} google=${identity.googleSessions}`,
     );
   }
 
@@ -35,7 +35,7 @@ async function main() {
   console.log("\n=== SAMPLE WARMUP SESSIONS ===");
   for (const session of sample) {
     console.log(
-      `${session.identity.externalId} ${session.status} at=${session.scheduledAt.toISOString()} attempts=${session.attemptCount}`,
+      `${session.identity.externalId} ${session.kind} ${session.status} at=${session.scheduledAt.toISOString()} query="${session.queryText}"`,
     );
   }
 

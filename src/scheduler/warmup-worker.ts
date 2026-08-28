@@ -55,12 +55,17 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
       identity: warmup.identity,
       queryText: warmup.queryText,
       warmupSessionId: warmup.id,
+      kind: warmup.kind,
     });
+
+    const succeeded =
+      result.status === "completed" &&
+      (warmup.kind === "graduation" || result.siteClicked);
 
     await prisma.warmupSession.update({
       where: { id: warmupSessionId },
       data: {
-        status: result.status === "completed" ? "completed" : "failed",
+        status: succeeded ? "completed" : "failed",
         sessionId: result.sessionId,
       },
     });
@@ -69,8 +74,10 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
       event: "warmup_session_processed",
       warmupSessionId,
       identityId: warmup.identity.externalId,
+      kind: warmup.kind,
       result: result.status,
       siteClicked: result.siteClicked,
+      succeeded,
     });
   } catch (error) {
     await prisma.warmupSession.update({

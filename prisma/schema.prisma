@@ -108,6 +108,11 @@ enum WarmupSessionStatus {
   cancelled
 }
 
+enum WarmupSessionKind {
+  benign
+  graduation
+}
+
 model Experiment {
   id                   String           @id @default(cuid())
   name                 String
@@ -219,6 +224,7 @@ model Identity {
   warmupStatus     WarmupStatus    @default(warming) @map("warmup_status")
   warmupSessionsCompleted Int      @default(0) @map("warmup_sessions_completed")
   warmupSiteClicks   Int             @default(0) @map("warmup_site_clicks")
+  warmupGraduationPassed Boolean     @default(false) @map("warmup_graduation_passed")
   warmupEligibleAt DateTime?       @map("warmup_eligible_at")
 
   scheduledSessions ScheduledSession[]
@@ -233,6 +239,7 @@ model WarmupSession {
   id           String              @id @default(cuid())
   identityId   String              @map("identity_id")
   queryText    String              @map("query_text")
+  kind         WarmupSessionKind   @default(benign)
   scheduledAt  DateTime            @map("scheduled_at")
   status       WarmupSessionStatus @default(scheduled)
   attemptCount Int                 @default(0) @map("attempt_count")

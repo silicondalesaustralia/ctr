@@ -1,11 +1,12 @@
-import type { Identity, WarmupStatus } from "@prisma/client";
+import type { Identity, WarmupSessionKind, WarmupStatus } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import {
-  pickWarmupQuery,
+  pickBenignWarmupQuery,
+  pickGraduationQuery,
+  WARMUP_BENIGN_RETRY_HOURS,
+  WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_GRADUATION_RETRY_HOURS,
   WARMUP_MIN_DAYS,
-  WARMUP_MIN_SESSIONS,
-  WARMUP_MIN_SITE_CLICKS,
-  WARMUP_SESSION_COUNT,
   WARMUP_SPREAD_DAYS,
 } from "./warmup-config.js";
 import {
@@ -20,6 +21,7 @@ export interface WarmupProgress {
   status: WarmupStatus;
   sessionsCompleted: number;
   siteClicks: number;
+  graduationPassed: boolean;
   ageDays: number;
   minDays: number;
   minSessions: number;
@@ -29,23 +31,31 @@ export interface WarmupProgress {
   scheduledRemaining: number;
 }
 
+export interface WarmupSessionOutcome {
+  kind: WarmupSessionKind;
+  blocked: boolean;
+  siteClicked: boolean;
+  queryText: string;
+}
+
 export function computeWarmupProgress(identity: Identity, scheduledRemaining = 0): WarmupProgress {
   const ageMs = Date.now() - identity.createdAt.getTime();
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   const eligible =
     identity.warmupStatus === "eligible" ||
     (ageDays >= WARMUP_MIN_DAYS &&
-      identity.warmupSessionsCompleted >= WARMUP_MIN_SESSIONS &&
-      identity.warmupSiteClicks >= WARMUP_MIN_SITE_CLICKS);
+      identity.warmupSiteClicks >= WARMUP_BENIGN_SITE_CLICKS &&
+      identity.warmupGraduationPassed);
 
   return {
     status: eligible ? "eligible" : identity.warmupStatus,
     sessionsCompleted: identity.warmupSessionsCompleted,
     siteClicks: identity.warmupSiteClicks,
+    graduationPassed: identity.warmupGraduationPassed,
     ageDays: Math.round(ageDays * 10) / 10,
     minDays: WARMUP_MIN_DAYS,
-    minSessions: WARMUP_MIN_SESSIONS,
-    minSiteClicks: WARMUP_MIN_SITE_CLICKS,
+    minSessions: WARMUP_BENIGN_SITE_CLICKS + 1,
+    minSiteClicks: WARMUP_BENIGN_SITE_CLICKS,
     eligible,
     eligibleAt: identity.warmupEligibleAt?.toISOString() ?? null,
     scheduledRemaining,
@@ -91,15 +101,67 @@ async function cancelPendingWarmupSessions(identityId: string): Promise<void> {
   });
 }
 
+export async function scheduleWarmupRetry(
+  identityId: string,
+  kind: WarmupSessionKind,
+  queryText: string,
+): Promise<void> {
+  const delayHours = kind === "graduation" ? WARMUP_GRADUATION_RETRY_HOURS : WARMUP_BENIGN_RETRY_HOURS;
+  await prisma.warmupSession.create({
+    data: {
+      identityId,
+      queryText,
+      kind,
+      scheduledAt: addMinutes(new Date(), delayHours * 60),
+    },
+  });
+}
+
 export async function recordWarmupSessionResult(
   identityId: string,
-  siteClicked: boolean,
+  outcome: WarmupSessionOutcome,
 ): Promise<Identity> {
+  if (outcome.blocked) {
+    await prisma.identity.update({
+      where: { id: identityId },
+      data: {
+        blockedSessions: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+    });
+    await scheduleWarmupRetry(identityId, outcome.kind, outcome.queryText);
+    return prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
+  }
+
+  if (outcome.kind === "graduation") {
+    const updated = await prisma.identity.update({
+      where: { id: identityId },
+      data: {
+        warmupGraduationPassed: true,
+        warmupSessionsCompleted: { increment: 1 },
+        totalSessions: { increment: 1 },
+        googleSessions: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+    });
+    return refreshWarmupEligibility(updated.id).then(async (identity) => {
+      if (identity.warmupStatus === "eligible") {
+        await cancelPendingWarmupSessions(identityId);
+      }
+      return identity;
+    });
+  }
+
+  if (!outcome.siteClicked) {
+    await scheduleWarmupRetry(identityId, "benign", outcome.queryText);
+    return prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
+  }
+
   const updated = await prisma.identity.update({
     where: { id: identityId },
     data: {
       warmupSessionsCompleted: { increment: 1 },
-      warmupSiteClicks: siteClicked ? { increment: 1 } : undefined,
+      warmupSiteClicks: { increment: 1 },
       totalSessions: { increment: 1 },
       googleSessions: { increment: 1 },
       lastUsedAt: new Date(),
@@ -114,39 +176,74 @@ export async function recordWarmupSessionResult(
   });
 }
 
-export async function scheduleWarmupForIdentity(identity: Identity): Promise<number> {
-  const existing = await prisma.warmupSession.count({
-    where: { identityId: identity.id, status: { not: "cancelled" } },
-  });
+function benignSessionsNeeded(identity: Identity): number {
+  return Math.max(0, WARMUP_BENIGN_SITE_CLICKS - identity.warmupSiteClicks);
+}
 
-  if (existing > 0) {
-    return 0;
+function scheduleWarmupRows(identity: Identity, now = new Date()) {
+  const rows: Array<{
+    identityId: string;
+    queryText: string;
+    kind: WarmupSessionKind;
+    scheduledAt: Date;
+  }> = [];
+
+  const benignNeeded = benignSessionsNeeded(identity);
+  const graduationNeeded = !identity.warmupGraduationPassed;
+  const totalSlots = benignNeeded + (graduationNeeded ? 1 : 0);
+
+  if (totalSlots === 0) {
+    return rows;
   }
 
-  const now = new Date();
-  const rows: Array<{ identityId: string; queryText: string; scheduledAt: Date }> = [];
-
-  for (let i = 0; i < WARMUP_SESSION_COUNT; i += 1) {
-    const dayOffset = Math.floor((i / WARMUP_SESSION_COUNT) * WARMUP_SPREAD_DAYS);
+  for (let slot = 0; slot < totalSlots; slot += 1) {
+    const dayOffset = Math.min(
+      WARMUP_SPREAD_DAYS - 1,
+      Math.floor((slot / Math.max(totalSlots - 1, 1)) * (WARMUP_SPREAD_DAYS - 1)),
+    );
     const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
     const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
 
     let scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
     if (scheduledAt <= now) {
-      scheduledAt = addMinutes(now, randomBetween(30, 180));
+      scheduledAt = addMinutes(now, randomBetween(30, 180) + slot * randomBetween(120, 240));
     }
 
+    const isGraduationSlot = graduationNeeded && slot === totalSlots - 1;
     rows.push({
       identityId: identity.id,
-      queryText: pickWarmupQuery(identity.city, i),
+      queryText: isGraduationSlot
+        ? pickGraduationQuery(identity.externalId, identity.city)
+        : pickBenignWarmupQuery(identity.city, identity.warmupSiteClicks + slot),
+      kind: isGraduationSlot ? "graduation" : "benign",
       scheduledAt,
     });
   }
 
   rows.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+  return rows;
+}
+
+export async function scheduleWarmupForIdentity(identity: Identity): Promise<number> {
+  const pending = await prisma.warmupSession.count({
+    where: { identityId: identity.id, status: "scheduled" },
+  });
+  if (pending > 0) {
+    return 0;
+  }
+
+  const rows = scheduleWarmupRows(identity);
+  if (rows.length === 0) {
+    return 0;
+  }
 
   await prisma.warmupSession.createMany({ data: rows });
   return rows.length;
+}
+
+export async function rebuildWarmupSchedule(identity: Identity): Promise<number> {
+  await cancelPendingWarmupSessions(identity.id);
+  return scheduleWarmupForIdentity(identity);
 }
 
 export async function countEligibleIdentities(
@@ -227,7 +324,7 @@ export async function backfillWarmupForExistingIdentities(): Promise<number> {
       await cancelPendingWarmupSessions(identity.id);
       continue;
     }
-    scheduled += await scheduleWarmupForIdentity(identity);
+    scheduled += await rebuildWarmupSchedule(identity);
   }
 
   return scheduled;
