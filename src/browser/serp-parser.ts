@@ -1,5 +1,12 @@
 import type { Page } from "playwright";
-import { domainMatches, resolveGoogleSerpHref } from "../utils/helpers.js";
+import {
+  citeMatchesDomain,
+  classifyGoogleSerpHref,
+  domainMatches,
+  isGoogleRedirectHref,
+  isGoogleRedirectPage,
+  resolveGoogleSerpHref,
+} from "../utils/helpers.js";
 
 export interface SerpResult {
   position: number;
@@ -7,6 +14,7 @@ export interface SerpResult {
   url: string;
   displayedUrl: string;
   serpPage: number;
+  hrefKind?: ReturnType<typeof classifyGoogleSerpHref>;
 }
 
 interface SerpLinkCandidate {
@@ -15,26 +23,32 @@ interface SerpLinkCandidate {
   displayedUrl: string;
 }
 
-function candidateMatchesTarget(candidate: SerpLinkCandidate, targetDomain: string): boolean {
-  const resolvedHref = resolveGoogleSerpHref(candidate.href);
-  if (resolvedHref.startsWith("http") && domainMatches(resolvedHref, targetDomain)) {
+export function candidateMatchesTarget(
+  candidate: SerpLinkCandidate,
+  targetDomain: string,
+): boolean {
+  if (candidate.displayedUrl && citeMatchesDomain(candidate.displayedUrl, targetDomain)) {
     return true;
   }
 
-  const normalizedTarget = targetDomain.replace(/^www\./, "").toLowerCase();
-  const citeHaystack = candidate.displayedUrl.toLowerCase();
-  return citeHaystack.includes(normalizedTarget);
+  if (isGoogleRedirectHref(candidate.href)) {
+    return false;
+  }
+
+  const resolvedHref = resolveGoogleSerpHref(candidate.href);
+  return resolvedHref.startsWith("http") && domainMatches(resolvedHref, targetDomain);
 }
 
 export function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
-  const resolvedHref = resolveGoogleSerpHref(candidate.href);
-  if (resolvedHref.startsWith("http") && !/google\.com/i.test(resolvedHref)) {
+  const kind = classifyGoogleSerpHref(candidate.href);
+  if (kind === "url_redirect" || kind === "goto_redirect") {
     return true;
   }
   if (candidate.displayedUrl.length > 3) {
     return true;
   }
-  return candidate.href.includes("/goto?");
+  const resolvedHref = resolveGoogleSerpHref(candidate.href);
+  return resolvedHref.startsWith("http") && !/google\.com/i.test(resolvedHref);
 }
 
 const ORGANIC_SELECTORS = [
@@ -45,6 +59,25 @@ const ORGANIC_SELECTORS = [
   "article.result a[href]",
   "ol.organic-results li a[href]",
 ];
+
+async function extractDisplayedUrl(link: ReturnType<Page["locator"]>): Promise<string> {
+  const citeSelectors = [
+    "xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//cite",
+    "xpath=ancestor::*[@data-hveid][1]//cite",
+    "xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//*[contains(@class,'tjvcx') or contains(@class,'ynAwRc')]",
+  ];
+
+  for (const selector of citeSelectors) {
+    const text = await link.locator(selector).first().innerText().catch(() => "");
+    if (text.trim().length > 3) {
+      return text.trim();
+    }
+  }
+
+  const aria = (await link.getAttribute("aria-label").catch(() => "")) ?? "";
+  const ariaMatch = aria.match(/https?:\/\/[^\s]+|[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/i);
+  return ariaMatch?.[0]?.trim() ?? "";
+}
 
 export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[]> {
   for (const selector of ORGANIC_SELECTORS) {
@@ -65,12 +98,8 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
       if (!title) {
         continue;
       }
-      const displayedUrl = await link
-        .locator("xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//cite")
-        .first()
-        .innerText()
-        .catch(() => "");
-      links.push({ href, title, displayedUrl: displayedUrl.trim() });
+      const displayedUrl = await extractDisplayedUrl(link);
+      links.push({ href, title, displayedUrl });
     }
     if (links.length > 0) {
       return links;
@@ -78,7 +107,7 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
   }
 
   return page.evaluate(() => {
-    const links: SerpLinkCandidate[] = [];
+    const links: Array<{ href: string; title: string; displayedUrl: string }> = [];
     for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.includes("google.com/search")) {
@@ -92,8 +121,13 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
         continue;
       }
       const block = anchor.closest(".g, .MjjYud, [data-hveid]");
-      const displayedUrl = (block?.querySelector("cite")?.textContent ?? "").trim();
-      links.push({ href, title, displayedUrl });
+      const citeText = (block?.querySelector("cite")?.textContent ?? "").trim();
+      const crumb =
+        citeText ||
+        (
+          block?.querySelector(".tjvcx, .ynAwRc, span[style*='color']")?.textContent ?? ""
+        ).trim();
+      links.push({ href, title, displayedUrl: crumb });
     }
     return links;
   });
@@ -117,14 +151,16 @@ export async function findTargetOnCurrentPage(
     position += 1;
     if (candidateMatchesTarget(candidate, targetDomain)) {
       const resolvedHref = resolveGoogleSerpHref(candidate.href);
+      const hrefKind = classifyGoogleSerpHref(candidate.href);
       return {
         position,
         title: candidate.title,
         url: candidate.href,
-        displayedUrl: resolvedHref.startsWith("http")
+        displayedUrl: resolvedHref.startsWith("http") && !isGoogleRedirectHref(candidate.href)
           ? resolvedHref
-          : candidate.displayedUrl,
+          : candidate.displayedUrl || resolvedHref,
         serpPage,
+        hrefKind,
       };
     }
   }
@@ -175,13 +211,42 @@ export async function findTargetInSerp(
   return { result: null, pagesSearched };
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export async function waitForSerpRedirectSettle(page: Page, timeoutMs = 15_000): Promise<string> {
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const current = page.url();
+    if (!isGoogleRedirectPage(current)) {
+      return current;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  return page.url();
+}
+
 export async function clickSerpResult(page: Page, result: SerpResult): Promise<void> {
-  const link = page.locator(`a[href="${result.url}"]`).first();
-  if (await link.count()) {
-    await link.click();
+  const byHref = page.locator(`a[href="${result.url}"]`).first();
+  if (await byHref.count()) {
+    await byHref.click();
+    await waitForSerpRedirectSettle(page);
     return;
   }
 
-  const fallback = page.locator(`a:has-text("${result.title.slice(0, 40)}")`).first();
-  await fallback.click();
+  const titleSnippet = result.title.slice(0, 40);
+  const byTitle = page.locator(`a:has-text("${titleSnippet}")`).first();
+  if (await byTitle.count()) {
+    await byTitle.click();
+    await waitForSerpRedirectSettle(page);
+    return;
+  }
+
+  const byRegex = page.locator(`a`).filter({ hasText: new RegExp(escapeRegex(titleSnippet)) }).first();
+  await byRegex.click();
+  await waitForSerpRedirectSettle(page);
 }

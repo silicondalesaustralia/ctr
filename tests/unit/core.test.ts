@@ -3,7 +3,15 @@ import {
   selectEngagementTemplate,
   selectWeightedQuery,
 } from "../../src/experiments/experiment-service.js";
-import { domainMatches } from "../../src/utils/helpers.js";
+import {
+  citeMatchesDomain,
+  classifyGoogleSerpHref,
+  domainMatches,
+  isGoogleRedirectHref,
+  isGoogleRedirectPage,
+  resolveGoogleSerpHref,
+} from "../../src/utils/helpers.js";
+import { candidateMatchesTarget, isOrganicCandidate } from "../../src/browser/serp-parser.js";
 import { scoreInternalLink } from "../../src/browser/internal-links.js";
 import { shouldRetry, getRetryDelayMinutes } from "../../src/scheduler/retry-policy.js";
 import {
@@ -49,6 +57,76 @@ describe("domainMatches", () => {
         "vendl.app",
       ),
     ).toBe(true);
+  });
+});
+
+describe("Google SERP href helpers", () => {
+  it("classifies classic /url and hashed /goto redirects", () => {
+    expect(
+      classifyGoogleSerpHref(
+        "https://www.google.com/url?q=https://example.com/page&sa=U",
+      ),
+    ).toBe("url_redirect");
+    expect(
+      classifyGoogleSerpHref("https://www.google.com/goto?url=abc123hashedvalue"),
+    ).toBe("goto_redirect");
+    expect(classifyGoogleSerpHref("https://www.example.com/page")).toBe("direct");
+    expect(isGoogleRedirectHref("https://www.google.com/goto?url=abc123")).toBe(true);
+    expect(isGoogleRedirectHref("https://www.example.com/page")).toBe(false);
+  });
+
+  it("unwraps /url destinations but leaves /goto hashes alone", () => {
+    expect(
+      resolveGoogleSerpHref(
+        "https://www.google.com/url?q=https://example.com/breeches&sa=U",
+      ),
+    ).toBe("https://example.com/breeches");
+    expect(
+      resolveGoogleSerpHref("https://www.google.com/goto?url=abc123hashedvalue"),
+    ).toBe("https://www.google.com/goto?url=abc123hashedvalue");
+  });
+
+  it("matches targets from cite text when href is a hashed goto wrapper", () => {
+    expect(citeMatchesDomain("www.theequestrian.com.au › clothing", "theequestrian.com.au")).toBe(
+      true,
+    );
+    expect(citeMatchesDomain("www.other.com.au › shoes", "theequestrian.com.au")).toBe(false);
+    expect(
+      candidateMatchesTarget(
+        {
+          href: "https://www.google.com/goto?url=abc123hashedvalue",
+          title: "Womens Breeches",
+          displayedUrl: "www.theequestrian.com.au › clothing › breeches",
+        },
+        "theequestrian.com.au",
+      ),
+    ).toBe(true);
+    expect(
+      candidateMatchesTarget(
+        {
+          href: "https://www.google.com/goto?url=abc123hashedvalue",
+          title: "Womens Breeches",
+          displayedUrl: "",
+        },
+        "theequestrian.com.au",
+      ),
+    ).toBe(false);
+  });
+
+  it("treats goto links with cites as organic", () => {
+    expect(
+      isOrganicCandidate({
+        href: "https://www.google.com/goto?url=abc123hashedvalue",
+        title: "Plumber near me",
+        displayedUrl: "www.hipages.com.au",
+      }),
+    ).toBe(true);
+  });
+
+  it("detects Google redirect landing pages", () => {
+    expect(isGoogleRedirectPage("https://www.google.com/goto?url=abc")).toBe(true);
+    expect(isGoogleRedirectPage("https://www.google.com.au/url?q=https://example.com")).toBe(true);
+    expect(isGoogleRedirectPage("https://www.example.com/landing")).toBe(false);
   });
 });
 

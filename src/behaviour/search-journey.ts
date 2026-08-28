@@ -203,6 +203,8 @@ export async function runSearchJourney(
         position: result.position,
         serpPage: result.serpPage,
         attempt: searchIndex + 1,
+        hrefKind: result.hrefKind,
+        displayedUrl: result.displayedUrl,
       });
 
       const clickTarget = !probabilistic || shouldClickTarget(persona, traits, allowTargetSkip);
@@ -255,10 +257,12 @@ export async function runSearchJourney(
       }
 
       await clickSerpResult(page, result);
-      await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+      const landingUrl = page.url();
       await onEvent("target_clicked", {
         url: result.url,
         title: result.title,
+        hrefKind: result.hrefKind,
+        landingUrl,
       });
 
       attempts.push({
@@ -283,7 +287,7 @@ export async function runSearchJourney(
         observedPosition: result.position,
         resultTitle: result.title,
         resultUrl: result.url,
-        landingUrl: page.url(),
+        landingUrl,
       };
     }
 

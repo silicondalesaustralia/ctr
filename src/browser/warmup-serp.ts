@@ -41,6 +41,5 @@ export async function clickRandomOrganicResult(page: Page): Promise<SerpResult |
   }
 
   await clickSerpResult(page, result);
-  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
   return result;
 }

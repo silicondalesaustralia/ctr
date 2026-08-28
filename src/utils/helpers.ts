@@ -54,6 +54,41 @@ export async function loadMockSerpInPage(
   await page.goto(dataUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 }
 
+export type GoogleHrefKind = "direct" | "url_redirect" | "goto_redirect" | "other_google";
+
+export function classifyGoogleSerpHref(href: string): GoogleHrefKind {
+  try {
+    const url = new URL(href, "https://www.google.com");
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    const isGoogle =
+      host === "google.com" ||
+      host.endsWith(".google.com") ||
+      host === "google.com.au" ||
+      host.endsWith(".google.com.au");
+    if (!isGoogle && !href.startsWith("/")) {
+      return "direct";
+    }
+    if (url.pathname === "/goto" || url.pathname.startsWith("/goto")) {
+      return "goto_redirect";
+    }
+    if (url.pathname === "/url" || url.pathname.startsWith("/url")) {
+      return "url_redirect";
+    }
+    if (isGoogle || href.startsWith("/")) {
+      return "other_google";
+    }
+    return "direct";
+  } catch {
+    return "direct";
+  }
+}
+
+export function isGoogleRedirectHref(href: string): boolean {
+  const kind = classifyGoogleSerpHref(href);
+  return kind === "url_redirect" || kind === "goto_redirect";
+}
+
+/** Unwrap readable destinations from classic /url wrappers. Hashed /goto cannot be decoded. */
 export function resolveGoogleSerpHref(href: string): string {
   try {
     const url = new URL(href, "https://www.google.com");
@@ -69,12 +104,56 @@ export function resolveGoogleSerpHref(href: string): string {
   }
 }
 
+export function normalizeDisplayedDomain(displayedUrl: string): string {
+  return displayedUrl
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[›>\s/|]/)[0]
+    ?.trim() ?? "";
+}
+
+export function citeMatchesDomain(displayedUrl: string, targetDomain: string): boolean {
+  const normalizedTarget = targetDomain.replace(/^www\./, "").toLowerCase();
+  const haystack = displayedUrl.toLowerCase();
+  if (haystack.includes(normalizedTarget)) {
+    return true;
+  }
+  const citeDomain = normalizeDisplayedDomain(displayedUrl);
+  return (
+    citeDomain === normalizedTarget ||
+    citeDomain.endsWith(`.${normalizedTarget}`) ||
+    normalizedTarget.endsWith(`.${citeDomain}`)
+  );
+}
+
 export function domainMatches(url: string, targetDomain: string): boolean {
   const resolved = resolveGoogleSerpHref(url);
   try {
     const hostname = new URL(resolved).hostname.replace(/^www\./, "");
     const normalizedTarget = targetDomain.replace(/^www\./, "");
     return hostname === normalizedTarget || hostname.endsWith(`.${normalizedTarget}`);
+  } catch {
+    return citeMatchesDomain(url, targetDomain);
+  }
+}
+
+export function isGoogleRedirectPage(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    const isGoogle =
+      host === "google.com" ||
+      host.endsWith(".google.com") ||
+      host === "google.com.au" ||
+      host.endsWith(".google.com.au");
+    if (!isGoogle) return false;
+    return (
+      parsed.pathname === "/goto" ||
+      parsed.pathname.startsWith("/goto") ||
+      parsed.pathname === "/url" ||
+      parsed.pathname.startsWith("/url")
+    );
   } catch {
     return false;
   }
