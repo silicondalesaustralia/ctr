@@ -932,7 +932,8 @@ export function createApiServer() {
       res.status(400).json({ error: "Session is not linked to a scheduled session" });
       return;
     }
-    if (!shouldRetry(session.status, session.scheduledSession.attemptCount)) {
+    const retryKey = session.errorCode ?? session.status;
+    if (!shouldRetry(retryKey, session.scheduledSession.attemptCount)) {
       res.status(400).json({ error: "Session status is not eligible for retry" });
       return;
     }

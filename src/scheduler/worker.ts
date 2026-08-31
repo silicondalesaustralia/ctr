@@ -89,8 +89,9 @@ export async function processScheduledSession(
       },
     });
 
-    if (shouldRetry(result.status as never, scheduled.attemptCount + 1)) {
-      const delay = getRetryDelayMinutes(result.status as never);
+    const retryKey = result.errorCode ?? result.status;
+    if (shouldRetry(retryKey, scheduled.attemptCount + 1)) {
+      const delay = getRetryDelayMinutes(retryKey);
       await prisma.scheduledSession.update({
         where: { id: scheduledSessionId },
         data: {
@@ -104,6 +105,8 @@ export async function processScheduledSession(
       event: "scheduled_session_processed",
       scheduledSessionId,
       result: result.status,
+      errorCode: result.errorCode,
+      retryKey,
     });
   } catch (error) {
     await prisma.scheduledSession.update({
