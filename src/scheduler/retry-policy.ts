@@ -5,18 +5,21 @@ export interface RetryPolicy {
   delayMinutes: number;
 }
 
+/** Keep retrying infra failures every 5 minutes until the session succeeds. */
+const UNTIL_SUCCESS: RetryPolicy = { maxAttempts: 10_000, delayMinutes: 5 };
+
 export const RETRY_POLICIES: Record<string, RetryPolicy> = {
-  /** Transient proxy/tunnel failures — retry quickly until the path recovers. */
-  proxy_error: { maxAttempts: 24, delayMinutes: 5 },
-  browser_error: { maxAttempts: 2, delayMinutes: 60 },
-  /** GoLogin cloud slot busy — retry quickly until a slot frees. */
-  gologin_parallel_limit: { maxAttempts: 24, delayMinutes: 5 },
-  target_error: { maxAttempts: 1, delayMinutes: 60 },
+  proxy_error: UNTIL_SUCCESS,
+  browser_error: UNTIL_SUCCESS,
+  gologin_parallel_limit: UNTIL_SUCCESS,
+  target_error: UNTIL_SUCCESS,
+  google_error: UNTIL_SUCCESS,
+  /** Intentional run outcomes — do not retry. */
   blocked: { maxAttempts: 0, delayMinutes: 0 },
   target_not_found: { maxAttempts: 0, delayMinutes: 0 },
   search_abandoned: { maxAttempts: 0, delayMinutes: 0 },
   target_found_no_click: { maxAttempts: 0, delayMinutes: 0 },
-  google_error: { maxAttempts: 0, delayMinutes: 0 },
+  completed: { maxAttempts: 0, delayMinutes: 0 },
 };
 
 export function isGoLoginParallelLimitError(message: string): boolean {
