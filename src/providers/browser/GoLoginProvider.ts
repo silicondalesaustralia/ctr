@@ -155,20 +155,44 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async updateProxy(profileId: string, proxy: ProxyConfig): Promise<void> {
-    const profile = await this.request<Record<string, unknown>>(`/browser/${profileId}`);
-    await this.request(`/browser/${profileId}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        ...profile,
-        proxy: {
-          mode: "http",
-          host: proxy.host,
-          port: proxy.port,
-          username: proxy.username,
-          password: proxy.password,
-        },
-      }),
-    });
+    const proxyPayload = {
+      mode: "http" as const,
+      host: proxy.host,
+      port: Number(proxy.port),
+      username: proxy.username,
+      password: proxy.password,
+    };
+
+    // Prefer partial update — PUT of the full GET profile often fails to stick proxy.
+    try {
+      await this.request(`/browser/${profileId}/custom`, {
+        method: "PUT",
+        body: JSON.stringify({ proxy: proxyPayload }),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[gologin] /custom proxy update failed (${message}); retrying minimal PUT`);
+      await this.request(`/browser/${profileId}`, {
+        method: "PUT",
+        body: JSON.stringify({ proxy: proxyPayload }),
+      });
+    }
+
+    const verified = await this.request<{
+      proxy?: { mode?: string; host?: string; port?: number };
+    }>(`/browser/${profileId}`);
+
+    const mode = verified.proxy?.mode;
+    const host = verified.proxy?.host;
+    if (mode !== "http" || !host || host !== proxy.host) {
+      throw new Error(
+        `GoLogin proxy not applied for ${profileId}: mode=${mode ?? "none"} host=${host ?? "none"}`,
+      );
+    }
+
+    console.error(
+      `[gologin] Proxy set on ${profileId}: ${proxy.host}:${proxy.port} user=${proxy.username.slice(0, 28)}…`,
+    );
   }
 
   async getProfile(profileId: string): Promise<BrowserProfile | null> {
