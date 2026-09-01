@@ -304,11 +304,28 @@ export async function previewCampaignIntensity(
   });
 }
 
+async function clearCampaignScheduledSessions(experimentId: string): Promise<void> {
+  const rows = await prisma.scheduledSession.findMany({
+    where: { experimentId },
+    select: { id: true },
+  });
+  if (rows.length === 0) return;
+
+  const ids = rows.map((row) => row.id);
+  await prisma.session.updateMany({
+    where: { scheduledSessionId: { in: ids } },
+    data: { scheduledSessionId: null },
+  });
+  await prisma.scheduledSession.deleteMany({ where: { experimentId } });
+}
+
 async function persistQueries(
   experimentId: string,
   queries: CampaignQueryInput[],
   intensity: CampaignIntensityResult,
 ): Promise<ExperimentQuery[]> {
+  // Scheduled sessions FK to query rows — clear them before replace.
+  await clearCampaignScheduledSessions(experimentId);
   await prisma.experimentQuery.deleteMany({ where: { experimentId } });
 
   const normalized = normalizeQueryWeights(intensity.queries);
@@ -516,10 +533,7 @@ export async function rebuildCampaignSchedule(experimentId: string): Promise<num
   });
   const remaining = Math.max(0, experiment.monthlySessionTarget - completedCount);
   if (remaining <= 0) {
-    await prisma.scheduledSession.updateMany({
-      where: { experimentId, status: "scheduled" },
-      data: { status: "cancelled" },
-    });
+    await clearCampaignScheduledSessions(experimentId);
     return 0;
   }
 
@@ -532,10 +546,7 @@ export async function rebuildCampaignSchedule(experimentId: string): Promise<num
     throw new Error("No identities in the campaign pool — assign identities before scheduling.");
   }
 
-  await prisma.scheduledSession.updateMany({
-    where: { experimentId, status: "scheduled" },
-    data: { status: "cancelled" },
-  });
+  await clearCampaignScheduledSessions(experimentId);
 
   const created = await generateCampaignSchedule({
     experiment,
