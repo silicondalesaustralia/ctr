@@ -88,16 +88,20 @@ export default function CampaignReviewStep({
 }: Props) {
   const startBlockReason = getStartCampaignBlockReason(form, preflightSummary);
   const startDisabled = Boolean(busy) || Boolean(startBlockReason);
+  const isGmb = form.campaignKind === "gmb";
   const notFoundQueries =
     preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
   return (
     <>
       <section style={panelStyle}>
         <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>Step 2 of 2</p>
-        <h2 style={{ margin: "0 0 8px" }}>Review recommended plan</h2>
+        <h2 style={{ margin: "0 0 8px" }}>
+          {isGmb ? "Review GMB / Places campaign" : "Review recommended plan"}
+        </h2>
         <p style={{ color: "#64748b", margin: "0 0 20px", fontSize: 15 }}>
-          Settings were chosen from GSC data and your keyword cluster. Adjust anything below,
-          save your draft, then validate on Google before starting.
+          {isGmb
+            ? "Settings are for Google Business Profile / Places rankings. Adjust below, save, then validate Places ranks before starting."
+            : "Settings were chosen from GSC data and your keyword cluster. Adjust anything below, save your draft, then validate on Google before starting."}
         </p>
 
         {(message || error) && (
@@ -158,7 +162,7 @@ export default function CampaignReviewStep({
           </div>
         )}
 
-        {gscStatus && (
+        {gscStatus && !isGmb && (
           <div
             style={{
               padding: "12px 16px",
@@ -172,6 +176,21 @@ export default function CampaignReviewStep({
             {gscStatus === "live"
               ? "GSC data loaded for this URL (AU, last 28 days)."
               : "GSC data unavailable — recommendations use keyword variations and defaults."}
+          </div>
+        )}
+
+        {isGmb && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderRadius: 8,
+              marginBottom: 20,
+              background: "#f0f9ff",
+              border: "1px solid #bae6fd",
+              fontSize: 14,
+            }}
+          >
+            GMB campaign — ranks come from Google local pack / More places (not organic SERP or GSC).
           </div>
         )}
 
@@ -330,12 +349,22 @@ export default function CampaignReviewStep({
           )}
           {!running && (
             <button type="button" onClick={onReanalyze} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
-              {busy === "analyze" ? "Analyzing..." : "Re-analyze GSC"}
+              {busy === "analyze"
+                ? "Analyzing..."
+                : isGmb
+                  ? "Re-analyze plan"
+                  : "Re-analyze GSC"}
             </button>
           )}
           {!running && (
             <button type="button" onClick={onPreflight} disabled={Boolean(busy)} style={secondaryButtonStyle(Boolean(busy))}>
-              {busy === "preflight" ? "Checking Google..." : "Validate on Google"}
+              {busy === "preflight"
+                ? isGmb
+                  ? "Checking Places..."
+                  : "Checking Google..."
+                : isGmb
+                  ? "Validate Places ranking"
+                  : "Validate on Google"}
             </button>
           )}
           {!running && (
@@ -501,29 +530,43 @@ export default function CampaignReviewStep({
         <section style={{ ...panelStyle, marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 16px" }}>Query cluster</h2>
           <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
-            GSC columns stay from analyze. Google column shows live preflight only. Disable rows you
-            do not want scheduled.
+            {isGmb
+              ? "GMB Place Ranking is from live local pack / More places validation. There is no GSC for Places — leave plan position blank until validated. Disable rows you do not want scheduled."
+              : "GSC columns stay from analyze. Google column shows live preflight only. Disable rows you do not want scheduled."}
           </p>
           {notFoundQueries.length > 0 && (
             <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
-              Not found live on Google (3 pages): {notFoundQueries.join(", ")}
+              {isGmb
+                ? `Not found in local pack / More places: ${notFoundQueries.join(", ")}`
+                : `Not found live on Google (3 pages): ${notFoundQueries.join(", ")}`}
             </p>
           )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {[
-                    "Use",
-                    "Query",
-                    "Type",
-                    "Google live",
-                    "Volume/mo",
-                    "GSC position",
-                    "GSC impr.",
-                    "GSC clicks",
-                    "Sessions",
-                  ].map((h) => (
+                  {(isGmb
+                    ? [
+                        "Use",
+                        "Query",
+                        "Type",
+                        "GMB Place Ranking",
+                        "Volume/mo",
+                        "Plan position",
+                        "Sessions",
+                      ]
+                    : [
+                        "Use",
+                        "Query",
+                        "Type",
+                        "Google live",
+                        "Volume/mo",
+                        "GSC position",
+                        "GSC impr.",
+                        "GSC clicks",
+                        "Sessions",
+                      ]
+                  ).map((h) => (
                     <th key={h} style={thStyle}>
                       {h}
                     </th>
@@ -533,8 +576,12 @@ export default function CampaignReviewStep({
               <tbody>
                 {form.queries.map((row, index) => {
                   const googleLabel =
-                    row.preflightFound && row.preflightSerpPage != null && row.preflightPosition != null
-                      ? `p${row.preflightSerpPage} #${row.preflightPosition}`
+                    row.preflightFound && row.preflightPosition != null
+                      ? isGmb
+                        ? `#${row.preflightPosition}`
+                        : row.preflightSerpPage != null
+                          ? `p${row.preflightSerpPage} #${row.preflightPosition}`
+                          : `#${row.preflightPosition}`
                       : row.preflightStatus
                         ? "Not found"
                         : "—";
@@ -574,8 +621,12 @@ export default function CampaignReviewStep({
                           placeholder="—"
                         />
                       </td>
-                      <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
-                      <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
+                      {!isGmb && (
+                        <>
+                          <td style={cellStyle}>{row.gscImpressions28d ?? "—"}</td>
+                          <td style={cellStyle}>{row.gscClicks28d ?? "—"}</td>
+                        </>
+                      )}
                       <td style={cellStyle}>{row.active ? (row.allocatedSessions ?? "—") : "—"}</td>
                     </tr>
                   );

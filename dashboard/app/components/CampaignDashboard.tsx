@@ -766,7 +766,7 @@ export default function CampaignDashboard({
       )}
 
       {activeTab === "sessions" && campaignId ? (
-        <CampaignSessionsTab campaignId={campaignId} />
+        <CampaignSessionsTab campaignId={campaignId} campaignKind={form.campaignKind} />
       ) : activeTab === "identities" && campaignId ? (
         <CampaignIdentitiesTab
           campaignId={campaignId}

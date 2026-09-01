@@ -8,6 +8,8 @@ export interface PreflightQueryResult {
   globalPosition: number | null;
   status: PreflightQueryStatus;
   errorMessage?: string;
+  /** GMB only: where the listing was matched. */
+  source?: "local_pack" | "more_places";
 }
 
 export type PreflightSummaryStatus = "complete" | "none_found" | "blocked" | "error";

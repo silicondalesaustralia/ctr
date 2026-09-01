@@ -44,19 +44,14 @@ async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidat
     }> = [];
     const seen = new Set<string>();
 
-    const cardSelector = [
-      ".Nv2PK",
-      ".VkpGBb",
-      ".rllt__link",
-      ".cXedhc",
-      "[data-cat='local']",
-      ".section-result",
-      "div[jscontroller][data-record-click-time]",
-      "[role='feed'] > div",
-      "[role='list'] > div",
-    ].join(", ");
-
-    const cards = Array.from(document.querySelectorAll(cardSelector));
+    // Prefer real Places list cards (.Nv2PK) — other selectors inflate rank.
+    const primary = Array.from(document.querySelectorAll(".Nv2PK"));
+    const fallback = Array.from(
+      document.querySelectorAll(
+        ".VkpGBb, .rllt__link, [data-cat='local'], .cXedhc, .section-result",
+      ),
+    );
+    const cards = primary.length > 0 ? primary : fallback;
 
     for (const card of cards) {
       const heading =
@@ -70,9 +65,17 @@ async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidat
       }
       if (title.length < 2) continue;
       if (/^(directions|website|call|more places|see more|share|save)$/i.test(title)) continue;
-      // Avoid grabbing entire card blobs
-      if (title.length > 120) {
-        title = title.slice(0, 80).trim();
+      if (title.length > 120) title = title.slice(0, 80).trim();
+
+      const cardText = (card.textContent ?? "").replace(/\s+/g, " ");
+      const looksLikeBusiness =
+        /\d\.\d/.test(cardText) || // rating
+        /\(\d+\)/.test(cardText) || // review count
+        /website|directions|open|closed|plumber|\$|·/i.test(cardText);
+      if (!looksLikeBusiness && primary.length > 0) {
+        // On Places list, still accept titled Nv2PK cards
+      } else if (!looksLikeBusiness && primary.length === 0) {
+        continue;
       }
 
       const anchor = card.querySelector(
@@ -87,7 +90,6 @@ async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidat
       );
       let cid = cidMatch?.[1] ?? cidMatch?.[2] ?? cidMatch?.[3] ?? null;
       if (!cid && cidMatch?.[4]) {
-        // hex feature id → decimal string Google often uses as CID
         try {
           cid = BigInt(`0x${cidMatch[4]}`).toString();
         } catch {
@@ -105,21 +107,6 @@ async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidat
         placeId: placeIdMatch?.[1] ?? placeIdMatch?.[2] ?? null,
         cid,
       });
-    }
-
-    // Fallback: any maps/place anchors with readable text
-    if (results.length === 0) {
-      for (const anchor of Array.from(
-        document.querySelectorAll('a[href*="/maps/place"], a[href*="cid="]'),
-      ) as HTMLAnchorElement[]) {
-        const title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
-        if (title.length < 2 || title.length > 120) continue;
-        const href = anchor.getAttribute("href") ?? "";
-        const key = title.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        results.push({ title, href, placeId: null, cid: null });
-      }
     }
 
     return results;

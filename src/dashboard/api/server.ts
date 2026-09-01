@@ -569,6 +569,52 @@ export function createApiServer() {
     res.json({ entries: sessions.map(serializeLogEntry) });
   });
 
+  app.get("/campaigns/:id/schedule", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    try {
+      const upcoming = await prisma.scheduledSession.findMany({
+        where: { experimentId: campaign.id, status: "scheduled" },
+        include: {
+          identity: {
+            select: {
+              externalId: true,
+              region: true,
+              city: true,
+              deviceClass: true,
+            },
+          },
+          query: { select: { query: true } },
+        },
+        orderBy: { scheduledAt: "asc" },
+        take: 200,
+      });
+
+      res.json({
+        upcomingCount: upcoming.length,
+        note: campaign.adaptivePacing
+          ? "Adaptive pacing is on — upcoming times may change when the plan recalculates."
+          : "Fixed schedule for this campaign.",
+        upcoming: upcoming.map((row) => ({
+          id: row.id,
+          scheduledAt: row.scheduledAt.toISOString(),
+          status: row.status,
+          group: row.group,
+          attemptCount: row.attemptCount,
+          query: row.query.query,
+          identity: row.identity,
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
+  });
+
   app.get("/campaigns/:id/identities", async (req, res) => {
     const campaign = await getCampaignById(req.params.id);
     if (!campaign) {

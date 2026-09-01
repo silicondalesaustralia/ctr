@@ -230,10 +230,11 @@ export async function rebuildProposalAfterPreflight(
     const original = proposal.queries.find(
       (row) => row.text.toLowerCase() === query.text.toLowerCase(),
     );
+    const keepGscPosition = hasGscData(query) ? (original?.startingPosition ?? query.startingPosition) : null;
     return {
       ...query,
       weight: calc?.weight ?? query.weight,
-      startingPosition: original?.startingPosition ?? query.startingPosition,
+      startingPosition: keepGscPosition,
       gscImpressions28d: query.gscImpressions28d,
       gscClicks28d: query.gscClicks28d,
     };

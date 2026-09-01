@@ -78,6 +78,7 @@ export async function checkGmbQueryOnPage(
       position: found.position,
       globalPosition: found.position,
       status: "found",
+      source: found.source,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
