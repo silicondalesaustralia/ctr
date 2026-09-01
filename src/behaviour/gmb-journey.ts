@@ -131,6 +131,7 @@ export async function runGmbSearchJourney(
     position: found.position,
     placeId: found.placeId,
     cid: found.cid,
+    source: found.source,
   });
 
   await clickLocalPackResult(page, found);

@@ -141,12 +141,20 @@ export default function CampaignReviewStep({
             {preflightSummary.status === "blocked"
               ? "Google blocked the preflight browser session (CAPTCHA). Retry later or switch identity."
               : preflightSummary.findableCount > 0
-                ? `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 3 pages.${
-                    preflightSummary.keywordAdjusted
-                      ? ` Primary keyword updated to "${form.keyword}".`
-                      : ""
-                  }`
-                : "Google preflight: none of the queries showed your site in the first 3 SERP pages."}
+                ? form.campaignKind === "gmb"
+                  ? `Local pack / More places: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable.${
+                      preflightSummary.keywordAdjusted
+                        ? ` Primary keyword updated to "${form.keyword}".`
+                        : ""
+                    }`
+                  : `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 3 pages.${
+                      preflightSummary.keywordAdjusted
+                        ? ` Primary keyword updated to "${form.keyword}".`
+                        : ""
+                    }`
+                : form.campaignKind === "gmb"
+                  ? "Local pack / More places: none of the queries showed your listing (checked top pack and More places)."
+                  : "Google preflight: none of the queries showed your site in the first 3 SERP pages."}
           </div>
         )}
 
