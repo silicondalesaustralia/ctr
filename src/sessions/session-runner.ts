@@ -25,7 +25,7 @@ import {
   registerSessionCleanup,
   type BrowserCleanupRefs,
 } from "./session-cleanup.js";
-import { classifyBrowserErrorCode } from "../scheduler/retry-policy.js";
+import { classifyBrowserErrorCode, mapErrorStatus } from "../scheduler/retry-policy.js";
 
 export interface RunSessionInput {
   experiment: Experiment;
@@ -393,14 +393,15 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const errorCode = classifyBrowserErrorCode(message);
+    const status = mapErrorStatus(errorCode);
     await completeSession(session.id, {
-      status: "browser_error",
+      status,
       errorMessage: message,
       errorCode,
       personaId: persona.id,
     });
     await appendSessionEvent(session.id, "error", { message, errorCode });
-    return { sessionId: session.id, status: "browser_error", errorCode };
+    return { sessionId: session.id, status, errorCode };
   } finally {
     cleanupRefs.connectedBrowser = connectedBrowser;
     cleanupRefs.runningBrowser = runningBrowser;

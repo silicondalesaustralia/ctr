@@ -6,7 +6,8 @@ export interface RetryPolicy {
 }
 
 export const RETRY_POLICIES: Record<string, RetryPolicy> = {
-  proxy_error: { maxAttempts: 2, delayMinutes: 60 },
+  /** Transient proxy/tunnel failures — retry quickly until the path recovers. */
+  proxy_error: { maxAttempts: 24, delayMinutes: 5 },
   browser_error: { maxAttempts: 2, delayMinutes: 60 },
   /** GoLogin cloud slot busy — retry quickly until a slot frees. */
   gologin_parallel_limit: { maxAttempts: 24, delayMinutes: 5 },
@@ -25,9 +26,21 @@ export function isGoLoginParallelLimitError(message: string): boolean {
   );
 }
 
+export function isProxyTunnelError(message: string): boolean {
+  return (
+    /ERR_TUNNEL_CONNECTION_FAILED/i.test(message) ||
+    /ERR_PROXY_CONNECTION_FAILED/i.test(message) ||
+    /ERR_SOCKS_CONNECTION_FAILED/i.test(message) ||
+    /tunnel connection failed/i.test(message)
+  );
+}
+
 export function classifyBrowserErrorCode(message: string): string {
   if (isGoLoginParallelLimitError(message)) {
     return "gologin_parallel_limit";
+  }
+  if (isProxyTunnelError(message)) {
+    return "proxy_error";
   }
   return "browser_error";
 }
