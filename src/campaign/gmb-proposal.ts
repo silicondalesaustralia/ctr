@@ -56,7 +56,7 @@ export async function buildGmbCampaignProposal(
     type: q.type,
     weight: q.weight,
     monthlySearchVolume: input.monthlySearchVolume ?? null,
-    startingPosition: 8,
+    startingPosition: null,
   }));
 
   const eligible = await countEligibleIdentities(region, true, cityConfig.city);
@@ -71,7 +71,7 @@ export async function buildGmbCampaignProposal(
       type: q.type ?? "core",
       weight: q.weight ?? 0,
       monthlySearchVolume: q.monthlySearchVolume,
-      startingPosition: q.startingPosition ?? 8,
+      startingPosition: null,
       gscImpressions28d: null,
       gscClicks28d: null,
     })),

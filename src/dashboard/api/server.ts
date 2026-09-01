@@ -741,7 +741,11 @@ export function createApiServer() {
     }
 
     try {
-      const queryCount = body.queries?.length ?? (await buildBaseProposalForPreflight(body)).queries.length;
+      const enabledQueryCount = body.queries?.filter((q) => q.active !== false).length;
+      const queryCount =
+        enabledQueryCount ??
+        (await buildBaseProposalForPreflight(body)).queries.filter((q) => q.active !== false)
+          .length;
       const job = await createPreflightJob(queryCount);
       void runPreflightJob(job.id, body);
       res.status(202).json({ jobId: job.id, totalCount: job.totalCount });

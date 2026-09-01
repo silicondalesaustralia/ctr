@@ -499,7 +499,8 @@ export default function CampaignDashboard({
       }
 
       const pollIntervalMs = 3000;
-      const queryCount = start.totalCount ?? form.queries.length ?? 5;
+      const queryCount =
+        start.totalCount ?? form.queries.filter((q) => q.active).length ?? 5;
       const estimatedMs = 120_000 + queryCount * 120_000;
       const maxAttempts = Math.max(200, Math.ceil(estimatedMs / pollIntervalMs));
 

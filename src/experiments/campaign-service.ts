@@ -275,7 +275,7 @@ export async function previewCampaignIntensity(
       type: q.type ?? "core",
       weight: q.weight ?? 0,
       monthlySearchVolume: q.monthlySearchVolume,
-      startingPosition: q.startingPosition ?? (resolved.campaignKind === "gmb" ? 8 : null),
+      startingPosition: q.startingPosition ?? null,
       gscImpressions28d: q.gscImpressions28d,
       gscClicks28d: q.gscClicks28d,
     })),

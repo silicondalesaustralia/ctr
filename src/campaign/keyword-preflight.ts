@@ -343,9 +343,11 @@ export async function runKeywordPreflight(
     },
   ) => Promise<PreflightQueryResult[]>,
 ): Promise<CampaignProposal> {
-  const queries = input.proposal.queries.map((q) => q.text);
+  const queries = input.proposal.queries
+    .filter((q) => q.active !== false)
+    .map((q) => q.text);
   if (queries.length === 0) {
-    throw new Error("No queries to validate — run analyze first.");
+    throw new Error("No enabled queries to validate — enable at least one query first.");
   }
 
   const isGmb = input.proposal.campaignKind === "gmb";
