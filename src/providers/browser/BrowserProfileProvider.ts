@@ -29,6 +29,8 @@ export interface RunningBrowser {
   wsEndpoint?: string;
   /** Redis token for the single GoLogin cloud-slot lock (plan allows 1 parallel). */
   slotToken?: string;
+  /** How the browser was started — drives cleanup. */
+  runtime?: "cloud" | "orbita" | "chromium";
   browser?: import("playwright").Browser;
   context?: import("playwright").BrowserContext;
 }

@@ -18,6 +18,7 @@ COPY experiments ./experiments
 RUN chmod +x scripts/railway-start.sh
 
 ENV NODE_ENV=production
+ENV GOLOGIN_BROWSER_RUNTIME=orbita
 EXPOSE 8080
 
 CMD ["bash", "scripts/railway-start.sh"]

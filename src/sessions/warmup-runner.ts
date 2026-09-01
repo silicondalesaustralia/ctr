@@ -193,7 +193,7 @@ export async function runWarmupSession(
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
     });
-    cloudStarted = useGoLogin && Boolean(runningBrowser.wsEndpoint);
+    cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
 
     let page: Page;
     if (runningBrowser.context) {

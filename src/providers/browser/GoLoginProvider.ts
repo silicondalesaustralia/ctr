@@ -20,6 +20,7 @@ import {
   startLocalChromiumWithProxy,
   stopLocalChromium,
 } from "./gologin-local.js";
+import { startOrbitaWithProxy, stopOrbita } from "./gologin-orbita.js";
 import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
 
 export class GoLoginProvider implements BrowserProfileProvider {
@@ -102,11 +103,30 @@ export class GoLoginProvider implements BrowserProfileProvider {
 
   async startProfile(profileId: string, proxy?: ProxyConfig): Promise<RunningBrowser> {
     const env = getEnv();
-    if (env.GOLOGIN_BROWSER_RUNTIME === "local") {
+    const runtime = env.GOLOGIN_BROWSER_RUNTIME;
+
+    if (runtime === "orbita") {
       if (!proxy || env.PROXY_PROVIDER === "mock") {
-        throw new Error(
-          "GOLOGIN_BROWSER_RUNTIME=local requires a real Decodo proxy lease",
+        throw new Error("GOLOGIN_BROWSER_RUNTIME=orbita requires a Decodo proxy lease");
+      }
+      const slotToken = await acquireGoLoginSlot(profileId);
+      try {
+        const running = await startOrbitaWithProxy(
+          this.apiToken,
+          (path, init) => this.request(path, init),
+          profileId,
+          proxy,
         );
+        return { ...running, slotToken };
+      } catch (error) {
+        await releaseGoLoginSlot(slotToken);
+        throw error;
+      }
+    }
+
+    if (runtime === "chromium") {
+      if (!proxy || env.PROXY_PROVIDER === "mock") {
+        throw new Error("GOLOGIN_BROWSER_RUNTIME=chromium requires a Decodo proxy lease");
       }
       const profile = await this.request<{
         navigator?: { language?: string; userAgent?: string };
@@ -114,12 +134,13 @@ export class GoLoginProvider implements BrowserProfileProvider {
       }>(`/browser/${profileId}`);
       const ua = profile.navigator?.userAgent?.toLowerCase() ?? "";
       const mobile = ua.includes("android") || ua.includes("iphone");
-      return startLocalChromiumWithProxy(profileId, proxy, {
+      const running = await startLocalChromiumWithProxy(profileId, proxy, {
         locale: profile.navigator?.language,
         timezone: profile.timezone?.id,
         deviceClass: mobile ? "mobile" : "desktop",
         userAgent: profile.navigator?.userAgent,
       });
+      return { ...running, runtime: "chromium" };
     }
 
     return this.startCloudProfile(profileId, proxy);
@@ -157,7 +178,7 @@ export class GoLoginProvider implements BrowserProfileProvider {
         `[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`,
       );
 
-      return { profileId, wsEndpoint, cdpUrl: wsEndpoint, slotToken };
+      return { profileId, wsEndpoint, cdpUrl: wsEndpoint, slotToken, runtime: "cloud" };
     } catch (error) {
       await releaseGoLoginSlot(slotToken);
       throw error;
@@ -184,12 +205,16 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async stopProfile(profileId: string, running?: RunningBrowser): Promise<void> {
-    if (running?.browser || running?.context) {
-      await stopLocalChromium(running);
-      return;
-    }
-
     try {
+      const runtime = running?.runtime;
+      if (runtime === "orbita") {
+        await stopOrbita(profileId);
+        return;
+      }
+      if (runtime === "chromium" || running?.browser || running?.context) {
+        await stopLocalChromium(running);
+        return;
+      }
       await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
     } finally {
       await releaseGoLoginSlot(running?.slotToken);

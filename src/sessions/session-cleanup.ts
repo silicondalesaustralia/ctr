@@ -67,8 +67,10 @@ export async function cleanupBrowserSession(refs: BrowserCleanupRefs): Promise<v
     return;
   }
 
-  if (refs.useGoLogin && refs.cloudStarted) {
-    await refs.browserProvider.stopProfile(refs.profileId, refs.runningBrowser ?? undefined);
+  if (refs.useGoLogin && refs.runningBrowser) {
+    await refs.browserProvider.stopProfile(refs.profileId, refs.runningBrowser);
+  } else if (refs.useGoLogin && refs.cloudStarted) {
+    await refs.browserProvider.stopProfile(refs.profileId, undefined);
   } else if (refs.runningBrowser?.context) {
     await refs.browserProvider.stopProfile(refs.profileId, refs.runningBrowser);
   }
