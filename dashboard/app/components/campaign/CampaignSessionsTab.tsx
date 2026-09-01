@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { apiGet } from "../../../lib/api";
+import { apiGet, apiPost } from "../../../lib/api";
 import CompletedSessionsSection, {
   type SessionRow,
 } from "./CompletedSessionsSection";
@@ -22,8 +22,10 @@ export default function CampaignSessionsTab({
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [upcoming, setUpcoming] = useState<ScheduleRow[]>([]);
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  const [campaignStatus, setCampaignStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rebuilding, setRebuilding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,11 +36,13 @@ export default function CampaignSessionsTab({
           upcoming: ScheduleRow[];
           upcomingCount: number;
           note?: string;
+          campaignStatus?: string;
         }>(`/campaigns/${campaignId}/schedule`),
       ]);
       setSessions(sessionRows);
       setUpcoming(schedule.upcoming);
       setScheduleNote(schedule.note ?? null);
+      setCampaignStatus(schedule.campaignStatus ?? null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
@@ -46,6 +50,18 @@ export default function CampaignSessionsTab({
       setLoading(false);
     }
   }, [campaignId]);
+
+  const rebuild = useCallback(async () => {
+    setRebuilding(true);
+    try {
+      await apiPost(`/campaigns/${campaignId}/schedule/rebuild`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rebuild schedule");
+    } finally {
+      setRebuilding(false);
+    }
+  }, [campaignId, load]);
 
   useEffect(() => {
     void load();
@@ -56,9 +72,12 @@ export default function CampaignSessionsTab({
       <UpcomingScheduleSection
         upcoming={upcoming}
         scheduleNote={scheduleNote}
+        campaignStatus={campaignStatus}
         loading={loading}
+        rebuilding={rebuilding}
         error={error}
         onRefresh={() => void load()}
+        onRebuild={() => void rebuild()}
       />
       <CompletedSessionsSection
         campaignId={campaignId}

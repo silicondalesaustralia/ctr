@@ -113,6 +113,10 @@ export async function generateCampaignSchedule(
   const desktopIdentities = identities.filter((i) => i.deviceClass === "desktop");
   const mobileIdentities = identities.filter((i) => i.deviceClass === "mobile");
 
+  if (identities.length === 0 || input.totalSessions <= 0) {
+    return 0;
+  }
+
   const querySlots = buildQuerySlots(input.queries, input.totalSessions);
   let slotIndex = 0;
 
@@ -137,7 +141,6 @@ export async function generateCampaignSchedule(
       if (slotIndex >= querySlots.length) break;
 
       const query = querySlots[slotIndex]!;
-      slotIndex += 1;
       const group = groups[Math.floor(Math.random() * groups.length)]!;
       const desktopPercent = input.experiment.desktopPercent ?? 65;
       const preferDesktop = Math.random() * 100 < desktopPercent;
@@ -190,8 +193,10 @@ export async function generateCampaignSchedule(
         }
       }
 
-      if (eligible.length === 0) continue;
+      // Do not burn the query slot — retry it on a later day.
+      if (eligible.length === 0) break;
 
+      slotIndex += 1;
       const pick = eligible[Math.floor(Math.random() * eligible.length)]!;
       scheduled.push({
         experimentId: input.experiment.id,

@@ -483,22 +483,66 @@ export async function upsertCampaign(
   return updateCampaign(current.id, input);
 }
 
+export async function rebuildCampaignSchedule(experimentId: string): Promise<number> {
+  const experiment = await prisma.experiment.findUniqueOrThrow({
+    where: { id: experimentId },
+    include: { queries: { where: { active: true } } },
+  });
+
+  const completedCount = await prisma.session.count({
+    where: {
+      experimentId,
+      status: {
+        in: ["completed", "target_not_found", "search_abandoned", "target_found_no_click"],
+      },
+    },
+  });
+  const remaining = Math.max(0, experiment.monthlySessionTarget - completedCount);
+  if (remaining <= 0) {
+    await prisma.scheduledSession.updateMany({
+      where: { experimentId, status: "scheduled" },
+      data: { status: "cancelled" },
+    });
+    return 0;
+  }
+
+  const identities = await getCampaignIdentityPool(
+    experimentId,
+    experiment.focusRegion,
+    experiment.focusCity,
+  );
+  if (identities.length === 0) {
+    throw new Error("No identities in the campaign pool — assign identities before scheduling.");
+  }
+
+  await prisma.scheduledSession.updateMany({
+    where: { experimentId, status: "scheduled" },
+    data: { status: "cancelled" },
+  });
+
+  const created = await generateCampaignSchedule({
+    experiment,
+    queries: experiment.queries,
+    identities,
+    totalSessions: remaining,
+    startDate: new Date(),
+    durationDays: experiment.campaignDurationDays,
+  });
+
+  if (created === 0) {
+    throw new Error(
+      "Could not place any sessions. Add more identities or lower the repeat-gap / daily caps.",
+    );
+  }
+
+  return created;
+}
+
 export async function runCampaign(experimentId: string): Promise<CampaignWithQueries> {
   const existing = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
   const startDate = new Date();
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + existing.campaignDurationDays);
-
-  await prisma.experiment.update({
-    where: { id: experimentId },
-    data: {
-      status: "active",
-      startDate,
-      endDate,
-    },
-  });
-
-  await enableRunner();
 
   const scheduledCount = await prisma.scheduledSession.count({
     where: { experimentId, status: "scheduled" },
@@ -510,12 +554,20 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
       existing.focusRegion,
       existing.focusCity,
     );
+    if (identities.length === 0) {
+      throw new Error("Cannot start: no identities in the campaign pool.");
+    }
+
     const fresh = await prisma.experiment.findUniqueOrThrow({
       where: { id: experimentId },
       include: { queries: { where: { active: true } } },
     });
 
-    await generateCampaignSchedule({
+    if (fresh.queries.length === 0) {
+      throw new Error("Cannot start: no active queries to schedule.");
+    }
+
+    const created = await generateCampaignSchedule({
       experiment: fresh,
       queries: fresh.queries,
       identities,
@@ -523,7 +575,24 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
       startDate,
       durationDays: fresh.campaignDurationDays,
     });
+
+    if (created === 0 && fresh.monthlySessionTarget > 0) {
+      throw new Error(
+        "Cannot start: could not schedule any sessions. Add identities or relax gap/daily limits.",
+      );
+    }
   }
+
+  await prisma.experiment.update({
+    where: { id: experimentId },
+    data: {
+      status: "active",
+      startDate,
+      endDate,
+    },
+  });
+
+  await enableRunner();
 
   return prisma.experiment.findUniqueOrThrow({
     where: { id: experimentId },

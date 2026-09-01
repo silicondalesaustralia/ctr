@@ -27,6 +27,7 @@ import {
   listCampaigns,
   previewCampaignIntensity,
   runCampaign,
+  rebuildCampaignSchedule,
   serializeCampaign,
   serializeCampaignSummary,
   serializeLogEntry,
@@ -595,6 +596,7 @@ export function createApiServer() {
       });
 
       res.json({
+        campaignStatus: campaign.status,
         upcomingCount: upcoming.length,
         note: campaign.adaptivePacing
           ? "Adaptive pacing is on — upcoming times may change when the plan recalculates."
@@ -612,6 +614,22 @@ export function createApiServer() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(500).json({ error: message });
+    }
+  });
+
+  app.post("/campaigns/:id/schedule/rebuild", async (req, res) => {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return;
+    }
+
+    try {
+      const created = await rebuildCampaignSchedule(campaign.id);
+      res.json({ ok: true, scheduled: created });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
     }
   });
 

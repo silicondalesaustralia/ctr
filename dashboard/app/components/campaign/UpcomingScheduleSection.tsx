@@ -15,18 +15,26 @@ export interface ScheduleRow {
 interface Props {
   upcoming: ScheduleRow[];
   scheduleNote: string | null;
+  campaignStatus: string | null;
   loading: boolean;
+  rebuilding: boolean;
   error: string | null;
   onRefresh: () => void;
+  onRebuild: () => void;
 }
 
 export default function UpcomingScheduleSection({
   upcoming,
   scheduleNote,
+  campaignStatus,
   loading,
+  rebuilding,
   error,
   onRefresh,
+  onRebuild,
 }: Props) {
+  const activeEmpty = campaignStatus === "active" && upcoming.length === 0 && !loading;
+
   return (
     <section style={panelStyle}>
       <div
@@ -46,9 +54,21 @@ export default function UpcomingScheduleSection({
               "Queued sessions for this campaign. Adaptive pacing may reshuffle times."}
           </p>
         </div>
-        <button type="button" onClick={onRefresh} style={secondaryButtonStyle()}>
-          Refresh
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {activeEmpty && (
+            <button
+              type="button"
+              onClick={onRebuild}
+              disabled={rebuilding}
+              style={secondaryButtonStyle(rebuilding)}
+            >
+              {rebuilding ? "Rebuilding..." : "Rebuild schedule"}
+            </button>
+          )}
+          <button type="button" onClick={onRefresh} style={secondaryButtonStyle()}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && <p style={{ color: "#b91c1c", margin: "0 0 12px" }}>{error}</p>}
@@ -56,7 +76,9 @@ export default function UpcomingScheduleSection({
         <p style={{ color: "#64748b" }}>Loading schedule...</p>
       ) : upcoming.length === 0 ? (
         <p style={{ color: "#64748b" }}>
-          No upcoming sessions scheduled. Start the campaign (or wait for pacing) to build a queue.
+          {activeEmpty
+            ? "Campaign is active but the queue is empty. Rebuild the schedule to place upcoming sessions."
+            : "No upcoming sessions scheduled. Start the campaign (or wait for pacing) to build a queue."}
         </p>
       ) : (
         <div style={{ overflowX: "auto" }}>
