@@ -9,8 +9,8 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 
-function main(): void {
-  let target: string;
+function main() {
+  let target;
   try {
     target = require.resolve("gologin/src/gologin.js");
   } catch {
