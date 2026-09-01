@@ -16,13 +16,11 @@ import {
   acquireGoLoginSlot,
   releaseGoLoginSlot,
 } from "./gologin-slot-lock.js";
-
-type GoLoginProxyState = {
-  mode?: string;
-  host?: string;
-  port?: number;
-  username?: string;
-};
+import {
+  startLocalChromiumWithProxy,
+  stopLocalChromium,
+} from "./gologin-local.js";
+import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
 
 export class GoLoginProvider implements BrowserProfileProvider {
   private readonly apiToken: string;
@@ -72,23 +70,21 @@ export class GoLoginProvider implements BrowserProfileProvider {
           ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    const payload = {
-      name: input.name,
-      browserType: "chrome",
-      os,
-      navigator: {
-        language: input.locale,
-        platform,
-        userAgent,
-        resolution: input.deviceClass === "mobile" ? "390x844" : "1366x768",
-      },
-      timezone: { id: input.timezone },
-      proxy: { mode: "none" },
-    };
-
     const created = await this.request<{ id: string }>("/browser", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        name: input.name,
+        browserType: "chrome",
+        os,
+        navigator: {
+          language: input.locale,
+          platform,
+          userAgent,
+          resolution: input.deviceClass === "mobile" ? "390x844" : "1366x768",
+        },
+        timezone: { id: input.timezone },
+        proxy: { mode: "none" },
+      }),
     });
 
     return {
@@ -105,6 +101,34 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async startProfile(profileId: string, proxy?: ProxyConfig): Promise<RunningBrowser> {
+    const env = getEnv();
+    if (env.GOLOGIN_BROWSER_RUNTIME === "local") {
+      if (!proxy || env.PROXY_PROVIDER === "mock") {
+        throw new Error(
+          "GOLOGIN_BROWSER_RUNTIME=local requires a real Decodo proxy lease",
+        );
+      }
+      const profile = await this.request<{
+        navigator?: { language?: string; userAgent?: string };
+        timezone?: { id?: string };
+      }>(`/browser/${profileId}`);
+      const ua = profile.navigator?.userAgent?.toLowerCase() ?? "";
+      const mobile = ua.includes("android") || ua.includes("iphone");
+      return startLocalChromiumWithProxy(profileId, proxy, {
+        locale: profile.navigator?.language,
+        timezone: profile.timezone?.id,
+        deviceClass: mobile ? "mobile" : "desktop",
+        userAgent: profile.navigator?.userAgent,
+      });
+    }
+
+    return this.startCloudProfile(profileId, proxy);
+  }
+
+  private async startCloudProfile(
+    profileId: string,
+    proxy?: ProxyConfig,
+  ): Promise<RunningBrowser> {
     const slotToken = await acquireGoLoginSlot(profileId);
     try {
       const env = getEnv();
@@ -129,7 +153,9 @@ export class GoLoginProvider implements BrowserProfileProvider {
       await sleep(15_000);
 
       const wsEndpoint = resolveConnectUrl(started, profileId, this.apiToken);
-      console.error(`[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`);
+      console.error(
+        `[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`,
+      );
 
       return { profileId, wsEndpoint, cdpUrl: wsEndpoint, slotToken };
     } catch (error) {
@@ -158,6 +184,11 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async stopProfile(profileId: string, running?: RunningBrowser): Promise<void> {
+    if (running?.browser || running?.context) {
+      await stopLocalChromium(running);
+      return;
+    }
+
     try {
       await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
     } finally {
@@ -166,57 +197,11 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async updateProxy(profileId: string, proxy: ProxyConfig): Promise<void> {
-    console.error(
-      `[gologin] Updating proxy on ${profileId} → ${proxy.host}:${proxy.port} user=${proxy.username.slice(0, 36)}…`,
+    await applyDecodoProxyToProfile(
+      (path, init) => this.request(path, init),
+      profileId,
+      proxy,
     );
-
-    const proxyPayload = {
-      mode: "http" as const,
-      host: proxy.host,
-      port: Number(proxy.port),
-      username: proxy.username,
-      password: proxy.password,
-      customName: `decodo-${proxy.sessionKey ?? profileId}`.slice(0, 60),
-    };
-
-    // Dedicated multi-profile proxy endpoint (most reliable for sticking credentials).
-    try {
-      await this.request(`/browser/proxy/many/v2`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          proxies: [{ profileId, proxy: proxyPayload }],
-        }),
-      });
-      console.error(`[gologin] Proxy PATCH /browser/proxy/many/v2 ok for ${profileId}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[gologin] proxy/many/v2 failed (${message}); trying /custom`);
-      await this.request(`/browser/${profileId}/custom`, {
-        method: "PUT",
-        body: JSON.stringify({ proxy: proxyPayload }),
-      });
-    }
-
-    const verified = await this.request<{ proxy?: GoLoginProxyState }>(`/browser/${profileId}`);
-    const applied = verified.proxy;
-    const mode = typeof applied?.mode === "string" ? applied.mode : String(applied?.mode ?? "");
-    const host = applied?.host ?? "";
-    const username = applied?.username ?? "";
-
-    console.error(
-      `[gologin] Proxy readback mode=${mode || "none"} host=${host || "none"} user=${username.slice(0, 36) || "none"}…`,
-    );
-
-    if (mode !== "http" || host !== proxy.host) {
-      throw new Error(
-        `GoLogin proxy not applied for ${profileId}: mode=${mode || "none"} host=${host || "none"}`,
-      );
-    }
-    if (!username || username !== proxy.username) {
-      throw new Error(
-        `GoLogin proxy username mismatch for ${profileId}: expected sticky Decodo user, got ${username.slice(0, 48) || "empty"}`,
-      );
-    }
   }
 
   async getProfile(profileId: string): Promise<BrowserProfile | null> {

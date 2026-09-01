@@ -197,7 +197,8 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
     });
-    cloudStarted = useGoLogin;
+    // Cloud only when GoLogin returns a remote CDP endpoint (local Chromium uses context).
+    cloudStarted = useGoLogin && Boolean(runningBrowser.wsEndpoint);
 
     let page: Page;
     if (runningBrowser.context) {

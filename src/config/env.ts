@@ -85,6 +85,11 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v !== "false" && v !== "0"),
   GOLOGIN_API_TOKEN: z.string().optional(),
+  /**
+   * local = Chromium on the worker with Decodo (required for AU egress).
+   * cloud = GoLogin cloud browser (custom Decodo is unreachable from their hosts).
+   */
+  GOLOGIN_BROWSER_RUNTIME: z.enum(["local", "cloud"]).default("local"),
   MULTILOGIN_API_TOKEN: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_HOST: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_PORT: z.string().optional(),
