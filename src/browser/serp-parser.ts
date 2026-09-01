@@ -211,10 +211,6 @@ export async function findTargetInSerp(
   return { result: null, pagesSearched };
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 export async function waitForSerpRedirectSettle(page: Page, timeoutMs = 15_000): Promise<string> {
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 
