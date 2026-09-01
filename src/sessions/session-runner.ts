@@ -89,7 +89,14 @@ function proxyFields(
 export async function runSession(input: RunSessionInput): Promise<RunSessionResult> {
   const env = getEnv();
   const group = input.group ?? "search";
-  const behaviourOverrides = loadBehaviourOverrides(input.experiment.slug);
+  const loadedOverrides = loadBehaviourOverrides(input.experiment.slug);
+  const isScheduledCampaign =
+    Boolean(input.scheduledSessionId) && input.experiment.slug !== "__warmup__";
+  const behaviourOverrides = {
+    ...loadedOverrides,
+    allowTargetSkip:
+      loadedOverrides.allowTargetSkip ?? (isScheduledCampaign ? false : true),
+  };
   const persona = await getPersonaForIdentity(input.identity, behaviourOverrides);
 
   const session = await createSessionRecord({
