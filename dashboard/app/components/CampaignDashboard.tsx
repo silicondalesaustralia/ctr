@@ -685,7 +685,7 @@ export default function CampaignDashboard({
   }
 
   async function saveAndStart() {
-    const blockReason = getStartCampaignBlockReason(form, preflightSummary);
+    const blockReason = getStartCampaignBlockReason(form, preflightSummary, campaignStatus);
     if (blockReason) {
       setError(blockReason);
       return;
@@ -832,6 +832,7 @@ export default function CampaignDashboard({
             gscStatus={gscStatus}
             preflightSummary={preflightSummary}
             running={campaignActive}
+            campaignStatus={campaignStatus}
             busy={busy}
             message={message}
             error={error}

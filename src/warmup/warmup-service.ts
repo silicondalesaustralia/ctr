@@ -274,15 +274,30 @@ export async function getCampaignIdentityPool(
   });
   const requireWarmup = experiment.requireWarmupIdentities;
 
+  const matchesGeo = (identity: Identity): boolean => {
+    if (focusCity?.trim()) {
+      return (identity.city ?? "").toLowerCase() === focusCity.trim().toLowerCase();
+    }
+    if (focusRegion && focusRegion !== "ALL") {
+      return identity.region === focusRegion;
+    }
+    return true;
+  };
+
   const selections = await prisma.experimentIdentity.findMany({
     where: { experimentId, selected: true },
     include: { identity: true },
   });
 
   if (selections.length > 0) {
-    return selections
+    const selected = selections
       .map((row) => row.identity)
-      .filter((identity) => identityAllowedForCampaign(identity, requireWarmup));
+      .filter((identity) => identityAllowedForCampaign(identity, requireWarmup))
+      .filter(matchesGeo);
+    // Keep explicit selection when it matches geo; otherwise fall back to city/region pool.
+    if (selected.length > 0) {
+      return selected;
+    }
   }
 
   const identities = await prisma.identity.findMany({

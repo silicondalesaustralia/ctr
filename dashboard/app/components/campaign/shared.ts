@@ -202,6 +202,7 @@ export function canScheduleQuery(
 export function getStartCampaignBlockReason(
   form: CampaignFormState,
   preflightSummary: PreflightSummary | null,
+  campaignStatus?: string | null,
 ): string | null {
   if (form.campaignKind === "gmb") {
     if (!form.keyword.trim() || !form.gmbMapsUrl.trim() || !form.focusCity) {
@@ -211,12 +212,19 @@ export function getStartCampaignBlockReason(
     if (enabledQueries.length === 0) {
       return "Enable at least one query before starting.";
     }
+    // Already ran before — allow restart without re-validating Places.
+    if (campaignStatus === "paused") {
+      return null;
+    }
     if (preflightSummary?.status === "blocked") {
       return "Google blocked local-pack preflight — retry validation before starting.";
     }
-    const hasFindable = enabledQueries.some((row) => isQueryFindableLive(row, preflightSummary));
+    const hasFindable = enabledQueries.some(
+      (row) =>
+        isQueryFindableLive(row, preflightSummary) || row.startingPosition != null,
+    );
     if (!hasFindable) {
-      return "Run Validate on Google — need at least one query findable in the local pack.";
+      return "Run Validate Places ranking — need at least one query findable in the local pack.";
     }
     return null;
   }
@@ -228,6 +236,10 @@ export function getStartCampaignBlockReason(
   const enabledQueries = form.queries.filter((row) => row.active);
   if (enabledQueries.length === 0) {
     return "Enable at least one query before starting.";
+  }
+
+  if (campaignStatus === "paused") {
+    return null;
   }
 
   if (preflightSummary?.status === "blocked") {

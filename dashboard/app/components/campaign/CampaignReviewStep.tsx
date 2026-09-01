@@ -46,6 +46,7 @@ interface Props {
   gscStatus: "live" | "unavailable" | null;
   preflightSummary: PreflightSummary | null;
   running: boolean;
+  campaignStatus?: string | null;
   busy: string | null;
   message: string | null;
   error: string | null;
@@ -78,6 +79,7 @@ export default function CampaignReviewStep({
   gscStatus,
   preflightSummary,
   running,
+  campaignStatus = null,
   busy,
   message,
   error,
@@ -93,7 +95,11 @@ export default function CampaignReviewStep({
   onSaveAndStart,
   onStop,
 }: Props) {
-  const startBlockReason = getStartCampaignBlockReason(form, preflightSummary);
+  const startBlockReason = getStartCampaignBlockReason(
+    form,
+    preflightSummary,
+    campaignStatus,
+  );
   const startDisabled = Boolean(busy) || Boolean(startBlockReason);
   const isGmb = form.campaignKind === "gmb";
   const notFoundQueries =

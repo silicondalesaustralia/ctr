@@ -583,7 +583,16 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
       existing.focusCity,
     );
     if (identities.length === 0) {
-      throw new Error("Cannot start: no identities in the campaign pool.");
+      const where =
+        existing.focusCity?.trim() ||
+        (existing.focusRegion && existing.focusRegion !== "ALL"
+          ? existing.focusRegion
+          : null);
+      throw new Error(
+        where
+          ? `Cannot start: no identities match ${where}. Pick geo-matched identities on the Identities tab (or clear the selection to use the city pool).`
+          : "Cannot start: no identities in the campaign pool.",
+      );
     }
 
     const fresh = await prisma.experiment.findUniqueOrThrow({
@@ -606,7 +615,7 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
 
     if (created === 0 && fresh.monthlySessionTarget > 0) {
       throw new Error(
-        "Cannot start: could not schedule any sessions. Add identities or relax gap/daily limits.",
+        `Cannot start: could not place sessions with ${identities.length} matching identities over ${fresh.campaignDurationDays} days. Add identities or widen the schedule window.`,
       );
     }
   }
