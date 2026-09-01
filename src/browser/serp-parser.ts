@@ -63,54 +63,52 @@ const ORGANIC_SELECTORS = [
   "ol.organic-results li a[href]",
 ];
 
-async function extractDisplayedUrl(link: ReturnType<Page["locator"]>): Promise<string> {
-  const citeSelectors = [
-    "xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//cite",
-    "xpath=ancestor::*[@data-hveid][1]//cite",
-    "xpath=ancestor::*[contains(@class,'g') or contains(@class,'MjjYud')][1]//*[contains(@class,'tjvcx') or contains(@class,'ynAwRc')]",
-  ];
-
-  for (const selector of citeSelectors) {
-    const text = await link.locator(selector).first().innerText().catch(() => "");
-    if (text.trim().length > 3) {
-      return text.trim();
-    }
-  }
-
-  const aria = (await link.getAttribute("aria-label").catch(() => "")) ?? "";
-  const ariaMatch = aria.match(/https?:\/\/[^\s]+|[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/i);
-  return ariaMatch?.[0]?.trim() ?? "";
-}
-
+/** Single page.evaluate round-trip — avoids ~11 min Playwright-per-link scans over cloud CDP. */
 export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[]> {
-  for (const selector of ORGANIC_SELECTORS) {
-    const candidate = page.locator(selector);
-    if ((await candidate.count()) === 0) {
-      continue;
-    }
-
-    const links: SerpLinkCandidate[] = [];
-    const count = await candidate.count();
-    for (let i = 0; i < count; i += 1) {
-      const link = candidate.nth(i);
-      const href = await link.getAttribute("href");
-      if (!href || href.startsWith("#") || href.includes("google.com/search")) {
-        continue;
-      }
-      const title = (await link.innerText().catch(() => "")).trim();
-      if (!title) {
-        continue;
-      }
-      const displayedUrl = await extractDisplayedUrl(link);
-      links.push({ href, title, displayedUrl });
-    }
-    if (links.length > 0) {
-      return links;
-    }
-  }
-
-  return page.evaluate(() => {
+  return page.evaluate((selectors) => {
     const links: Array<{ href: string; title: string; displayedUrl: string }> = [];
+    const seen = new Set<string>();
+
+    for (const selector of selectors) {
+      for (const anchor of Array.from(document.querySelectorAll(selector))) {
+        const href = anchor.getAttribute("href");
+        if (!href || href.startsWith("#") || href.includes("google.com/search")) {
+          continue;
+        }
+        if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {
+          continue;
+        }
+        const title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (title.length < 4) {
+          continue;
+        }
+        const key = `${href}::${title.slice(0, 48)}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+
+        const block = anchor.closest(".g, .MjjYud, [data-hveid]");
+        const citeText = (block?.querySelector("cite")?.textContent ?? "").trim();
+        let displayedUrl = citeText.length > 3 ? citeText : "";
+        if (!displayedUrl) {
+          displayedUrl = (
+            block?.querySelector(".tjvcx, .ynAwRc, span[style*='color']")?.textContent ?? ""
+          ).trim();
+        }
+        if (!displayedUrl) {
+          const aria = anchor.getAttribute("aria-label") ?? "";
+          const ariaMatch = aria.match(/https?:\/\/[^\s]+|[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/i);
+          displayedUrl = ariaMatch?.[0]?.trim() ?? "";
+        }
+
+        links.push({ href, title, displayedUrl });
+      }
+      if (links.length > 0) {
+        return links;
+      }
+    }
+
     for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.includes("google.com/search")) {
@@ -119,21 +117,34 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
       if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {
         continue;
       }
-      const title = (anchor.textContent ?? "").trim();
+      const title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
       if (title.length < 4) {
         continue;
       }
+      const key = `${href}::${title.slice(0, 48)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+
       const block = anchor.closest(".g, .MjjYud, [data-hveid]");
       const citeText = (block?.querySelector("cite")?.textContent ?? "").trim();
-      const crumb =
-        citeText ||
-        (
+      let displayedUrl = citeText.length > 3 ? citeText : "";
+      if (!displayedUrl) {
+        displayedUrl = (
           block?.querySelector(".tjvcx, .ynAwRc, span[style*='color']")?.textContent ?? ""
         ).trim();
-      links.push({ href, title, displayedUrl: crumb });
+      }
+      if (!displayedUrl) {
+        const aria = anchor.getAttribute("aria-label") ?? "";
+        const ariaMatch = aria.match(/https?:\/\/[^\s]+|[\w.-]+\.[a-z]{2,}(?:\/[^\s]*)?/i);
+        displayedUrl = ariaMatch?.[0]?.trim() ?? "";
+      }
+
+      links.push({ href, title, displayedUrl });
     }
     return links;
-  });
+  }, ORGANIC_SELECTORS);
 }
 
 export async function findTargetOnCurrentPage(
@@ -143,7 +154,11 @@ export async function findTargetOnCurrentPage(
 ): Promise<SerpResult | null> {
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 
+  const scanStart = Date.now();
   const candidates = await collectSerpLinkCandidates(page);
+  console.error(
+    `[serp] collected ${candidates.length} link candidates in ${Date.now() - scanStart}ms`,
+  );
   let position = 0;
 
   for (const candidate of candidates) {
@@ -237,42 +252,77 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
 
   const clickedVia = await page.evaluate(
     ({ title, href }) => {
-      const isVisible = (el: HTMLElement) => {
-        const style = window.getComputedStyle(el);
-        const rect = el.getBoundingClientRect();
-        return (
-          style.visibility !== "hidden" &&
-          style.display !== "none" &&
-          style.opacity !== "0" &&
-          rect.width > 0 &&
-          rect.height > 0
-        );
-      };
-
       const organicAnchors = Array.from(
         document.querySelectorAll("#search a[href], #rso a[href], div.MjjYud a[href]"),
-      ) as HTMLAnchorElement[];
+      ) as HTMLElement[];
 
       const needle = title.toLowerCase().slice(0, 24);
       if (needle.length >= 4) {
         for (const el of organicAnchors) {
           const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-          if (!text.includes(needle)) continue;
-          if ((el.textContent ?? "").trim().length < 4) continue;
-          if (!isVisible(el)) continue;
+          if (!text.includes(needle)) {
+            continue;
+          }
+          if ((el.textContent ?? "").trim().length < 4) {
+            continue;
+          }
+          const style = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          if (
+            style.visibility === "hidden" ||
+            style.display === "none" ||
+            style.opacity === "0" ||
+            rect.width <= 0 ||
+            rect.height <= 0
+          ) {
+            continue;
+          }
           el.scrollIntoView({ block: "center", inline: "nearest" });
           el.click();
           return "title";
         }
       }
 
-      const hrefMatches = organicAnchors.filter((el) => el.getAttribute("href") === href);
-      const hrefTarget =
-        hrefMatches.find((el) => isVisible(el) && (el.textContent ?? "").trim().length > 0) ??
-        hrefMatches.find(isVisible);
-      if (hrefTarget) {
-        hrefTarget.scrollIntoView({ block: "center", inline: "nearest" });
-        hrefTarget.click();
+      const hrefMatches: HTMLElement[] = [];
+      for (const el of organicAnchors) {
+        if (el.getAttribute("href") === href) {
+          hrefMatches.push(el);
+        }
+      }
+
+      for (const el of hrefMatches) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        if (
+          style.visibility === "hidden" ||
+          style.display === "none" ||
+          style.opacity === "0" ||
+          rect.width <= 0 ||
+          rect.height <= 0
+        ) {
+          continue;
+        }
+        if ((el.textContent ?? "").trim().length > 0) {
+          el.scrollIntoView({ block: "center", inline: "nearest" });
+          el.click();
+          return "href-visible";
+        }
+      }
+
+      for (const el of hrefMatches) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        if (
+          style.visibility === "hidden" ||
+          style.display === "none" ||
+          style.opacity === "0" ||
+          rect.width <= 0 ||
+          rect.height <= 0
+        ) {
+          continue;
+        }
+        el.scrollIntoView({ block: "center", inline: "nearest" });
+        el.click();
         return "href-visible";
       }
 
