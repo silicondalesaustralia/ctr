@@ -231,46 +231,70 @@ export async function waitForSerpRedirectSettle(page: Page, timeoutMs = 15_000):
 }
 
 export async function clickSerpResult(page: Page, result: SerpResult): Promise<void> {
-  // Google often duplicates /goto hrefs: a visible organic link plus a hidden empty <a>.
-  // Prefer a visible match so we don't hang waiting on the invisible twin.
-  const visibleByHref = page.locator(`a[href="${result.url}"]`).filter({ visible: true });
-  if ((await visibleByHref.count()) > 0) {
-    const link = visibleByHref.first();
-    await link.scrollIntoViewIfNeeded().catch(() => undefined);
-    await link.click({ timeout: 15_000 });
+  // Google duplicates /goto hrefs (visible organic + hidden empty <a class="KEVENd">).
+  // Always drive the click via DOM JS so Playwright actionability never hangs on the twin.
+  const clickedByHref = await page.evaluate((href) => {
+    const matches = Array.from(document.querySelectorAll("a[href]")).filter(
+      (el) => el.getAttribute("href") === href,
+    ) as HTMLAnchorElement[];
+
+    const isVisible = (el: HTMLElement) => {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return (
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        style.opacity !== "0" &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+
+    const withText = matches.filter((el) => (el.textContent ?? "").trim().length > 0);
+    const target =
+      withText.find(isVisible) ??
+      matches.find(isVisible) ??
+      withText[0] ??
+      matches[0];
+
+    if (!target) return false;
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    target.click();
+    return true;
+  }, result.url);
+
+  if (clickedByHref) {
     await waitForSerpRedirectSettle(page);
     return;
   }
 
   const titleSnippet = result.title.replace(/\s+/g, " ").trim().slice(0, 40);
   if (titleSnippet.length >= 4) {
-    const byTitle = page.locator("a").filter({ hasText: titleSnippet, visible: true });
-    if ((await byTitle.count()) > 0) {
-      const link = byTitle.first();
-      await link.scrollIntoViewIfNeeded().catch(() => undefined);
-      await link.click({ timeout: 15_000 });
+    const clickedByTitle = await page.evaluate((snippet) => {
+      const anchors = Array.from(document.querySelectorAll("a[href]")) as HTMLAnchorElement[];
+      const needle = snippet.toLowerCase();
+      const match = anchors.find((el) => {
+        const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+        if (!text.includes(needle)) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return (
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      });
+      if (!match) return false;
+      match.scrollIntoView({ block: "center", inline: "nearest" });
+      match.click();
+      return true;
+    }, titleSnippet);
+
+    if (clickedByTitle) {
       await waitForSerpRedirectSettle(page);
       return;
     }
-
-    const byRegex = page
-      .locator("a")
-      .filter({ hasText: new RegExp(escapeRegex(titleSnippet), "i"), visible: true });
-    if ((await byRegex.count()) > 0) {
-      const link = byRegex.first();
-      await link.scrollIntoViewIfNeeded().catch(() => undefined);
-      await link.click({ timeout: 15_000 });
-      await waitForSerpRedirectSettle(page);
-      return;
-    }
-  }
-
-  // Last resort: force-click any matching href (including non-visible) via JS.
-  const forced = page.locator(`a[href="${result.url}"]`).first();
-  if ((await forced.count()) > 0) {
-    await forced.evaluate((el: HTMLElement) => el.click());
-    await waitForSerpRedirectSettle(page);
-    return;
   }
 
   throw new Error(`Could not click SERP result: ${titleSnippet || result.url}`);
