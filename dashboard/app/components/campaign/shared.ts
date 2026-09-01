@@ -5,7 +5,22 @@ export type CampaignTab = "plan" | "sessions" | "identities";
 export interface RegionOption {
   code: string;
   label: string;
+  city?: string;
 }
+
+export type CampaignKind = "url" | "gmb";
+
+export interface GmbActionFlags {
+  website: boolean;
+  directions: boolean;
+  call: boolean;
+}
+
+export const DEFAULT_GMB_ACTIONS: GmbActionFlags = {
+  website: true,
+  directions: true,
+  call: true,
+};
 
 export interface QueryRow {
   text: string;
@@ -57,9 +72,15 @@ export interface IntensitySummary {
 }
 
 export interface CampaignFormState {
+  campaignKind: CampaignKind;
   keyword: string;
   targetUrl: string;
   region: string;
+  focusCity: string;
+  gmbBusinessName: string;
+  gmbPlaceId: string;
+  gmbMapsUrl: string;
+  gmbActions: GmbActionFlags;
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
   campaignDurationDays: number;
@@ -182,6 +203,13 @@ export function getStartCampaignBlockReason(
   form: CampaignFormState,
   preflightSummary: PreflightSummary | null,
 ): string | null {
+  if (form.campaignKind === "gmb") {
+    if (!form.keyword.trim() || !form.gmbMapsUrl.trim() || !form.focusCity) {
+      return "Keyword, Maps URL, and geo city are required.";
+    }
+    return "GMB local-pack sessions are not enabled yet — save the campaign and create city identities for now.";
+  }
+
   if (!form.keyword.trim() || !form.targetUrl.trim()) {
     return "Keyword and target URL are required.";
   }

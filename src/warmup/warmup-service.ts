@@ -249,11 +249,13 @@ export async function rebuildWarmupSchedule(identity: Identity): Promise<number>
 export async function countEligibleIdentities(
   region?: string | null,
   requireWarmup = true,
+  city?: string | null,
 ): Promise<number> {
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
-      ...(region && region !== "ALL" ? { region } : {}),
+      ...(city?.trim() ? { city: city.trim() } : {}),
+      ...(!city?.trim() && region && region !== "ALL" ? { region } : {}),
     },
   });
 
@@ -264,6 +266,7 @@ export async function countEligibleIdentities(
 export async function getCampaignIdentityPool(
   experimentId: string,
   focusRegion?: string | null,
+  focusCity?: string | null,
 ): Promise<Identity[]> {
   const experiment = await prisma.experiment.findUniqueOrThrow({
     where: { id: experimentId },
@@ -285,7 +288,10 @@ export async function getCampaignIdentityPool(
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
-      ...(focusRegion && focusRegion !== "ALL" ? { region: focusRegion } : {}),
+      ...(focusCity?.trim() ? { city: focusCity.trim() } : {}),
+      ...(!focusCity?.trim() && focusRegion && focusRegion !== "ALL"
+        ? { region: focusRegion }
+        : {}),
     },
   });
 

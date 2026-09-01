@@ -104,7 +104,7 @@ async function main() {
     where: { id: EXPERIMENT_ID },
     include: { queries: { where: { active: true } } },
   });
-  const identities = await getCampaignIdentityPool(EXPERIMENT_ID, refreshed.focusRegion);
+  const identities = await getCampaignIdentityPool(EXPERIMENT_ID, refreshed.focusRegion, refreshed.focusCity);
 
   const count = await generateCampaignSchedule({
     experiment: refreshed,

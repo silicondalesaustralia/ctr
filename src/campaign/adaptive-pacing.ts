@@ -150,7 +150,11 @@ export async function recalculateCampaignPacing(
     });
 
     if (refreshed) {
-      const identities = await getCampaignIdentityPool(experimentId, refreshed.focusRegion);
+      const identities = await getCampaignIdentityPool(
+        experimentId,
+        refreshed.focusRegion,
+        refreshed.focusCity,
+      );
       updated = await generateCampaignSchedule({
         experiment: refreshed,
         queries: refreshed.queries,

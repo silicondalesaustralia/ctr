@@ -18,7 +18,10 @@ interface CampaignSummary {
   status: string;
   keyword: string;
   targetUrl: string;
+  campaignKind?: string;
   region: string;
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
   campaignDurationDays: number;
   monthlySessionTarget: number;
   queryCount: number;
@@ -185,6 +188,21 @@ export default function CampaignList() {
                   <tr key={campaign.id}>
                     <td style={cellStyle}>
                       <strong>{campaign.keyword || campaign.name}</strong>
+                      {campaign.campaignKind === "gmb" && (
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "#0369a1",
+                            background: "#e0f2fe",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                          }}
+                        >
+                          GMB
+                        </span>
+                      )}
                     </td>
                     <td style={cellStyle}>
                       <a
@@ -193,10 +211,16 @@ export default function CampaignList() {
                         rel="noreferrer"
                         style={{ color: "#2563eb" }}
                       >
-                        {campaign.targetUrl.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
+                        {campaign.campaignKind === "gmb"
+                          ? (campaign.gmbBusinessName ?? "Maps listing")
+                          : campaign.targetUrl.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
                       </a>
                     </td>
-                    <td style={cellStyle}>{campaign.region}</td>
+                    <td style={cellStyle}>
+                      {campaign.focusCity
+                        ? `${campaign.focusCity} (${campaign.region})`
+                        : campaign.region}
+                    </td>
                     <td style={cellStyle}>
                       <span
                         style={{

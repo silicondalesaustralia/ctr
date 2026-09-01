@@ -45,6 +45,14 @@ export interface CampaignProposal {
   plannedSessionCap?: number | null;
   targetIdentityCount?: number | null;
   organicMaxSessionsPerIdentity?: number;
+  gscConnectionId?: string | null;
+  gscSiteUrl?: string | null;
+  campaignKind?: "url" | "gmb";
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
+  gmbMapsUrl?: string | null;
+  gmbActions?: string[];
 }
 
 function classifyQueryType(query: string, keyword: string): CampaignQueryInput["type"] {

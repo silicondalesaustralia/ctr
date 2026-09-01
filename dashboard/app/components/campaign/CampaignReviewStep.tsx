@@ -448,12 +448,28 @@ export default function CampaignReviewStep({
               }}
             >
               <div>
-                <strong>Need {intensity.identityDeficit} more identities</strong>
+                <strong>
+                  Need {intensity.identityDeficit} more
+                  {form.campaignKind === "gmb" && form.focusCity
+                    ? ` ${form.focusCity}`
+                    : ""}{" "}
+                  identities
+                </strong>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-                  You have {intensity.activeIdentityCount} active but organic traffic needs about{" "}
-                  {intensity.suggestedIdentities} mostly-unique visitors (max 2 sessions each). The
-                  pool can still schedule {intensity.feasibleSessions} of{" "}
-                  {intensity.totalAllocatedSessions} sessions with identity reuse.
+                  {form.campaignKind === "gmb" && form.focusCity ? (
+                    <>
+                      You have {intensity.activeIdentityCount} eligible in {form.focusCity} but this
+                      plan needs about {intensity.suggestedIdentities}. New identities will be
+                      created with {form.focusCity} proxies.
+                    </>
+                  ) : (
+                    <>
+                      You have {intensity.activeIdentityCount} active but organic traffic needs about{" "}
+                      {intensity.suggestedIdentities} mostly-unique visitors (max 2 sessions each).
+                      The pool can still schedule {intensity.feasibleSessions} of{" "}
+                      {intensity.totalAllocatedSessions} sessions with identity reuse.
+                    </>
+                  )}
                 </p>
               </div>
               <button
@@ -464,7 +480,9 @@ export default function CampaignReviewStep({
               >
                 {busy === "identities"
                   ? "Creating..."
-                  : `Create ${intensity.identityDeficit} identities`}
+                  : form.campaignKind === "gmb" && form.focusCity
+                    ? `Create ${intensity.identityDeficit} ${form.focusCity} identities`
+                    : `Create ${intensity.identityDeficit} identities`}
               </button>
             </div>
           )}

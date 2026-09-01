@@ -37,6 +37,8 @@ import {
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
 import { buildCampaignProposal, type CampaignProposal } from "../../campaign/campaign-proposal.js";
+import { buildGmbCampaignProposal } from "../../campaign/gmb-proposal.js";
+import { getGeoCapacity, listCityOptions } from "../../campaign/geo-capacity.js";
 import { runKeywordPreflight } from "../../campaign/keyword-preflight.js";
 import {
   completePreflightJob,
@@ -237,6 +239,30 @@ export function createApiServer() {
       { code: "ALL", label: "All Australia", city: "Mixed" },
       ...listRegionOptions(),
     ]);
+  });
+
+  app.get("/cities", (_req, res) => {
+    res.json(listCityOptions());
+  });
+
+  app.get("/campaign/geo-capacity", async (req, res) => {
+    const city = String(req.query.city ?? "").trim();
+    const suggested = Number(req.query.suggested ?? 0);
+    if (!city) {
+      res.status(400).json({ error: "city is required" });
+      return;
+    }
+    try {
+      const capacity = await getGeoCapacity(
+        city,
+        Number.isFinite(suggested) ? suggested : 0,
+        true,
+      );
+      res.json(capacity);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(400).json({ error: message });
+    }
   });
 
   app.get("/gsc/status", (_req, res) => {
@@ -591,9 +617,51 @@ export function createApiServer() {
       keyword?: string;
       targetUrl?: string;
       region?: string;
+      campaignKind?: "url" | "gmb";
+      focusCity?: string;
+      gmbBusinessName?: string;
+      gmbMapsUrl?: string;
+      gmbActions?: { website?: boolean; directions?: boolean; call?: boolean };
       gscConnectionId?: string | null;
       gscSiteUrl?: string | null;
+      monthlySearchVolume?: number | null;
     };
+
+    if (body.campaignKind === "gmb") {
+      if (!body.keyword?.trim() || !body.focusCity?.trim() || !body.gmbBusinessName?.trim()) {
+        res.status(400).json({
+          error: "keyword, focusCity, and gmbBusinessName are required for GMB campaigns",
+        });
+        return;
+      }
+      const mapsUrl = (body.gmbMapsUrl ?? body.targetUrl ?? "").trim();
+      if (!mapsUrl) {
+        res.status(400).json({ error: "gmbMapsUrl (Maps URL / Place ID / CID) is required" });
+        return;
+      }
+      try {
+        const proposal = await buildGmbCampaignProposal({
+          keyword: body.keyword,
+          focusCity: body.focusCity,
+          gmbBusinessName: body.gmbBusinessName,
+          gmbMapsUrl: mapsUrl,
+          gmbActions: body.gmbActions
+            ? {
+                website: Boolean(body.gmbActions.website),
+                directions: Boolean(body.gmbActions.directions),
+                call: Boolean(body.gmbActions.call),
+              }
+            : undefined,
+          monthlySearchVolume: body.monthlySearchVolume ?? null,
+        });
+        res.json({ proposal });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(400).json({ error: message });
+      }
+      return;
+    }
+
     if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
@@ -614,7 +682,7 @@ export function createApiServer() {
         gscConnectionId: body.gscConnectionId ?? null,
         gscSiteUrl: body.gscSiteUrl ?? null,
       });
-      res.json({ proposal });
+      res.json({ proposal: { ...proposal, campaignKind: "url" as const } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });
@@ -946,7 +1014,17 @@ export function createApiServer() {
       count?: number;
       experimentId?: string | null;
     };
-    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
+    const isGmb = body.campaignKind === "gmb";
+    if (!body.keyword?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword and region are required" });
+      return;
+    }
+    if (isGmb) {
+      if (!body.focusCity?.trim() || !(body.gmbMapsUrl ?? body.targetUrl)?.trim()) {
+        res.status(400).json({ error: "focusCity and Maps URL are required for GMB identities" });
+        return;
+      }
+    } else if (!body.targetUrl?.trim()) {
       res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
     }
@@ -971,8 +1049,9 @@ export function createApiServer() {
         return;
       }
 
+      const cityNote = body.focusCity ? ` in ${body.focusCity}` : "";
       res.json({
-        message: `Created ${result.createdCount} identities (${result.fromExternalId}–${result.toExternalId})`,
+        message: `Created ${result.createdCount} identities${cityNote} (${result.fromExternalId}–${result.toExternalId})`,
         createdCount: result.createdCount,
         fromExternalId: result.fromExternalId,
         toExternalId: result.toExternalId,

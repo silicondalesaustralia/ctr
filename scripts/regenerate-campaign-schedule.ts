@@ -30,7 +30,7 @@ program
         data: { status: "cancelled" },
       });
 
-      const identities = await getCampaignIdentityPool(experiment.id, experiment.focusRegion);
+      const identities = await getCampaignIdentityPool(experiment.id, experiment.focusRegion, experiment.focusCity);
       count = await generateCampaignSchedule({
         experiment,
         queries: experiment.queries,

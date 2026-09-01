@@ -16,6 +16,13 @@ export interface CreateExperimentInput {
   name?: string;
   sessionsPerMonth?: number;
   activate?: boolean;
+  campaignKind?: "url" | "gmb";
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
+  gmbMapsUrl?: string | null;
+  gmbActionsJson?: string | null;
+  targetDomain?: string;
 }
 
 export async function createExperimentFromInput(
@@ -24,7 +31,7 @@ export async function createExperimentFromInput(
   const keyword = input.keyword.trim();
   const targetUrl = input.targetUrl.trim();
   const region = input.region.trim().toUpperCase();
-  const targetDomain = extractTargetDomain(targetUrl);
+  const targetDomain = input.targetDomain ?? extractTargetDomain(targetUrl);
   const name = input.name?.trim() || buildExperimentName(keyword, region);
   const baseSlug = slugify(name);
   const slug = await uniqueSlug(baseSlug);
@@ -37,9 +44,15 @@ export async function createExperimentFromInput(
       slug,
       targetUrl,
       targetDomain,
+      campaignKind: input.campaignKind === "gmb" ? "gmb" : "url",
       status: input.activate ? "active" : "draft",
       monthlySessionTarget: input.sessionsPerMonth ?? 100,
       focusRegion: region === "ALL" ? null : region,
+      focusCity: input.focusCity ?? null,
+      gmbBusinessName: input.gmbBusinessName ?? null,
+      gmbPlaceId: input.gmbPlaceId ?? null,
+      gmbMapsUrl: input.gmbMapsUrl ?? null,
+      gmbActionsJson: input.gmbActionsJson ?? null,
       scheduleTimezone: timezone,
       maxSerpPages: 3,
     },

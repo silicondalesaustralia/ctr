@@ -3,12 +3,14 @@ import { prisma } from "../db/client.js";
 import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { getEnv } from "../config/env.js";
-import { AU_REGIONS, isRegionCoherent, pickWeightedRegion } from "./regions.js";
+import { AU_REGIONS, findRegionConfigByCity, isRegionCoherent, pickWeightedRegion } from "./regions.js";
 import { isWarmupEligible, scheduleWarmupForIdentity } from "../warmup/warmup-service.js";
 
 export interface CreateIdentitiesOptions {
   count: number;
   desktopPercent?: number;
+  /** Force all new identities into this city (e.g. Adelaide for GMB). */
+  city?: string;
 }
 
 function externalIdForIndex(index: number): string {
@@ -63,6 +65,7 @@ async function createIdentityBatch(
   startIndex: number,
   count: number,
   desktopPercent: number,
+  city?: string,
 ): Promise<Identity[]> {
   const browserProvider = createBrowserProvider();
   const env = getEnv();
@@ -71,13 +74,18 @@ async function createIdentityBatch(
       ? ProfileProvider.gologin
       : ProfileProvider.mock;
 
+  const forcedRegion = city ? findRegionConfigByCity(city) : undefined;
+  if (city && !forcedRegion) {
+    throw new Error(`Unknown city for identity creation: ${city}`);
+  }
+
   const desktopCount = Math.round((count * desktopPercent) / 100);
   const created: Identity[] = [];
 
   for (let offset = 0; offset < count; offset += 1) {
     const index = startIndex + offset;
     const externalId = externalIdForIndex(index);
-    const regionConfig = pickWeightedRegion(offset, count);
+    const regionConfig = forcedRegion ?? pickWeightedRegion(offset, count);
     const deviceClass = offset < desktopCount ? DeviceClass.desktop : DeviceClass.mobile;
     const osFamily =
       deviceClass === DeviceClass.mobile
@@ -221,7 +229,7 @@ export async function createIdentities(
 export async function createAdditionalIdentities(
   options: CreateIdentitiesOptions,
 ): Promise<{ created: Identity[]; fromExternalId: string; toExternalId: string }> {
-  const { count, desktopPercent = 65 } = options;
+  const { count, desktopPercent = 65, city } = options;
   if (count <= 0) {
     throw new Error("count must be positive");
   }
@@ -230,7 +238,7 @@ export async function createAdditionalIdentities(
   }
 
   const maxIndex = await getMaxExternalIdNumber();
-  const created = await createIdentityBatch(maxIndex + 1, count, desktopPercent);
+  const created = await createIdentityBatch(maxIndex + 1, count, desktopPercent, city);
 
   return {
     created,

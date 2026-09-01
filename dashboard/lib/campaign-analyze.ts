@@ -6,10 +6,16 @@ export interface SettingRationale {
 
 export interface AnalyzeInput {
   keyword: string;
-  targetUrl: string;
-  region: string;
+  targetUrl?: string;
+  region?: string;
+  campaignKind?: "url" | "gmb";
+  focusCity?: string;
+  gmbBusinessName?: string;
+  gmbMapsUrl?: string;
+  gmbActions?: { website: boolean; directions: boolean; call: boolean };
   gscConnectionId?: string | null;
   gscSiteUrl?: string | null;
+  monthlySearchVolume?: number | null;
 }
 
 interface GeneratedQuery {
@@ -65,6 +71,12 @@ export interface CampaignProposalResponse {
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable";
   gscQueryCount: number;
+  campaignKind?: "url" | "gmb";
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
+  gmbMapsUrl?: string | null;
+  gmbActions?: string[];
 }
 
 function recommendIntensity(avgPosition: number): string {
@@ -179,23 +191,37 @@ export async function buildCampaignProposalViaRailway(
   input: AnalyzeInput,
 ): Promise<CampaignProposalResponse> {
   const keyword = input.keyword.trim();
-  const targetUrl = input.targetUrl.trim();
-  const region = input.region.trim().toUpperCase();
+  const campaignKind = input.campaignKind === "gmb" ? "gmb" : "url";
 
-  // Prefer native analyze when Railway has deployed it.
+  const analyzeBody =
+    campaignKind === "gmb"
+      ? {
+          campaignKind: "gmb" as const,
+          keyword,
+          focusCity: input.focusCity,
+          gmbBusinessName: input.gmbBusinessName,
+          gmbMapsUrl: input.gmbMapsUrl ?? input.targetUrl,
+          gmbActions: input.gmbActions,
+          monthlySearchVolume: input.monthlySearchVolume ?? null,
+          region: input.region,
+          targetUrl: input.gmbMapsUrl ?? input.targetUrl,
+        }
+      : {
+          campaignKind: "url" as const,
+          keyword,
+          targetUrl: input.targetUrl?.trim(),
+          region: input.region?.trim().toUpperCase(),
+          gscConnectionId: input.gscConnectionId ?? null,
+          gscSiteUrl: input.gscSiteUrl ?? null,
+        };
+
   const analyzeResponse = await fetch(`${apiOrigin}/campaign/analyze`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify({
-      keyword,
-      targetUrl,
-      region,
-      gscConnectionId: input.gscConnectionId ?? null,
-      gscSiteUrl: input.gscSiteUrl ?? null,
-    }),
+    body: JSON.stringify(analyzeBody),
     cache: "no-store",
   });
 
@@ -208,6 +234,15 @@ export async function buildCampaignProposalViaRailway(
     const payload = (await analyzeResponse.json().catch(() => null)) as { error?: string } | null;
     throw new Error(payload?.error ?? `API error ${analyzeResponse.status} for /campaign/analyze`);
   }
+
+  if (campaignKind === "gmb") {
+    throw new Error(
+      "GMB analyze requires the API service — Railway returned 404 for /campaign/analyze",
+    );
+  }
+
+  const targetUrl = (input.targetUrl ?? "").trim();
+  const region = (input.region ?? "ALL").trim().toUpperCase();
 
   const { queries } = await railwayFetch<{ queries: GeneratedQuery[] }>(
     apiOrigin,
@@ -276,5 +311,7 @@ export async function buildCampaignProposalViaRailway(
     rationales: buildRationales(input, treatmentIntensity, intensity, queries.length),
     gscStatus: "unavailable",
     gscQueryCount: 0,
+    campaignKind: "url",
   };
 }
+

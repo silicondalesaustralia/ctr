@@ -95,6 +95,11 @@ enum CtrSource {
   gsc_site_curve
 }
 
+enum CampaignKind {
+  url
+  gmb
+}
+
 enum WarmupStatus {
   warming
   eligible
@@ -119,6 +124,7 @@ model Experiment {
   slug                 String           @unique
   targetUrl            String           @map("target_url")
   targetDomain         String           @map("target_domain")
+  campaignKind         CampaignKind     @default(url) @map("campaign_kind")
   status               ExperimentStatus @default(draft)
   startDate            DateTime?        @map("start_date")
   endDate              DateTime?        @map("end_date")
@@ -136,6 +142,11 @@ model Experiment {
   repeatIdentityMinGapDays   Int      @default(2) @map("repeat_identity_min_gap_days")
   minMinutesBetweenGlobalSessions Int @default(5) @map("min_minutes_between_global_sessions")
   focusRegion          String?          @map("focus_region")
+  focusCity            String?          @map("focus_city")
+  gmbBusinessName      String?          @map("gmb_business_name")
+  gmbPlaceId           String?          @map("gmb_place_id")
+  gmbMapsUrl           String?          @map("gmb_maps_url")
+  gmbActionsJson       String?          @map("gmb_actions_json")
   country              String           @default("AU")
   campaignDurationDays Int              @default(14) @map("campaign_duration_days")
   treatmentIntensity   TreatmentIntensity @default(normal) @map("treatment_intensity")

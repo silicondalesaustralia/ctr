@@ -43,3 +43,12 @@ export function isRegionCoherent(
   if (!match) return false;
   return match.timezone === timezone;
 }
+
+export function findRegionConfigByCity(city: string): RegionConfig | undefined {
+  const normalized = city.trim().toLowerCase();
+  return AU_REGIONS.find((row) => row.city.toLowerCase() === normalized);
+}
+
+export function findRegionConfigByCode(region: string): RegionConfig | undefined {
+  return AU_REGIONS.find((row) => row.region === region.toUpperCase());
+}

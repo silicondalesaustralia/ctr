@@ -5,16 +5,21 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost, apiPut } from "../../lib/api";
 import AppLayout from "./AppLayout";
+import CampaignGmbSetupStep from "./campaign/CampaignGmbSetupStep";
 import CampaignIdentitiesTab from "./campaign/CampaignIdentitiesTab";
 import CampaignIdentityPicker from "./campaign/CampaignIdentityPicker";
+import CampaignModePicker from "./campaign/CampaignModePicker";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
+import type { CityOption } from "./campaign/CampaignGmbSetupStep";
 import {
+  DEFAULT_GMB_ACTIONS,
   getStartCampaignBlockReason,
   type CampaignFormState,
+  type CampaignKind,
   type CampaignTab,
   type IntensitySummary,
   type PreflightSummary,
@@ -45,7 +50,30 @@ interface IntensityPreview {
   treatmentMultiplier: number;
 }
 
-interface CampaignProposal extends CampaignFormState {
+interface CampaignProposal {
+  campaignKind?: CampaignKind;
+  keyword: string;
+  targetUrl: string;
+  region: string;
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
+  gmbMapsUrl?: string | null;
+  gmbActions?: string[];
+  gscConnectionId: string | null;
+  gscSiteUrl: string | null;
+  campaignDurationDays: number;
+  treatmentIntensity: string;
+  adaptivePacing: boolean;
+  recalculateEveryDays: number;
+  maxShareOfSearchDemand: number;
+  maxShareOfGscImpressions: number;
+  desktopPercent: number;
+  ctrSource: string;
+  queries: QueryRow[];
+  plannedSessionCap?: number | null;
+  targetIdentityCount?: number | null;
+  organicMaxSessionsPerIdentity?: number;
   intensity: IntensityPreview;
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable";
@@ -56,7 +84,13 @@ interface Campaign {
   id: string;
   keyword: string;
   targetUrl: string;
+  campaignKind?: CampaignKind;
   region: string;
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
+  gmbMapsUrl?: string | null;
+  gmbActions?: string[];
   status: string;
   campaignDurationDays: number;
   treatmentIntensity: string;
@@ -73,12 +107,28 @@ interface Campaign {
   intensity: IntensitySummary | null;
 }
 
-type WizardStep = "setup" | "review";
+type WizardStep = "mode" | "setup" | "review";
+
+function flagsFromActionList(actions: string[] | null | undefined) {
+  if (!actions?.length) return { ...DEFAULT_GMB_ACTIONS };
+  const set = new Set(actions.map((a) => a.toLowerCase()));
+  return {
+    website: set.has("website"),
+    directions: set.has("directions"),
+    call: set.has("call"),
+  };
+}
 
 const defaultForm = (): CampaignFormState => ({
+  campaignKind: "url",
   keyword: "",
   targetUrl: "",
   region: "ALL",
+  focusCity: "",
+  gmbBusinessName: "",
+  gmbPlaceId: "",
+  gmbMapsUrl: "",
+  gmbActions: { ...DEFAULT_GMB_ACTIONS },
   gscConnectionId: null,
   gscSiteUrl: null,
   campaignDurationDays: 14,
@@ -196,7 +246,7 @@ export default function CampaignDashboard({
   }
 
   const [form, setForm] = useState<CampaignFormState>(defaultForm());
-  const [step, setStep] = useState<WizardStep>("setup");
+  const [step, setStep] = useState<WizardStep>(isNew ? "mode" : "review");
   const [rationales, setRationales] = useState<SettingRationale[]>([]);
   const [gscStatus, setGscStatus] = useState<"live" | "unavailable" | null>(null);
   const [preflightSummary, setPreflightSummary] = useState<PreflightSummary | null>(null);
@@ -204,6 +254,7 @@ export default function CampaignDashboard({
   const [campaignActive, setCampaignActive] = useState(false);
   const [campaignStatus, setCampaignStatus] = useState("draft");
   const [regions, setRegions] = useState<RegionOption[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
   const [gscSites, setGscSites] = useState<GscSiteOption[]>([]);
   const [gscSitesLoading, setGscSitesLoading] = useState(false);
@@ -217,10 +268,20 @@ export default function CampaignDashboard({
     if (!proposal?.keyword?.trim()) {
       throw new Error("Server returned an invalid campaign proposal");
     }
+    const kind = proposal.campaignKind === "gmb" ? "gmb" : form.campaignKind;
     setForm((prev) => ({
+      ...prev,
+      campaignKind: kind,
       keyword: proposal.keyword,
       targetUrl: proposal.targetUrl,
       region: proposal.region,
+      focusCity: proposal.focusCity ?? prev.focusCity,
+      gmbBusinessName: proposal.gmbBusinessName ?? prev.gmbBusinessName,
+      gmbPlaceId: proposal.gmbPlaceId ?? prev.gmbPlaceId,
+      gmbMapsUrl: proposal.gmbMapsUrl ?? prev.gmbMapsUrl,
+      gmbActions: proposal.gmbActions
+        ? flagsFromActionList(proposal.gmbActions)
+        : prev.gmbActions,
       gscConnectionId: proposal.gscConnectionId,
       gscSiteUrl: proposal.gscSiteUrl,
       campaignDurationDays: proposal.campaignDurationDays,
@@ -246,9 +307,15 @@ export default function CampaignDashboard({
 
   function applyCampaign(c: Campaign) {
     setForm({
+      campaignKind: c.campaignKind === "gmb" ? "gmb" : "url",
       keyword: c.keyword,
       targetUrl: c.targetUrl,
       region: c.region,
+      focusCity: c.focusCity ?? "",
+      gmbBusinessName: c.gmbBusinessName ?? "",
+      gmbPlaceId: c.gmbPlaceId ?? "",
+      gmbMapsUrl: c.gmbMapsUrl ?? "",
+      gmbActions: flagsFromActionList(c.gmbActions),
       gscConnectionId: c.gscConnectionId,
       gscSiteUrl: c.gscSiteUrl,
       campaignDurationDays: c.campaignDurationDays,
@@ -271,7 +338,7 @@ export default function CampaignDashboard({
     setIntensity(c.intensity);
     setCampaignActive(c.status === "active");
     setCampaignStatus(c.status);
-    if (c.keyword && c.targetUrl) {
+    if (c.keyword && (c.targetUrl || c.gmbMapsUrl)) {
       setStep("review");
     }
   }
@@ -310,11 +377,13 @@ export default function CampaignDashboard({
   useEffect(() => {
     void (async () => {
       try {
-        const [regionOptions, connectionsRes] = await Promise.all([
+        const [regionOptions, cityOptions, connectionsRes] = await Promise.all([
           apiGet<RegionOption[]>("/regions"),
+          apiGet<CityOption[]>("/cities").catch(() => [] as CityOption[]),
           apiGet<{ connections: GscConnectionOption[] }>("/gsc/connections"),
         ]);
         setRegions(regionOptions);
+        setCities(cityOptions);
         setGscConnections(connectionsRes.connections);
         if (!isNew) {
           await loadCampaign();
@@ -337,11 +406,18 @@ export default function CampaignDashboard({
 
   function buildPayload() {
     return {
+      campaignKind: form.campaignKind,
       keyword: form.keyword,
-      targetUrl: form.targetUrl,
+      targetUrl:
+        form.campaignKind === "gmb" ? form.gmbMapsUrl || form.targetUrl : form.targetUrl,
       region: form.region,
-      gscConnectionId: form.gscConnectionId,
-      gscSiteUrl: form.gscSiteUrl,
+      focusCity: form.focusCity || null,
+      gmbBusinessName: form.gmbBusinessName || null,
+      gmbPlaceId: form.gmbPlaceId || null,
+      gmbMapsUrl: form.gmbMapsUrl || null,
+      gmbActions: form.gmbActions,
+      gscConnectionId: form.campaignKind === "gmb" ? null : form.gscConnectionId,
+      gscSiteUrl: form.campaignKind === "gmb" ? null : form.gscSiteUrl,
       campaignDurationDays: form.campaignDurationDays,
       treatmentIntensity: form.treatmentIntensity,
       adaptivePacing: form.adaptivePacing,
@@ -485,23 +561,54 @@ export default function CampaignDashboard({
     setMessage(null);
     setPreflightSummary(null);
     try {
-      const result = await apiPost<{ proposal?: CampaignProposal }>("/campaign/analyze", {
-        keyword: form.keyword,
-        targetUrl: form.targetUrl,
-        region: form.region,
-        gscConnectionId: form.gscConnectionId,
-        gscSiteUrl: form.gscSiteUrl,
-      });
+      const result = await apiPost<{ proposal?: CampaignProposal }>(
+        "/campaign/analyze",
+        form.campaignKind === "gmb"
+          ? {
+              campaignKind: "gmb",
+              keyword: form.keyword,
+              focusCity: form.focusCity,
+              gmbBusinessName: form.gmbBusinessName,
+              gmbMapsUrl: form.gmbMapsUrl,
+              gmbActions: form.gmbActions,
+              region: form.region,
+              targetUrl: form.gmbMapsUrl,
+            }
+          : {
+              campaignKind: "url",
+              keyword: form.keyword,
+              targetUrl: form.targetUrl,
+              region: form.region,
+              gscConnectionId: form.gscConnectionId,
+              gscSiteUrl: form.gscSiteUrl,
+            },
+      );
       if (!result?.proposal) {
         throw new Error("Analysis did not return a campaign proposal");
       }
       applyProposal(result.proposal);
-      setMessage("Analysis complete — review the plan, then validate on Google when ready.");
+      setMessage(
+        form.campaignKind === "gmb"
+          ? "GMB plan ready — create city identities if needed, then save. Local-pack validation ships next."
+          : "Analysis complete — review the plan, then validate on Google when ready.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setBusy(null);
     }
+  }
+
+  function chooseCampaignKind(kind: CampaignKind) {
+    setForm((prev) => ({
+      ...prev,
+      campaignKind: kind,
+      desktopPercent: kind === "gmb" ? 40 : 65,
+      campaignDurationDays: kind === "gmb" ? 21 : 14,
+      gscConnectionId: kind === "gmb" ? null : prev.gscConnectionId,
+      gscSiteUrl: kind === "gmb" ? null : prev.gscSiteUrl,
+    }));
+    setStep("setup");
   }
 
   async function previewIntensity() {
@@ -662,10 +769,36 @@ export default function CampaignDashboard({
       ) : activeTab === "identities" && campaignId ? (
         <CampaignIdentitiesTab
           campaignId={campaignId}
-          regionLabel={form.region}
+          regionLabel={form.focusCity || form.region}
           selectedIds={form.selectedIdentityIds}
           onSelectionChange={(ids) => updateForm("selectedIdentityIds", ids)}
           readonly={campaignActive}
+        />
+      ) : step === "mode" && isNew && !campaignActive ? (
+        <CampaignModePicker onChoose={chooseCampaignKind} />
+      ) : step === "setup" && !campaignActive && form.campaignKind === "gmb" ? (
+        <CampaignGmbSetupStep
+          keyword={form.keyword}
+          gmbBusinessName={form.gmbBusinessName}
+          gmbMapsUrl={form.gmbMapsUrl}
+          focusCity={form.focusCity}
+          gmbActions={form.gmbActions}
+          cities={cities}
+          busy={busy === "analyze"}
+          onKeywordChange={(value) => updateForm("keyword", value)}
+          onBusinessNameChange={(value) => updateForm("gmbBusinessName", value)}
+          onMapsUrlChange={(value) => updateForm("gmbMapsUrl", value)}
+          onCityChange={(value) => {
+            const city = cities.find((row) => row.city === value);
+            setForm((prev) => ({
+              ...prev,
+              focusCity: value,
+              region: city?.region ?? prev.region,
+            }));
+          }}
+          onActionsChange={(value) => updateForm("gmbActions", value)}
+          onAnalyze={() => void analyzeCampaign()}
+          onBack={() => (isNew ? setStep("mode") : setStep("review"))}
         />
       ) : step === "setup" && !campaignActive ? (
         <CampaignSetupStep

@@ -16,40 +16,50 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: {
-    keyword?: string;
-    targetUrl?: string;
-    region?: string;
-    gscConnectionId?: string | null;
-    gscSiteUrl?: string | null;
-  };
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as typeof body;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
-    return NextResponse.json(
-      { error: "keyword, targetUrl, and region are required" },
-      { status: 400 },
-    );
+  const campaignKind = body.campaignKind === "gmb" ? "gmb" : "url";
+  const keyword = typeof body.keyword === "string" ? body.keyword : "";
+
+  if (campaignKind === "gmb") {
+    const focusCity = typeof body.focusCity === "string" ? body.focusCity : "";
+    const gmbBusinessName =
+      typeof body.gmbBusinessName === "string" ? body.gmbBusinessName : "";
+    const gmbMapsUrl =
+      typeof body.gmbMapsUrl === "string"
+        ? body.gmbMapsUrl
+        : typeof body.targetUrl === "string"
+          ? body.targetUrl
+          : "";
+    if (!keyword.trim() || !focusCity.trim() || !gmbBusinessName.trim() || !gmbMapsUrl.trim()) {
+      return NextResponse.json(
+        { error: "keyword, focusCity, gmbBusinessName, and Maps URL are required" },
+        { status: 400 },
+      );
+    }
+  } else {
+    const targetUrl = typeof body.targetUrl === "string" ? body.targetUrl : "";
+    const region = typeof body.region === "string" ? body.region : "";
+    if (!keyword.trim() || !targetUrl.trim() || !region.trim()) {
+      return NextResponse.json(
+        { error: "keyword, targetUrl, and region are required" },
+        { status: 400 },
+      );
+    }
+    try {
+      new URL(targetUrl);
+    } catch {
+      return NextResponse.json({ error: "targetUrl must be a valid URL" }, { status: 400 });
+    }
   }
 
   try {
-    new URL(body.targetUrl);
-  } catch {
-    return NextResponse.json({ error: "targetUrl must be a valid URL" }, { status: 400 });
-  }
-
-  try {
-    const proposal = await buildCampaignProposalViaRailway(apiOrigin(), apiKey, {
-      keyword: body.keyword,
-      targetUrl: body.targetUrl,
-      region: body.region,
-      gscConnectionId: body.gscConnectionId ?? null,
-      gscSiteUrl: body.gscSiteUrl ?? null,
-    });
+    const proposal = await buildCampaignProposalViaRailway(apiOrigin(), apiKey, body as never);
     return NextResponse.json({ proposal });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
