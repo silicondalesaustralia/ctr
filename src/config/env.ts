@@ -86,10 +86,10 @@ const envSchema = z.object({
     .transform((v) => v !== "false" && v !== "0"),
   GOLOGIN_API_TOKEN: z.string().optional(),
   /**
-   * local = Chromium on the worker with Decodo (required for AU egress).
-   * cloud = GoLogin cloud browser (custom Decodo is unreachable from their hosts).
+   * cloud = GoLogin Orbita (anti-detect). local = stock Playwright Chromium + Decodo (no Orbita).
+   * Do not default to local — fingerprints matter for SERP work.
    */
-  GOLOGIN_BROWSER_RUNTIME: z.enum(["local", "cloud"]).default("local"),
+  GOLOGIN_BROWSER_RUNTIME: z.enum(["local", "cloud"]).default("cloud"),
   MULTILOGIN_API_TOKEN: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_HOST: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_PORT: z.string().optional(),
