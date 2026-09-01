@@ -12,6 +12,7 @@ import {
   secondaryButtonStyle,
   thStyle,
 } from "./shared";
+import { AU_TIMEZONE_OPTIONS } from "../../../lib/format-timezone";
 
 const CAMPAIGN_SETTING_HINTS = {
   duration:
@@ -286,6 +287,24 @@ export default function CampaignReviewStep({
               </select>
             </label>
           </div>
+
+          <label>
+            <HintLabel
+              label="Display / schedule timezone"
+              hint="Upcoming and completed session times are shown in this timezone. Scheduling also uses this zone for day windows."
+            />
+            <select
+              style={inputStyle}
+              value={form.scheduleTimezone}
+              onChange={(e) => onFormChange("scheduleTimezone", e.target.value)}
+            >
+              {AU_TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
             <label>

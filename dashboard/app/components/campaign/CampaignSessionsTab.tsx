@@ -13,19 +13,26 @@ import type { CampaignKind } from "./shared";
 interface Props {
   campaignId: string;
   campaignKind?: CampaignKind;
+  scheduleTimezone?: string;
 }
 
 export default function CampaignSessionsTab({
   campaignId,
   campaignKind = "url",
+  scheduleTimezone = "Australia/Adelaide",
 }: Props) {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [upcoming, setUpcoming] = useState<ScheduleRow[]>([]);
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  const [timezone, setTimezone] = useState(scheduleTimezone);
   const [campaignStatus, setCampaignStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
+
+  useEffect(() => {
+    setTimezone(scheduleTimezone);
+  }, [scheduleTimezone]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,12 +44,16 @@ export default function CampaignSessionsTab({
           upcomingCount: number;
           note?: string;
           campaignStatus?: string;
+          scheduleTimezone?: string;
         }>(`/campaigns/${campaignId}/schedule`),
       ]);
       setSessions(sessionRows);
       setUpcoming(schedule.upcoming);
       setScheduleNote(schedule.note ?? null);
       setCampaignStatus(schedule.campaignStatus ?? null);
+      if (schedule.scheduleTimezone) {
+        setTimezone(schedule.scheduleTimezone);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load sessions");
@@ -72,6 +83,7 @@ export default function CampaignSessionsTab({
       <UpcomingScheduleSection
         upcoming={upcoming}
         scheduleNote={scheduleNote}
+        scheduleTimezone={timezone}
         campaignStatus={campaignStatus}
         loading={loading}
         rebuilding={rebuilding}
@@ -82,6 +94,7 @@ export default function CampaignSessionsTab({
       <CompletedSessionsSection
         campaignId={campaignId}
         campaignKind={campaignKind}
+        scheduleTimezone={timezone}
         sessions={sessions}
         loading={loading}
       />

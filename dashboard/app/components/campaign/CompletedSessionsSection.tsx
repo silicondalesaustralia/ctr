@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { cellStyle, panelStyle, thStyle } from "./shared";
 import type { CampaignKind } from "./shared";
+import { formatInTimezone } from "../../../lib/format-timezone";
 
 export interface SessionRow {
   id: string;
@@ -22,6 +23,7 @@ export interface SessionRow {
 interface Props {
   campaignId: string;
   campaignKind: CampaignKind;
+  scheduleTimezone: string;
   sessions: SessionRow[];
   loading: boolean;
 }
@@ -29,6 +31,7 @@ interface Props {
 export default function CompletedSessionsSection({
   campaignId,
   campaignKind,
+  scheduleTimezone,
   sessions,
   loading,
 }: Props) {
@@ -68,7 +71,9 @@ export default function CompletedSessionsSection({
             <tbody>
               {sessions.map((session) => (
                 <tr key={session.id}>
-                  <td style={cellStyle}>{new Date(session.createdAt).toLocaleString()}</td>
+                  <td style={cellStyle}>
+                    {formatInTimezone(session.createdAt, scheduleTimezone)}
+                  </td>
                   <td style={cellStyle}>{session.identity.externalId}</td>
                   <td style={cellStyle}>{session.identity.region}</td>
                   <td style={cellStyle}>{session.identity.deviceClass}</td>

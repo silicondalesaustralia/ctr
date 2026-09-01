@@ -84,6 +84,7 @@ export interface CampaignFormState {
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
   campaignDurationDays: number;
+  scheduleTimezone: string;
   treatmentIntensity: string;
   adaptivePacing: boolean;
   recalculateEveryDays: number;

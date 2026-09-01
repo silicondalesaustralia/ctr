@@ -597,6 +597,7 @@ export function createApiServer() {
 
       res.json({
         campaignStatus: campaign.status,
+        scheduleTimezone: campaign.scheduleTimezone,
         upcomingCount: upcoming.length,
         note: campaign.adaptivePacing
           ? "Adaptive pacing is on — upcoming times may change when the plan recalculates."

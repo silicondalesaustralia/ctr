@@ -60,6 +60,7 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   gmbMapsUrl?: string | null;
   gmbActions?: GmbActionFlags | GmbAction[] | string[] | null;
   campaignDurationDays?: number;
+  scheduleTimezone?: string;
   treatmentIntensity?: TreatmentIntensity;
   adaptivePacing?: boolean;
   recalculateEveryDays?: number;
@@ -390,9 +391,12 @@ async function saveCampaignConfig(
       gmbPlaceId: resolved.gmbPlaceId,
       gmbMapsUrl: resolved.gmbMapsUrl,
       gmbActionsJson: resolved.gmbActionsJson,
-      scheduleTimezone: resolveRegionTimezone(resolved.region),
       monthlySessionTarget: intensity.totalAllocatedSessions,
       campaignDurationDays,
+      scheduleTimezone:
+        input.scheduleTimezone?.trim() ||
+        existing?.scheduleTimezone ||
+        resolveRegionTimezone(resolved.region),
       repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
       maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
       treatmentIntensity: input.treatmentIntensity ?? existing?.treatmentIntensity ?? "normal",
@@ -895,6 +899,7 @@ export function serializeCampaign(
     country: campaign.country,
     monthlySessionTarget: campaign.monthlySessionTarget,
     campaignDurationDays: campaign.campaignDurationDays,
+    scheduleTimezone: campaign.scheduleTimezone,
     treatmentIntensity: campaign.treatmentIntensity,
     adaptivePacing: campaign.adaptivePacing,
     recalculateEveryDays: campaign.recalculateEveryDays,

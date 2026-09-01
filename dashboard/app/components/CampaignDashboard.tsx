@@ -15,6 +15,7 @@ import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
 import type { CityOption } from "./campaign/CampaignGmbSetupStep";
+import { timezoneForRegion } from "../../lib/format-timezone";
 import {
   DEFAULT_GMB_ACTIONS,
   getStartCampaignBlockReason,
@@ -63,6 +64,7 @@ interface CampaignProposal {
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
   campaignDurationDays: number;
+  scheduleTimezone?: string;
   treatmentIntensity: string;
   adaptivePacing: boolean;
   recalculateEveryDays: number;
@@ -93,6 +95,7 @@ interface Campaign {
   gmbActions?: string[];
   status: string;
   campaignDurationDays: number;
+  scheduleTimezone?: string;
   treatmentIntensity: string;
   adaptivePacing: boolean;
   recalculateEveryDays: number;
@@ -132,6 +135,7 @@ const defaultForm = (): CampaignFormState => ({
   gscConnectionId: null,
   gscSiteUrl: null,
   campaignDurationDays: 14,
+  scheduleTimezone: "Australia/Adelaide",
   treatmentIntensity: "normal",
   adaptivePacing: true,
   recalculateEveryDays: 3,
@@ -285,6 +289,7 @@ export default function CampaignDashboard({
       gscConnectionId: proposal.gscConnectionId,
       gscSiteUrl: proposal.gscSiteUrl,
       campaignDurationDays: proposal.campaignDurationDays,
+      scheduleTimezone: prev.scheduleTimezone,
       treatmentIntensity: proposal.treatmentIntensity,
       adaptivePacing: proposal.adaptivePacing,
       recalculateEveryDays: proposal.recalculateEveryDays,
@@ -319,6 +324,7 @@ export default function CampaignDashboard({
       gscConnectionId: c.gscConnectionId,
       gscSiteUrl: c.gscSiteUrl,
       campaignDurationDays: c.campaignDurationDays,
+      scheduleTimezone: c.scheduleTimezone ?? "Australia/Adelaide",
       treatmentIntensity: c.treatmentIntensity,
       adaptivePacing: c.adaptivePacing,
       recalculateEveryDays: c.recalculateEveryDays,
@@ -419,6 +425,7 @@ export default function CampaignDashboard({
       gscConnectionId: form.campaignKind === "gmb" ? null : form.gscConnectionId,
       gscSiteUrl: form.campaignKind === "gmb" ? null : form.gscSiteUrl,
       campaignDurationDays: form.campaignDurationDays,
+      scheduleTimezone: form.scheduleTimezone,
       treatmentIntensity: form.treatmentIntensity,
       adaptivePacing: form.adaptivePacing,
       recalculateEveryDays: form.recalculateEveryDays,
@@ -605,7 +612,8 @@ export default function CampaignDashboard({
       ...prev,
       campaignKind: kind,
       desktopPercent: kind === "gmb" ? 40 : 65,
-      campaignDurationDays: kind === "gmb" ? 21 : 14,
+      campaignDurationDays: kind === "gmb" ? 7 : 14,
+      scheduleTimezone: "Australia/Adelaide",
       gscConnectionId: kind === "gmb" ? null : prev.gscConnectionId,
       gscSiteUrl: kind === "gmb" ? null : prev.gscSiteUrl,
     }));
@@ -766,7 +774,11 @@ export default function CampaignDashboard({
       )}
 
       {activeTab === "sessions" && campaignId ? (
-        <CampaignSessionsTab campaignId={campaignId} campaignKind={form.campaignKind} />
+        <CampaignSessionsTab
+          campaignId={campaignId}
+          campaignKind={form.campaignKind}
+          scheduleTimezone={form.scheduleTimezone}
+        />
       ) : activeTab === "identities" && campaignId ? (
         <CampaignIdentitiesTab
           campaignId={campaignId}
@@ -795,6 +807,7 @@ export default function CampaignDashboard({
               ...prev,
               focusCity: value,
               region: city?.region ?? prev.region,
+              scheduleTimezone: city?.timezone ?? prev.scheduleTimezone,
             }));
           }}
           onActionsChange={(value) => updateForm("gmbActions", value)}
@@ -815,7 +828,14 @@ export default function CampaignDashboard({
           busy={busy === "analyze"}
           onKeywordChange={(value) => updateForm("keyword", value)}
           onTargetUrlChange={(value) => updateForm("targetUrl", value)}
-          onRegionChange={(value) => updateForm("region", value)}
+          onRegionChange={(value) => {
+            const tz = timezoneForRegion(value);
+            setForm((prev) => ({
+              ...prev,
+              region: value,
+              scheduleTimezone: tz ?? prev.scheduleTimezone,
+            }));
+          }}
           onGscConnectionChange={(value) => {
             updateForm("gscConnectionId", value);
             updateForm("gscSiteUrl", null);

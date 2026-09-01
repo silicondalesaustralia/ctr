@@ -1,6 +1,7 @@
 "use client";
 
 import { cellStyle, panelStyle, secondaryButtonStyle, thStyle } from "./shared";
+import { formatInTimezone, timezoneLabel } from "../../../lib/format-timezone";
 
 export interface ScheduleRow {
   id: string;
@@ -15,6 +16,7 @@ export interface ScheduleRow {
 interface Props {
   upcoming: ScheduleRow[];
   scheduleNote: string | null;
+  scheduleTimezone: string;
   campaignStatus: string | null;
   loading: boolean;
   rebuilding: boolean;
@@ -26,6 +28,7 @@ interface Props {
 export default function UpcomingScheduleSection({
   upcoming,
   scheduleNote,
+  scheduleTimezone,
   campaignStatus,
   loading,
   rebuilding,
@@ -51,7 +54,8 @@ export default function UpcomingScheduleSection({
           <h2 style={{ margin: 0 }}>Upcoming schedule</h2>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
             {scheduleNote ??
-              "Queued sessions for this campaign. Adaptive pacing may reshuffle times."}
+              "Queued sessions for this campaign. Adaptive pacing may reshuffle times."}{" "}
+            Times shown in {timezoneLabel(scheduleTimezone)}.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -97,7 +101,9 @@ export default function UpcomingScheduleSection({
             <tbody>
               {upcoming.map((row) => (
                 <tr key={row.id}>
-                  <td style={cellStyle}>{new Date(row.scheduledAt).toLocaleString()}</td>
+                  <td style={cellStyle}>
+                    {formatInTimezone(row.scheduledAt, scheduleTimezone)}
+                  </td>
                   <td style={cellStyle}>{row.identity.externalId}</td>
                   <td style={cellStyle}>
                     {row.identity.city
