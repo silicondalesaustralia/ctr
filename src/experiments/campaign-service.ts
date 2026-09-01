@@ -399,6 +399,7 @@ async function saveCampaignConfig(
         resolveRegionTimezone(resolved.region),
       repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
       maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
+      minMinutesBetweenGlobalSessions: density.minMinutesBetweenGlobalSessions,
       treatmentIntensity: input.treatmentIntensity ?? existing?.treatmentIntensity ?? "normal",
       adaptivePacing: input.adaptivePacing ?? existing?.adaptivePacing ?? true,
       recalculateEveryDays: input.recalculateEveryDays ?? existing?.recalculateEveryDays ?? 3,

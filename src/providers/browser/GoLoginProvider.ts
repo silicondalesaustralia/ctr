@@ -17,6 +17,13 @@ import {
   releaseGoLoginSlot,
 } from "./gologin-slot-lock.js";
 
+type GoLoginProxyState = {
+  mode?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+};
+
 export class GoLoginProvider implements BrowserProfileProvider {
   private readonly apiToken: string;
   private readonly baseUrl = "https://api.gologin.com";
@@ -103,6 +110,10 @@ export class GoLoginProvider implements BrowserProfileProvider {
       const env = getEnv();
       if (proxy && env.PROXY_PROVIDER !== "mock") {
         await this.updateProxy(profileId, proxy);
+      } else {
+        console.error(
+          `[gologin] Skipping proxy update for ${profileId} (proxy=${Boolean(proxy)} provider=${env.PROXY_PROVIDER})`,
+        );
       }
 
       console.error(`[gologin] Stopping any existing cloud session for ${profileId}...`);
@@ -155,44 +166,57 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async updateProxy(profileId: string, proxy: ProxyConfig): Promise<void> {
+    console.error(
+      `[gologin] Updating proxy on ${profileId} → ${proxy.host}:${proxy.port} user=${proxy.username.slice(0, 36)}…`,
+    );
+
     const proxyPayload = {
       mode: "http" as const,
       host: proxy.host,
       port: Number(proxy.port),
       username: proxy.username,
       password: proxy.password,
+      customName: `decodo-${proxy.sessionKey ?? profileId}`.slice(0, 60),
     };
 
-    // Prefer partial update — PUT of the full GET profile often fails to stick proxy.
+    // Dedicated multi-profile proxy endpoint (most reliable for sticking credentials).
     try {
+      await this.request(`/browser/proxy/many/v2`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          proxies: [{ profileId, proxy: proxyPayload }],
+        }),
+      });
+      console.error(`[gologin] Proxy PATCH /browser/proxy/many/v2 ok for ${profileId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[gologin] proxy/many/v2 failed (${message}); trying /custom`);
       await this.request(`/browser/${profileId}/custom`, {
         method: "PUT",
         body: JSON.stringify({ proxy: proxyPayload }),
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[gologin] /custom proxy update failed (${message}); retrying minimal PUT`);
-      await this.request(`/browser/${profileId}`, {
-        method: "PUT",
-        body: JSON.stringify({ proxy: proxyPayload }),
-      });
     }
 
-    const verified = await this.request<{
-      proxy?: { mode?: string; host?: string; port?: number };
-    }>(`/browser/${profileId}`);
-
-    const mode = verified.proxy?.mode;
-    const host = verified.proxy?.host;
-    if (mode !== "http" || !host || host !== proxy.host) {
-      throw new Error(
-        `GoLogin proxy not applied for ${profileId}: mode=${mode ?? "none"} host=${host ?? "none"}`,
-      );
-    }
+    const verified = await this.request<{ proxy?: GoLoginProxyState }>(`/browser/${profileId}`);
+    const applied = verified.proxy;
+    const mode = typeof applied?.mode === "string" ? applied.mode : String(applied?.mode ?? "");
+    const host = applied?.host ?? "";
+    const username = applied?.username ?? "";
 
     console.error(
-      `[gologin] Proxy set on ${profileId}: ${proxy.host}:${proxy.port} user=${proxy.username.slice(0, 28)}…`,
+      `[gologin] Proxy readback mode=${mode || "none"} host=${host || "none"} user=${username.slice(0, 36) || "none"}…`,
     );
+
+    if (mode !== "http" || host !== proxy.host) {
+      throw new Error(
+        `GoLogin proxy not applied for ${profileId}: mode=${mode || "none"} host=${host || "none"}`,
+      );
+    }
+    if (!username || username !== proxy.username) {
+      throw new Error(
+        `GoLogin proxy username mismatch for ${profileId}: expected sticky Decodo user, got ${username.slice(0, 48) || "empty"}`,
+      );
+    }
   }
 
   async getProfile(profileId: string): Promise<BrowserProfile | null> {
