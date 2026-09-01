@@ -47,7 +47,9 @@ export async function applyDecodoProxyToProfile(
   await request(`/browser/proxy/many/v2`, {
     method: "PATCH",
     body: JSON.stringify({
-      proxies: [{ profileId, proxy: { id: proxyId, mode: "http" } }],
+      // Include full credentials (not id-only). Orbita local spawn needs host/port;
+      // id-only links hydrate in the dashboard API but download as undefined locally.
+      proxies: [{ profileId, proxy: { ...proxyPayload, id: proxyId } }],
     }),
   });
   console.error(`[gologin] Proxy entity ${proxyId.slice(0, 8)}… linked to ${profileId}`);

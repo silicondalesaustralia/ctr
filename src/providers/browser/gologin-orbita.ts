@@ -8,14 +8,15 @@ type GlRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 const activeOrbita = new Map<string, InstanceType<typeof GoLogin>>();
 
 /**
- * Launch GoLogin Orbita on the worker with Decodo attached to the profile.
- * Cloud Orbita cannot reach Decodo; local Orbita can (and keeps anti-detect fingerprints).
+ * Launch GoLogin Orbita on the worker with Decodo.
+ * Requires scripts/patch-gologin.js (localhost DNS exclude + major version pin).
  */
 export async function startOrbitaWithProxy(
   apiToken: string,
   request: GlRequest,
   profileId: string,
   proxy: ProxyConfig,
+  timezoneId = "Australia/Adelaide",
 ): Promise<RunningBrowser> {
   await applyDecodoProxyToProfile(request, profileId, proxy);
 
@@ -25,12 +26,27 @@ export async function startOrbitaWithProxy(
     activeOrbita.delete(profileId);
   }
 
+  const proxyServer = `http://${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@${proxy.host}:${proxy.port}`;
+
   const gl = new GoLogin({
     token: apiToken,
     profile_id: profileId,
-    extra_params: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage"],
+    extra_params: [
+      `--proxy-server=${proxyServer}`,
+      "--headless=new",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+    ],
     autoUpdateBrowser: true,
     skipOrbitaHashChecking: true,
+    // >=135 writes encoded proxy auth into preferences (Chrome/120 profiles otherwise skip auth).
+    browserMajorVersion: 135,
+    timezone: {
+      timezone: timezoneId,
+      country: proxy.country ?? "AU",
+      city: proxy.city ?? "Adelaide",
+      ip: "127.0.0.1",
+    },
   });
 
   console.error(`[gologin] Starting local Orbita for ${profileId}…`);

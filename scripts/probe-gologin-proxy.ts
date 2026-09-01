@@ -2,11 +2,12 @@
 /**
  * Probe GoLogin cloud egress strategies. Prints only geo results (no secrets).
  * Usage: npx tsx scripts/probe-gologin-proxy.ts [profileId] [mode]
- * mode: patch | add_proxies | gologin_au | headed
+ * mode: local | patch | add_proxies | gologin_au | headed
  */
 import { chromium } from "playwright";
 import { verifyBrowserEgressGeo } from "../src/browser/egress-geo.js";
 import { getEnv } from "../src/config/env.js";
+import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";
 import {
   acquireGoLoginSlot,
   releaseGoLoginSlot,
@@ -43,7 +44,7 @@ async function glRequest<T>(
 
 async function main(): Promise<void> {
   const profileId = process.argv[2] ?? "6a8e86efd430d862c7d13847";
-  const mode = process.argv[3] ?? "add_proxies";
+  const mode = process.argv[3] ?? "local";
   const env = getEnv();
   if (!env.GOLOGIN_API_TOKEN) throw new Error("GOLOGIN_API_TOKEN missing");
   const token = env.GOLOGIN_API_TOKEN;
@@ -56,6 +57,31 @@ async function main(): Promise<void> {
     sessionKey: `probe${Date.now().toString(36).slice(-8)}`,
     deviceClass: "mobile",
   });
+
+  if (mode === "local") {
+    console.error(`mode=local runtime=${env.GOLOGIN_BROWSER_RUNTIME} profile=${profileId}`);
+    const gl = createGoLoginProvider();
+    const running = await gl.startProfile(profileId, {
+      host: lease.host,
+      port: lease.port,
+      username: lease.username,
+      password: lease.password,
+      country: "AU",
+      region: "SA",
+      city: "Adelaide",
+      sessionKey: lease.sessionKey,
+    });
+    try {
+      const page =
+        running.context!.pages()[0] ?? (await running.context!.newPage());
+      const egress = await verifyBrowserEgressGeo(page, "AU");
+      console.log(JSON.stringify({ ok: true, mode, egress }));
+    } finally {
+      await gl.stopProfile(profileId, running);
+      await proxyProvider.release(lease.leaseId);
+    }
+    return;
+  }
 
   const slot = await acquireGoLoginSlot(profileId);
   let browser: Awaited<ReturnType<typeof chromium.connectOverCDP>> | null = null;

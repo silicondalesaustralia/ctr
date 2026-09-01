@@ -116,6 +116,10 @@ export class GoLoginProvider implements BrowserProfileProvider {
           (path, init) => this.request(path, init),
           profileId,
           proxy,
+          // Prefer sticky city TZ; SDK timezone option skips broken proxy URL encoding.
+          proxy.city?.toLowerCase() === "adelaide"
+            ? "Australia/Adelaide"
+            : "Australia/Sydney",
         );
         return { ...running, slotToken };
       } catch (error) {

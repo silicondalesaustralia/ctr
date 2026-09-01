@@ -3,6 +3,7 @@ FROM mcr.microsoft.com/playwright:v1.51.0-jammy
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
 RUN npm ci
 
 COPY prisma ./prisma
