@@ -8,6 +8,9 @@ import {
   resolveGoogleSerpHref,
 } from "../utils/helpers.js";
 
+/** Bump when click strategy changes — visible in worker logs to confirm deploy. */
+export const SERP_CLICK_STRATEGY = "v2-title-first-dom";
+
 export interface SerpResult {
   position: number;
   title: string;
@@ -227,71 +230,61 @@ export async function waitForSerpRedirectSettle(page: Page, timeoutMs = 15_000):
 }
 
 export async function clickSerpResult(page: Page, result: SerpResult): Promise<void> {
-  // Google duplicates /goto hrefs (visible organic + hidden empty <a class="KEVENd">).
-  // Always drive the click via DOM JS so Playwright actionability never hangs on the twin.
-  const clickedByHref = await page.evaluate((href) => {
-    const matches = Array.from(document.querySelectorAll("a[href]")).filter(
-      (el) => el.getAttribute("href") === href,
-    ) as HTMLAnchorElement[];
+  const titleSnippet = result.title.replace(/\s+/g, " ").trim().slice(0, 60);
+  console.error(
+    `[serp] ${SERP_CLICK_STRATEGY} click title="${titleSnippet.slice(0, 40)}" hrefKind=${result.hrefKind ?? "unknown"}`,
+  );
 
-    const isVisible = (el: HTMLElement) => {
-      const style = window.getComputedStyle(el);
-      const rect = el.getBoundingClientRect();
-      return (
-        style.visibility !== "hidden" &&
-        style.display !== "none" &&
-        style.opacity !== "0" &&
-        rect.width > 0 &&
-        rect.height > 0
-      );
-    };
-
-    const withText = matches.filter((el) => (el.textContent ?? "").trim().length > 0);
-    const target =
-      withText.find(isVisible) ??
-      matches.find(isVisible) ??
-      withText[0] ??
-      matches[0];
-
-    if (!target) return false;
-    target.scrollIntoView({ block: "center", inline: "nearest" });
-    target.click();
-    return true;
-  }, result.url);
-
-  if (clickedByHref) {
-    await waitForSerpRedirectSettle(page);
-    return;
-  }
-
-  const titleSnippet = result.title.replace(/\s+/g, " ").trim().slice(0, 40);
-  if (titleSnippet.length >= 4) {
-    const clickedByTitle = await page.evaluate((snippet) => {
-      const anchors = Array.from(document.querySelectorAll("a[href]")) as HTMLAnchorElement[];
-      const needle = snippet.toLowerCase();
-      const match = anchors.find((el) => {
-        const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-        if (!text.includes(needle)) return false;
+  const clickedVia = await page.evaluate(
+    ({ title, href }) => {
+      const isVisible = (el: HTMLElement) => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
         return (
           style.visibility !== "hidden" &&
           style.display !== "none" &&
+          style.opacity !== "0" &&
           rect.width > 0 &&
           rect.height > 0
         );
-      });
-      if (!match) return false;
-      match.scrollIntoView({ block: "center", inline: "nearest" });
-      match.click();
-      return true;
-    }, titleSnippet);
+      };
 
-    if (clickedByTitle) {
-      await waitForSerpRedirectSettle(page);
-      return;
-    }
+      const organicAnchors = Array.from(
+        document.querySelectorAll("#search a[href], #rso a[href], div.MjjYud a[href]"),
+      ) as HTMLAnchorElement[];
+
+      const needle = title.toLowerCase().slice(0, 24);
+      if (needle.length >= 4) {
+        for (const el of organicAnchors) {
+          const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+          if (!text.includes(needle)) continue;
+          if ((el.textContent ?? "").trim().length < 4) continue;
+          if (!isVisible(el)) continue;
+          el.scrollIntoView({ block: "center", inline: "nearest" });
+          el.click();
+          return "title";
+        }
+      }
+
+      const hrefMatches = organicAnchors.filter((el) => el.getAttribute("href") === href);
+      const hrefTarget =
+        hrefMatches.find((el) => isVisible(el) && (el.textContent ?? "").trim().length > 0) ??
+        hrefMatches.find(isVisible);
+      if (hrefTarget) {
+        hrefTarget.scrollIntoView({ block: "center", inline: "nearest" });
+        hrefTarget.click();
+        return "href-visible";
+      }
+
+      return null;
+    },
+    { title: titleSnippet, href: result.url },
+  );
+
+  if (!clickedVia) {
+    throw new Error(`Could not click SERP result (${SERP_CLICK_STRATEGY}): ${titleSnippet}`);
   }
 
-  throw new Error(`Could not click SERP result: ${titleSnippet || result.url}`);
+  console.error(`[serp] clicked via ${clickedVia}`);
+  await waitForSerpRedirectSettle(page);
 }

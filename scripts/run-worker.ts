@@ -9,6 +9,7 @@ import { logger } from "../src/config/logger.js";
 import { prisma } from "../src/db/client.js";
 import { maybeRecalculateAdaptivePacing } from "../src/campaign/adaptive-pacing.js";
 import { backfillWarmupForExistingIdentities, backfillCampaignWarmupRequirements } from "../src/warmup/warmup-service.js";
+import { SERP_CLICK_STRATEGY } from "../src/browser/serp-parser.js";
 
 const worker = createSessionWorker();
 const warmupWorker = createWarmupWorker();
@@ -81,4 +82,6 @@ cleanupStaleSessions().catch((error) =>
   logger.error({ event: "stale_session_cleanup_failed", error: String(error) }),
 );
 
-console.log("Session worker started with concurrency=1 (campaign + warmup queues)");
+console.log(
+  `Session worker started with concurrency=1 (campaign + warmup queues) serp=${SERP_CLICK_STRATEGY} commit=${process.env.RAILWAY_GIT_COMMIT_SHA ?? "local"}`,
+);
