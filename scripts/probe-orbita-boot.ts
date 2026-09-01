@@ -52,7 +52,6 @@ async function main(): Promise<void> {
     token: env.GOLOGIN_API_TOKEN!,
     profile_id: profileId,
     extra_params: [
-      `--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE ${lease.host}, EXCLUDE api.gologin.com, EXCLUDE 127.0.0.1, EXCLUDE localhost`,
       `--proxy-server=${proxyServer}`,
       "--headless=new",
       "--no-sandbox",

@@ -25,6 +25,7 @@ export class WrongEgressGeoError extends Error {
 
 interface IpLookupPayload {
   ip?: unknown;
+  query?: unknown;
   country?: unknown;
   country_code?: unknown;
   countryCode?: unknown;
@@ -43,7 +44,8 @@ export function parseEgressGeoPayload(
   payload: IpLookupPayload,
   source: string,
 ): EgressGeo {
-  const ip = asTrimmedString(payload.ip);
+  const ip =
+    asTrimmedString(payload.ip) ?? asTrimmedString(payload.query);
   const country = (
     asTrimmedString(payload.country_code) ??
     asTrimmedString(payload.countryCode) ??
@@ -73,9 +75,28 @@ export function assertExpectedCountry(
 }
 
 const LOOKUP_URLS = [
-  "https://ipapi.co/json/",
   "https://ipinfo.io/json",
+  "https://ipapi.co/json/",
+  "http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,query",
 ] as const;
+
+async function lookupViaFetch(page: Page, url: string): Promise<IpLookupPayload> {
+  return page.evaluate(async (lookupUrl) => {
+    const response = await fetch(lookupUrl, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return (await response.json()) as IpLookupPayload;
+  }, url);
+}
+
+async function lookupViaNavigation(page: Page, url: string): Promise<IpLookupPayload> {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  const text = await page.locator("body").innerText();
+  return JSON.parse(text) as IpLookupPayload;
+}
 
 /**
  * Resolve the browser's egress IP geo via in-page fetch (uses the active proxy).
@@ -88,31 +109,27 @@ export async function verifyBrowserEgressGeo(
   let lastError: unknown;
 
   for (const url of LOOKUP_URLS) {
-    try {
-      const payload = await page.evaluate(async (lookupUrl) => {
-        const response = await fetch(lookupUrl, {
-          headers: { Accept: "application/json" },
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+    for (const mode of ["fetch", "goto"] as const) {
+      try {
+        const payload =
+          mode === "fetch"
+            ? await lookupViaFetch(page, url)
+            : await lookupViaNavigation(page, url);
+        const egress = parseEgressGeoPayload(payload, `${url} (${mode})`);
+        console.error(
+          `[geo] egress ip=${egress.ip} country=${egress.country}` +
+            `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
+        );
+        assertExpectedCountry(egress, expectedCountry);
+        return egress;
+      } catch (error) {
+        if (error instanceof WrongEgressGeoError) {
+          throw error;
         }
-        return (await response.json()) as IpLookupPayload;
-      }, url);
-
-      const egress = parseEgressGeoPayload(payload, url);
-      console.error(
-        `[geo] egress ip=${egress.ip} country=${egress.country}` +
-          `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
-      );
-      assertExpectedCountry(egress, expectedCountry);
-      return egress;
-    } catch (error) {
-      if (error instanceof WrongEgressGeoError) {
-        throw error;
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[geo] lookup failed via ${url} (${mode}): ${message}`);
       }
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[geo] lookup failed via ${url}: ${message}`);
     }
   }
 

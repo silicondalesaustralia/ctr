@@ -1,19 +1,35 @@
 #!/usr/bin/env node
 /**
- * Patch gologin SDK so local Orbita + authenticated proxies work:
- * 1) host-resolver excludes localhost (CDP)
- * 2) honor browserMajorVersion >=135 (proxy auth in preferences)
+ * Patch gologin SDK for Railway Orbita + Decodo:
+ * 1) do not sinkhole DNS with MAP * 0.0.0.0 (breaks geo + Google through HTTP proxy)
+ * 2) honor browserMajorVersion >=135
+ * 3) never inject bare --proxy-server without credentials
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
+function resolveGoLoginSrc() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "node_modules", "gologin", "src", "gologin.js"),
+    join(process.cwd(), "node_modules", "gologin", "src", "gologin.js"),
+  ];
+  try {
+    const require = createRequire(import.meta.url);
+    const entry = require.resolve("gologin");
+    candidates.unshift(join(dirname(entry), "gologin.js"));
+    candidates.unshift(join(dirname(entry), "..", "src", "gologin.js"));
+  } catch {
+    /* ignore */
+  }
+  return candidates.find((path) => existsSync(path));
+}
 
 function main() {
-  let target;
-  try {
-    target = require.resolve("gologin/src/gologin.js");
-  } catch {
+  const target = resolveGoLoginSrc();
+  if (!target) {
     console.error("[patch-gologin] gologin not installed — skip");
     return;
   }
@@ -21,13 +37,31 @@ function main() {
   let text = readFileSync(target, "utf8");
   let changed = false;
 
-  const hrOld =
-    'const hr_rules = `"MAP * 0.0.0.0 , EXCLUDE ${proxy_host} , EXCLUDE api.gologin.com"`;';
-  const hrNew =
-    'const hr_rules = `"MAP * 0.0.0.0 , EXCLUDE ${proxy_host} , EXCLUDE api.gologin.com , EXCLUDE 127.0.0.1 , EXCLUDE localhost"`;';
-  if (text.includes(hrOld)) {
-    text = text.replace(hrOld, hrNew);
+  // Disable DNS sinkhole entirely (MAP * breaks in-page fetch via HTTP proxy).
+  const hrBlockOld =
+    "      if (proxy) {\n" +
+    '        const hr_rules = `"MAP * 0.0.0.0 , EXCLUDE ${proxy_host} , EXCLUDE api.gologin.com , EXCLUDE 127.0.0.1 , EXCLUDE localhost"`;\n' +
+    "        params.push(`--host-resolver-rules=${hr_rules}`);\n" +
+    "      }";
+  const hrBlockOldUnpatched =
+    "      if (proxy) {\n" +
+    '        const hr_rules = `"MAP * 0.0.0.0 , EXCLUDE ${proxy_host} , EXCLUDE api.gologin.com"`;\n' +
+    "        params.push(`--host-resolver-rules=${hr_rules}`);\n" +
+    "      }";
+  const hrBlockNew =
+    "      // CTR: skip host-resolver DNS sinkhole — it breaks geo/Google with HTTP proxies.\n" +
+    "      if (false && proxy) {\n" +
+    '        const hr_rules = `"MAP * 0.0.0.0 , EXCLUDE ${proxy_host} , EXCLUDE api.gologin.com"`;\n' +
+    "        params.push(`--host-resolver-rules=${hr_rules}`);\n" +
+    "      }";
+  if (text.includes(hrBlockOld)) {
+    text = text.replace(hrBlockOld, hrBlockNew);
     changed = true;
+  } else if (text.includes(hrBlockOldUnpatched)) {
+    text = text.replace(hrBlockOldUnpatched, hrBlockNew);
+    changed = true;
+  } else if (!text.includes("CTR: skip host-resolver DNS sinkhole")) {
+    console.error("[patch-gologin] host-resolver block not found");
   }
 
   const resolveOld =
@@ -44,6 +78,17 @@ function main() {
   if (text.includes(resolveOld) && !text.includes("Keep caller-pinned major versions")) {
     text = text.replace(resolveOld, resolveNew);
     changed = true;
+  }
+
+  const bareProxyOld =
+    "      if (proxy && Number(this.browserMajorVersion) < this.newProxyOrbitaMajorVersion) {\n        params.push(`--proxy-server=${proxy}`);\n      }";
+  const bareProxyNew =
+    "      // CTR: skip bare --proxy-server (no auth). Caller supplies authenticated --proxy-server via extra_params.\n      if (false && proxy && Number(this.browserMajorVersion) < this.newProxyOrbitaMajorVersion) {\n        params.push(`--proxy-server=${proxy}`);\n      }";
+  if (text.includes(bareProxyOld)) {
+    text = text.replace(bareProxyOld, bareProxyNew);
+    changed = true;
+  } else if (!text.includes("CTR: skip bare --proxy-server")) {
+    console.error("[patch-gologin] bare --proxy-server pattern not found");
   }
 
   if (!changed) {
