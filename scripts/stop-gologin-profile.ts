@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { getEnv } from "../src/config/env.js";
 import { getIdentityByExternalId } from "../src/identities/identity-service.js";
 import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";
+import { forceReleaseGoLoginSlot } from "../src/providers/browser/gologin-slot-lock.js";
 
 const program = new Command();
 
@@ -20,6 +21,7 @@ program
 
     const provider = createGoLoginProvider();
     await provider.stopProfile(identity.externalProfileId);
+    await forceReleaseGoLoginSlot();
     console.log(`Stopped GoLogin cloud profile for ${options.identity}`);
   });
 

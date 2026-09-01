@@ -12,6 +12,10 @@ import {
   type GoLoginStartResponse,
   resolveConnectUrl,
 } from "./gologin-utils.js";
+import {
+  acquireGoLoginSlot,
+  releaseGoLoginSlot,
+} from "./gologin-slot-lock.js";
 
 export class GoLoginProvider implements BrowserProfileProvider {
   private readonly apiToken: string;
@@ -94,27 +98,33 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   async startProfile(profileId: string, proxy?: ProxyConfig): Promise<RunningBrowser> {
-    const env = getEnv();
-    if (proxy && env.PROXY_PROVIDER !== "mock") {
-      await this.updateProxy(profileId, proxy);
+    const slotToken = await acquireGoLoginSlot(profileId);
+    try {
+      const env = getEnv();
+      if (proxy && env.PROXY_PROVIDER !== "mock") {
+        await this.updateProxy(profileId, proxy);
+      }
+
+      console.error(`[gologin] Stopping any existing cloud session for ${profileId}...`);
+      await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
+
+      console.error(`[gologin] Starting cloud profile ${profileId}...`);
+      const started = await this.request<GoLoginStartResponse>(`/browser/${profileId}/web`, {
+        method: "POST",
+        body: JSON.stringify({ isHeadless: true }),
+      });
+
+      console.error("[gologin] Waiting for cloud container boot...");
+      await sleep(15_000);
+
+      const wsEndpoint = resolveConnectUrl(started, profileId, this.apiToken);
+      console.error(`[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`);
+
+      return { profileId, wsEndpoint, cdpUrl: wsEndpoint, slotToken };
+    } catch (error) {
+      await releaseGoLoginSlot(slotToken);
+      throw error;
     }
-
-    console.error(`[gologin] Stopping any existing cloud session for ${profileId}...`);
-    await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
-
-    console.error(`[gologin] Starting cloud profile ${profileId}...`);
-    const started = await this.request<GoLoginStartResponse>(`/browser/${profileId}/web`, {
-      method: "POST",
-      body: JSON.stringify({ isHeadless: true }),
-    });
-
-    console.error("[gologin] Waiting for cloud container boot...");
-    await sleep(15_000);
-
-    const wsEndpoint = resolveConnectUrl(started, profileId, this.apiToken);
-    console.error(`[gologin] Connect URL resolved (${wsEndpoint.startsWith("wss://") ? "wss" : "ws"})`);
-
-    return { profileId, wsEndpoint, cdpUrl: wsEndpoint };
   }
 
   private async stopCloudSession(
@@ -136,8 +146,12 @@ export class GoLoginProvider implements BrowserProfileProvider {
     }
   }
 
-  async stopProfile(profileId: string, _running?: RunningBrowser): Promise<void> {
-    await this.stopCloudSession(profileId);
+  async stopProfile(profileId: string, running?: RunningBrowser): Promise<void> {
+    try {
+      await this.stopCloudSession(profileId, { alreadyStoppedOk: true });
+    } finally {
+      await releaseGoLoginSlot(running?.slotToken);
+    }
   }
 
   async updateProxy(profileId: string, proxy: ProxyConfig): Promise<void> {

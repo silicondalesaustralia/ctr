@@ -22,7 +22,8 @@ export const RETRY_POLICIES: Record<string, RetryPolicy> = {
 export function isGoLoginParallelLimitError(message: string): boolean {
   return (
     /max parallel cloud launches/i.test(message) ||
-    (/GoLogin API error 403/i.test(message) && /parallel/i.test(message))
+    (/GoLogin API error 403/i.test(message) && /parallel/i.test(message)) ||
+    /GoLogin cloud slot busy/i.test(message)
   );
 }
 
