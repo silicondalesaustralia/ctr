@@ -207,7 +207,18 @@ export function getStartCampaignBlockReason(
     if (!form.keyword.trim() || !form.gmbMapsUrl.trim() || !form.focusCity) {
       return "Keyword, Maps URL, and geo city are required.";
     }
-    return "GMB local-pack sessions are not enabled yet — save the campaign and create city identities for now.";
+    const enabledQueries = form.queries.filter((row) => row.active);
+    if (enabledQueries.length === 0) {
+      return "Enable at least one query before starting.";
+    }
+    if (preflightSummary?.status === "blocked") {
+      return "Google blocked local-pack preflight — retry validation before starting.";
+    }
+    const hasFindable = enabledQueries.some((row) => isQueryFindableLive(row, preflightSummary));
+    if (!hasFindable) {
+      return "Run Validate on Google — need at least one query findable in the local pack.";
+    }
+    return null;
   }
 
   if (!form.keyword.trim() || !form.targetUrl.trim()) {

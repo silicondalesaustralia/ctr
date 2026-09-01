@@ -4,9 +4,10 @@ import { getPersonaForIdentity } from "../behaviour/personas.js";
 import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits.js";
 import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
+import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
-import { getEnv } from "../config/env.js";
+import { getEnv, isDryRun } from "../config/env.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import { hashValue, sleep } from "../utils/helpers.js";
@@ -24,6 +25,7 @@ import {
 } from "../sessions/session-cleanup.js";
 import { recordWarmupSessionResult } from "../warmup/warmup-service.js";
 import { getWarmupExperiment } from "../warmup/warmup-experiment.js";
+import { classifyBrowserErrorCode, mapErrorStatus } from "../scheduler/retry-policy.js";
 
 export interface RunWarmupSessionInput {
   identity: Identity;
@@ -176,7 +178,7 @@ export async function runWarmupSession(
       country: "AU",
       region: input.identity.region,
       city: input.identity.city,
-      sessionKey: input.identity.externalId,
+      sessionKey: session.id,
       deviceClass: input.identity.deviceClass,
     });
     proxyLeaseId = proxyLease.leaseId;
@@ -205,6 +207,24 @@ export async function runWarmupSession(
     }
 
     const bandwidth = trackBandwidth(page);
+    let egressCountry = "AU";
+    let egressRegion = input.identity.region;
+    let egressCity = input.identity.city;
+    let egressIpHash = hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`);
+    if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
+      const egress = await verifyBrowserEgressGeo(page, "AU");
+      egressCountry = egress.country;
+      egressRegion = egress.region ?? input.identity.region;
+      egressCity = egress.city ?? input.identity.city;
+      egressIpHash = hashValue(egress.ip);
+      await updateSessionRecord(session.id, {
+        proxyProvider: env.PROXY_PROVIDER,
+        proxyCountry: egressCountry,
+        proxyRegion: egressRegion,
+        proxyCity: egressCity,
+        proxyIpHash: egressIpHash,
+      });
+    }
     const onEvent = async (eventType: SessionEventType, metadata?: Record<string, unknown>) => {
       await appendSessionEvent(session.id, eventType, metadata);
     };
@@ -283,10 +303,10 @@ export async function runWarmupSession(
         durationSeconds: 0,
         bytesTransferred: BigInt(bandwidth.getTotal()),
         proxyProvider: env.PROXY_PROVIDER,
-        proxyCountry: "AU",
-        proxyRegion: input.identity.region,
-        proxyCity: input.identity.city,
-        proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`),
+        proxyCountry: egressCountry,
+        proxyRegion: egressRegion,
+        proxyCity: egressCity,
+        proxyIpHash: egressIpHash,
         personaId: persona.id,
         sessionTraitsJson: traitsToJson(sessionTraits),
       });
@@ -344,10 +364,10 @@ export async function runWarmupSession(
       durationSeconds,
       bytesTransferred: BigInt(bandwidth.getTotal()),
       proxyProvider: env.PROXY_PROVIDER,
-      proxyCountry: "AU",
-      proxyRegion: input.identity.region,
-      proxyCity: input.identity.city,
-      proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`),
+      proxyCountry: egressCountry,
+      proxyRegion: egressRegion,
+      proxyCity: egressCity,
+      proxyIpHash: egressIpHash,
       personaId: persona.id,
       sessionTraitsJson: traitsToJson(sessionTraits),
     });
@@ -362,14 +382,16 @@ export async function runWarmupSession(
     return { sessionId: session.id, status: "completed", siteClicked };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorCode = classifyBrowserErrorCode(message);
+    const status = mapErrorStatus(errorCode);
     await completeSession(session.id, {
-      status: "browser_error",
+      status,
       errorMessage: message,
-      errorCode: "browser_error",
+      errorCode,
       personaId: persona.id,
     });
-    await appendSessionEvent(session.id, "error", { message });
-    return { sessionId: session.id, status: "browser_error", siteClicked: false };
+    await appendSessionEvent(session.id, "error", { message, errorCode });
+    return { sessionId: session.id, status, siteClicked: false };
   } finally {
     cleanupRefs.connectedBrowser = connectedBrowser;
     cleanupRefs.runningBrowser = runningBrowser;

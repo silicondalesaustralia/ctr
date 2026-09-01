@@ -154,9 +154,10 @@ describe("retry policy", () => {
     expect(getRetryDelayMinutes("blocked")).toBe(0);
   });
 
-  it("retries proxy errors up to configured max", () => {
+  it("retries proxy errors under until-success policy", () => {
     expect(shouldRetry("proxy_error", 0)).toBe(true);
-    expect(shouldRetry("proxy_error", 2)).toBe(false);
+    expect(shouldRetry("proxy_error", 2)).toBe(true);
+    expect(shouldRetry("proxy_error", 10_000)).toBe(false);
   });
 });
 

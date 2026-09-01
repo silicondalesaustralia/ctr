@@ -336,6 +336,10 @@ export async function runKeywordPreflight(
       region: string;
       maxSerpPages: number;
       identityExternalId?: string;
+      campaignKind?: "url" | "gmb";
+      focusCity?: string | null;
+      gmbBusinessName?: string | null;
+      gmbPlaceId?: string | null;
     },
   ) => Promise<PreflightQueryResult[]>,
 ): Promise<CampaignProposal> {
@@ -344,8 +348,14 @@ export async function runKeywordPreflight(
     throw new Error("No queries to validate — run analyze first.");
   }
 
-  const targetDomain = extractTargetDomain(input.proposal.targetUrl);
-  const maxSerpPages = input.maxSerpPages ?? 3;
+  const isGmb = input.proposal.campaignKind === "gmb";
+  let targetDomain = "gmb";
+  if (!isGmb) {
+    targetDomain = extractTargetDomain(input.proposal.targetUrl);
+  } else if (input.proposal.gmbPlaceId) {
+    targetDomain = `gmb:${input.proposal.gmbPlaceId}`;
+  }
+  const maxSerpPages = isGmb ? 1 : (input.maxSerpPages ?? 3);
 
   const results = await runSerpChecks(queries, {
     targetUrl: input.proposal.targetUrl,
@@ -353,6 +363,10 @@ export async function runKeywordPreflight(
     region: input.proposal.region,
     maxSerpPages,
     identityExternalId: input.identityExternalId,
+    campaignKind: input.proposal.campaignKind,
+    focusCity: input.proposal.focusCity,
+    gmbBusinessName: input.proposal.gmbBusinessName,
+    gmbPlaceId: input.proposal.gmbPlaceId,
   });
 
   return await rebuildProposalAfterPreflight(input.proposal, results);

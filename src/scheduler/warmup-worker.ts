@@ -58,6 +58,30 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
       kind: warmup.kind,
     });
 
+    const infraFailure =
+      result.status === "proxy_error" ||
+      result.status === "browser_error" ||
+      result.status === "gologin_parallel_limit";
+
+    if (infraFailure) {
+      await prisma.warmupSession.update({
+        where: { id: warmupSessionId },
+        data: {
+          status: "scheduled",
+          sessionId: result.sessionId,
+          scheduledAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
+      logger.info({
+        event: "warmup_session_retry_scheduled",
+        warmupSessionId,
+        identityId: warmup.identity.externalId,
+        kind: warmup.kind,
+        result: result.status,
+      });
+      return;
+    }
+
     const succeeded =
       result.status === "completed" &&
       (warmup.kind === "graduation" || result.siteClicked);

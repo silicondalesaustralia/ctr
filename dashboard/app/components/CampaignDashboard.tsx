@@ -589,7 +589,7 @@ export default function CampaignDashboard({
       applyProposal(result.proposal);
       setMessage(
         form.campaignKind === "gmb"
-          ? "GMB plan ready — create city identities if needed, then save. Local-pack validation ships next."
+          ? "GMB plan ready — validate local pack ranks, create city identities if needed, then start."
           : "Analysis complete — review the plan, then validate on Google when ready.",
       );
     } catch (err) {

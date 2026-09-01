@@ -4,11 +4,14 @@ import { loadBehaviourOverrides } from "../behaviour/experiment-behaviour.js";
 import { getPersonaForIdentity } from "../behaviour/personas.js";
 import { resolveInitialQuery } from "../behaviour/query-evolution.js";
 import { runSearchJourney } from "../behaviour/search-journey.js";
+import { runGmbSearchJourney } from "../behaviour/gmb-journey.js";
 import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits.js";
 import { runSiteJourney } from "../behaviour/site-journey.js";
-import { getEnv } from "../config/env.js";
+import { verifyBrowserEgressGeo, type EgressGeo } from "../browser/egress-geo.js";
+import { getEnv, isDryRun } from "../config/env.js";
 import { getExperimentQueries } from "../experiments/experiment-service.js";
 import { updateIdentityStats } from "../identities/identity-service.js";
+import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
@@ -76,13 +79,16 @@ function proxyFields(
   env: ReturnType<typeof getEnv>,
   identity: Identity,
   proxyLease: { host: string; sessionKey?: string },
+  egress?: EgressGeo,
 ) {
   return {
     proxyProvider: env.PROXY_PROVIDER,
-    proxyCountry: "AU" as const,
-    proxyRegion: identity.region,
-    proxyCity: identity.city,
-    proxyIpHash: hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`),
+    proxyCountry: egress?.country ?? "AU",
+    proxyRegion: egress?.region ?? identity.region,
+    proxyCity: egress?.city ?? identity.city,
+    proxyIpHash: hashValue(
+      egress?.ip ?? `${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`,
+    ),
   };
 }
 
@@ -205,7 +211,14 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     }
 
     const bandwidth = trackBandwidth(page);
-    const proxyMeta = proxyFields(env, input.identity, proxyLease);
+    let egress: EgressGeo | undefined;
+    if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
+      egress = await verifyBrowserEgressGeo(page, "AU");
+    }
+    const proxyMeta = proxyFields(env, input.identity, proxyLease, egress);
+    if (egress) {
+      await updateSessionRecord(session.id, proxyMeta);
+    }
 
     if (group === "none") {
       await completeSession(session.id, {
@@ -275,18 +288,30 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     const cluster = await getExperimentQueries(input.experiment.id);
     const initialQuery = resolveInitialQuery(input.queryText, cluster);
 
-    const search = await runSearchJourney({
-      page,
-      persona,
-      traits: sessionTraits,
-      cluster,
-      initialQuery,
-      targetDomain: input.experiment.targetDomain,
-      targetUrl: input.experiment.targetUrl,
-      maxSerpPages: input.experiment.maxSerpPages,
-      behaviourOverrides,
-      onEvent,
-    });
+    const search =
+      input.experiment.campaignKind === "gmb"
+        ? await runGmbSearchJourney({
+            page,
+            persona,
+            traits: sessionTraits,
+            query: initialQuery,
+            businessName: input.experiment.gmbBusinessName ?? input.experiment.name,
+            placeId: input.experiment.gmbPlaceId,
+            actions: parseActionsJson(input.experiment.gmbActionsJson),
+            onEvent,
+          })
+        : await runSearchJourney({
+            page,
+            persona,
+            traits: sessionTraits,
+            cluster,
+            initialQuery,
+            targetDomain: input.experiment.targetDomain,
+            targetUrl: input.experiment.targetUrl,
+            maxSerpPages: input.experiment.maxSerpPages,
+            behaviourOverrides,
+            onEvent,
+          });
 
     const queriesUsed = search.searches.map((attempt) => attempt.queryText);
     const commonFields = {

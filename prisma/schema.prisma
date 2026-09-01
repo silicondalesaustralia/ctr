@@ -71,6 +71,12 @@ enum SessionEventType {
   session_completed
   blocked
   error
+  local_pack_found
+  gmb_opened
+  gmb_action_website
+  gmb_action_directions
+  gmb_action_call
+  target_not_found
 }
 
 enum ProfileProvider {

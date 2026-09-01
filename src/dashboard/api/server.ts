@@ -87,21 +87,38 @@ type PreflightRequestBody = Partial<UpsertCampaignInput> & {
 
 async function buildBaseProposalForPreflight(body: PreflightRequestBody): Promise<CampaignProposal> {
   const current = await getCurrentCampaign();
-  let baseProposal = await buildCampaignProposal({
-    keyword: body.keyword!,
-    targetUrl: body.targetUrl!,
-    region: body.region!,
-    gscConnectionId: body.gscConnectionId ?? null,
-    gscSiteUrl: body.gscSiteUrl ?? null,
-  });
+  const isGmb = body.campaignKind === "gmb";
+
+  let baseProposal: CampaignProposal = isGmb
+    ? await buildGmbCampaignProposal({
+        keyword: body.keyword!,
+        focusCity: body.focusCity ?? current?.focusCity ?? "",
+        gmbBusinessName: body.gmbBusinessName ?? current?.gmbBusinessName ?? "",
+        gmbMapsUrl: body.gmbMapsUrl ?? body.targetUrl ?? current?.gmbMapsUrl ?? "",
+        gmbActions: Array.isArray(body.gmbActions)
+          ? undefined
+          : (body.gmbActions ?? undefined),
+      })
+    : await buildCampaignProposal({
+        keyword: body.keyword!,
+        targetUrl: body.targetUrl!,
+        region: body.region!,
+        gscConnectionId: body.gscConnectionId ?? null,
+        gscSiteUrl: body.gscSiteUrl ?? null,
+      });
 
   if (body.queries?.length) {
     const intensity = await previewCampaignIntensity(body as UpsertCampaignInput, current?.id);
     baseProposal = {
       ...baseProposal,
       keyword: body.keyword!.trim(),
-      targetUrl: body.targetUrl!.trim(),
-      region: body.region!.trim().toUpperCase(),
+      targetUrl: (body.targetUrl ?? body.gmbMapsUrl ?? baseProposal.targetUrl).trim(),
+      region: (body.region ?? baseProposal.region).trim().toUpperCase(),
+      campaignKind: isGmb ? "gmb" : "url",
+      focusCity: body.focusCity ?? baseProposal.focusCity,
+      gmbBusinessName: body.gmbBusinessName ?? baseProposal.gmbBusinessName,
+      gmbPlaceId: body.gmbPlaceId ?? baseProposal.gmbPlaceId,
+      gmbMapsUrl: body.gmbMapsUrl ?? baseProposal.gmbMapsUrl,
       campaignDurationDays: body.campaignDurationDays ?? baseProposal.campaignDurationDays,
       treatmentIntensity: body.treatmentIntensity ?? baseProposal.treatmentIntensity,
       adaptivePacing: body.adaptivePacing ?? baseProposal.adaptivePacing,
@@ -120,6 +137,11 @@ async function buildBaseProposalForPreflight(body: PreflightRequestBody): Promis
   } else {
     baseProposal = {
       ...baseProposal,
+      campaignKind: isGmb ? "gmb" : baseProposal.campaignKind ?? "url",
+      focusCity: body.focusCity ?? baseProposal.focusCity,
+      gmbBusinessName: body.gmbBusinessName ?? baseProposal.gmbBusinessName,
+      gmbPlaceId: body.gmbPlaceId ?? baseProposal.gmbPlaceId,
+      gmbMapsUrl: body.gmbMapsUrl ?? baseProposal.gmbMapsUrl,
       plannedSessionCap: body.plannedSessionCap ?? null,
       targetIdentityCount: body.targetIdentityCount ?? null,
       organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
@@ -691,17 +713,31 @@ export function createApiServer() {
 
   app.post("/campaign/preflight", async (req, res) => {
     const body = req.body as PreflightRequestBody;
+    const isGmb = body.campaignKind === "gmb";
 
-    if (!body.keyword?.trim() || !body.targetUrl?.trim() || !body.region?.trim()) {
-      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
+    if (!body.keyword?.trim() || !body.region?.trim()) {
+      res.status(400).json({ error: "keyword and region are required" });
       return;
     }
-
-    try {
-      new URL(body.targetUrl);
-    } catch {
-      res.status(400).json({ error: "targetUrl must be a valid URL" });
+    if (isGmb) {
+      if (!body.focusCity?.trim() || !(body.gmbMapsUrl ?? body.targetUrl)?.trim()) {
+        res.status(400).json({ error: "focusCity and Maps URL are required for GMB preflight" });
+        return;
+      }
+      if (!body.gmbBusinessName?.trim()) {
+        res.status(400).json({ error: "gmbBusinessName is required for GMB preflight" });
+        return;
+      }
+    } else if (!body.targetUrl?.trim()) {
+      res.status(400).json({ error: "keyword, targetUrl, and region are required" });
       return;
+    } else {
+      try {
+        new URL(body.targetUrl);
+      } catch {
+        res.status(400).json({ error: "targetUrl must be a valid URL" });
+        return;
+      }
     }
 
     try {

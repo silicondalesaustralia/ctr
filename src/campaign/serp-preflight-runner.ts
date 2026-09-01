@@ -14,6 +14,7 @@ import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
 import { updatePreflightJobProgress } from "./preflight-jobs.js";
+import { checkGmbQueryOnPage } from "./gmb-preflight-check.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
   cleanupBrowserSession,
@@ -46,6 +47,7 @@ async function connectBrowserWithRetry(wsEndpoint: string, maxAttempts = 4) {
 export async function pickPreflightIdentity(
   region: string,
   identityExternalId?: string,
+  city?: string | null,
 ): Promise<Identity> {
   const requireGoLogin = getEnv().BROWSER_PROFILE_PROVIDER === "gologin";
 
@@ -86,11 +88,14 @@ export async function pickPreflightIdentity(
     throw new Error("No active identities available for Google preflight.");
   }
 
+  const cityPool = city?.trim()
+    ? identities.filter((identity) => identity.city === city.trim())
+    : [];
   const focusRegion = region === "ALL" ? null : region;
   const regional = focusRegion
     ? identities.filter((identity) => identity.region === focusRegion)
     : identities;
-  const pool = regional.length > 0 ? regional : identities;
+  const pool = cityPool.length > 0 ? cityPool : regional.length > 0 ? regional : identities;
   const desktop = pool.filter((identity) => identity.deviceClass === "desktop");
   const pick = desktop[0] ?? pool[0] ?? identities[0];
   if (!pick) {
@@ -201,9 +206,17 @@ export async function runSerpPreflightChecks(input: {
   maxSerpPages: number;
   identityExternalId?: string;
   jobId?: string;
+  campaignKind?: "url" | "gmb";
+  focusCity?: string | null;
+  gmbBusinessName?: string | null;
+  gmbPlaceId?: string | null;
 }): Promise<PreflightQueryResult[]> {
   const env = getEnv();
-  const identity = await pickPreflightIdentity(input.region, input.identityExternalId);
+  const identity = await pickPreflightIdentity(
+    input.region,
+    input.identityExternalId,
+    input.focusCity,
+  );
   const persona = FAST_DRY_RUN_PERSONA;
   const traits = generateSessionTraits(persona, `preflight-${Date.now()}`, identity.externalId);
 
@@ -288,15 +301,23 @@ export async function runSerpPreflightChecks(input: {
       throw new Error("Browser provider did not return a usable browser");
     }
 
+    const isGmb = input.campaignKind === "gmb";
+    const businessName = input.gmbBusinessName?.trim() ?? "";
+    if (isGmb && !businessName) {
+      throw new Error("gmbBusinessName is required for GMB preflight");
+    }
+
     for (const query of input.queries) {
-      const result = await checkQueryOnPage(
-        page,
-        query,
-        input.targetDomain,
-        input.maxSerpPages,
-        persona,
-        traits,
-      );
+      const result = isGmb
+        ? await checkGmbQueryOnPage(page, query, businessName, input.gmbPlaceId)
+        : await checkQueryOnPage(
+            page,
+            query,
+            input.targetDomain,
+            input.maxSerpPages,
+            persona,
+            traits,
+          );
       results.push(result);
       if (input.jobId) {
         void updatePreflightJobProgress(input.jobId, results.length);

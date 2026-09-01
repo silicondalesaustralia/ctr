@@ -485,11 +485,6 @@ export async function upsertCampaign(
 
 export async function runCampaign(experimentId: string): Promise<CampaignWithQueries> {
   const existing = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
-  if (existing.campaignKind === "gmb") {
-    throw new Error(
-      "GMB campaigns can be saved and provisioned, but local-pack sessions are not enabled yet.",
-    );
-  }
   const startDate = new Date();
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + existing.campaignDurationDays);

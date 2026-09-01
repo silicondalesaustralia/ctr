@@ -39,11 +39,15 @@ export function isProxyTunnelError(message: string): boolean {
   );
 }
 
+export function isWrongEgressGeoError(message: string): boolean {
+  return /Proxy egress geo mismatch/i.test(message);
+}
+
 export function classifyBrowserErrorCode(message: string): string {
   if (isGoLoginParallelLimitError(message)) {
     return "gologin_parallel_limit";
   }
-  if (isProxyTunnelError(message)) {
+  if (isProxyTunnelError(message) || isWrongEgressGeoError(message)) {
     return "proxy_error";
   }
   return "browser_error";
