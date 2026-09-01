@@ -59,7 +59,7 @@ export async function checkGmbQueryOnPage(
       };
     }
 
-    const found = await findGmbInLocalPack(page, { businessName, placeId });
+    const found = await findGmbInLocalPack(page, { businessName, placeId, query });
     if (!found) {
       return {
         query,

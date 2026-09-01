@@ -110,7 +110,11 @@ export async function runGmbSearchJourney(
     };
   }
 
-  const found = await findGmbInLocalPack(page, { businessName, placeId });
+  const found = await findGmbInLocalPack(page, {
+    businessName,
+    placeId,
+    query: query.query,
+  });
   if (!found) {
     await onEvent("target_not_found", { businessName });
     return {
