@@ -12,6 +12,7 @@ import {
 } from "../campaign/intensity-calculator.js";
 import type { CampaignIntensityResult } from "../campaign/types.js";
 import { generateCampaignSchedule } from "../scheduler/schedule-generator.js";
+import { deriveScheduleDensity } from "../campaign/schedule-density.js";
 import {
   buildExperimentName,
   extractTargetDomain,
@@ -268,7 +269,8 @@ export async function previewCampaignIntensity(
       ? await buildSiteCurveFromExperiment(experimentId)
       : null;
 
-  const campaignDays = input.campaignDurationDays ?? (resolved.campaignKind === "gmb" ? 21 : 14);
+  const campaignDays = input.campaignDurationDays ?? (resolved.campaignKind === "gmb" ? 7 : 14);
+  const density = deriveScheduleDensity(campaignDays);
   const base = calculateCampaignIntensity({
     queries: queries.map((q) => ({
       text: q.text,
@@ -289,8 +291,8 @@ export async function previewCampaignIntensity(
     },
     siteCurveData,
     activeIdentityCount: identityCount,
-    maxSessionsPerIdentityPerDay: 1,
-    repeatIdentityMinGapDays: 2,
+    maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
+    repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
   });
 
   return applyIntensityPlanOverrides(base, {
@@ -352,6 +354,12 @@ async function saveCampaignConfig(
     region: input.region || "ALL",
   });
 
+  const campaignDurationDays =
+    input.campaignDurationDays ??
+    existing?.campaignDurationDays ??
+    (resolved.campaignKind === "gmb" ? 7 : 14);
+  const density = deriveScheduleDensity(campaignDurationDays);
+
   const experiment = await prisma.experiment.update({
     where: { id: experimentId },
     data: {
@@ -367,10 +375,9 @@ async function saveCampaignConfig(
       gmbActionsJson: resolved.gmbActionsJson,
       scheduleTimezone: resolveRegionTimezone(resolved.region),
       monthlySessionTarget: intensity.totalAllocatedSessions,
-      campaignDurationDays:
-        input.campaignDurationDays ??
-        existing?.campaignDurationDays ??
-        (resolved.campaignKind === "gmb" ? 21 : 14),
+      campaignDurationDays,
+      repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
+      maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
       treatmentIntensity: input.treatmentIntensity ?? existing?.treatmentIntensity ?? "normal",
       adaptivePacing: input.adaptivePacing ?? existing?.adaptivePacing ?? true,
       recalculateEveryDays: input.recalculateEveryDays ?? existing?.recalculateEveryDays ?? 3,
@@ -470,7 +477,17 @@ export async function updateCampaign(
   }
   const intensity = await previewCampaignIntensity(input, experimentId);
 
-  return saveCampaignConfig(experimentId, input, queries, intensity, existing);
+  const saved = await saveCampaignConfig(experimentId, input, queries, intensity, existing);
+
+  if (existing.status === "active") {
+    try {
+      await rebuildCampaignSchedule(experimentId);
+    } catch {
+      // Keep saved config even if reschedule fails (e.g. empty pool); UI can rebuild.
+    }
+  }
+
+  return saved;
 }
 
 export async function upsertCampaign(

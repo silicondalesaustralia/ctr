@@ -12,6 +12,7 @@ import {
   type GmbActionFlags,
 } from "./gmb-types.js";
 import type { CampaignProposal, SettingRationale } from "./campaign-proposal.js";
+import { deriveScheduleDensity } from "./schedule-density.js";
 
 export interface GmbCampaignProposalInput {
   keyword: string;
@@ -60,7 +61,8 @@ export async function buildGmbCampaignProposal(
   }));
 
   const eligible = await countEligibleIdentities(region, true, cityConfig.city);
-  const campaignDurationDays = 21;
+  const campaignDurationDays = 7;
+  const density = deriveScheduleDensity(campaignDurationDays);
   const treatmentIntensity: TreatmentIntensity = "normal";
   const desktopPercent = 40;
   const ctrSource: CtrSource = "default_curve";
@@ -85,8 +87,8 @@ export async function buildGmbCampaignProposal(
     },
     siteCurveData: null,
     activeIdentityCount: eligible,
-    maxSessionsPerIdentityPerDay: 1,
-    repeatIdentityMinGapDays: 2,
+    maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
+    repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
   });
 
   const rationales: SettingRationale[] = [
@@ -101,9 +103,10 @@ export async function buildGmbCampaignProposal(
       reason: "Identity pool and Decodo exits are locked to this city.",
     },
     {
-      setting: "Duration",
+      setting: "Schedule window",
       value: `${campaignDurationDays} days`,
-      reason: "Default without GSC; refine after local-pack preflight ranks.",
+      reason:
+        "Default burst window for local pack. Shorten to 3 days for a denser batch, or lengthen to spread quieter.",
     },
     {
       setting: "Device mix",

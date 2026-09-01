@@ -15,7 +15,7 @@ import {
 
 const CAMPAIGN_SETTING_HINTS = {
   duration:
-    "How many days the campaign runs. Search sessions are spread across this window to look like steady organic traffic.",
+    "How many days to spread sessions across. Use 3 for a dense burst, 7 for a short batch, or 14–21 for quieter organic pacing. Short windows auto-relax identity spacing so the queue can still fill.",
   treatmentIntensity:
     "Multiplier applied to expected baseline clicks from GSC. Low = 1.25×, Normal = 1.5×, Strong = 2×. Use Strong for deeper rankings.",
   desktopPercent:
@@ -31,6 +31,13 @@ const CAMPAIGN_SETTING_HINTS = {
   maxShareOfGscImpressions:
     "Safety cap: treatment sessions will not exceed this fraction of your page's GSC impressions in the last 28 days (default 5%).",
 } as const;
+
+const SCHEDULE_WINDOW_PRESETS = [
+  { days: 3, label: "Burst 3d" },
+  { days: 7, label: "Short 7d" },
+  { days: 14, label: "Standard 14d" },
+  { days: 21, label: "Long 21d" },
+] as const;
 
 interface Props {
   form: CampaignFormState;
@@ -227,15 +234,37 @@ export default function CampaignReviewStep({
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <label>
-              <HintLabel label="Duration (days)" hint={CAMPAIGN_SETTING_HINTS.duration} />
+              <HintLabel label="Schedule window (days)" hint={CAMPAIGN_SETTING_HINTS.duration} />
               <input
                 style={inputStyle}
                 type="number"
                 min={1}
+                max={90}
                 value={form.campaignDurationDays}
                 onChange={(e) => onFormChange("campaignDurationDays", Number(e.target.value))}
-                disabled={running}
               />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                {SCHEDULE_WINDOW_PRESETS.map((preset) => {
+                  const selected = form.campaignDurationDays === preset.days;
+                  return (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => onFormChange("campaignDurationDays", preset.days)}
+                      style={{
+                        ...secondaryButtonStyle(false),
+                        padding: "6px 10px",
+                        fontSize: 13,
+                        background: selected ? "#1e293b" : "#fff",
+                        color: selected ? "#fff" : "#334155",
+                        borderColor: selected ? "#1e293b" : "#cbd5e1",
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
             </label>
             <label>
               <HintLabel label="Treatment intensity" hint={CAMPAIGN_SETTING_HINTS.treatmentIntensity} />
@@ -337,7 +366,8 @@ export default function CampaignReviewStep({
 
         {running && (
           <p style={{ color: "#64748b", fontSize: 14, marginTop: 16 }}>
-            Campaign is running. Stop it to edit settings.
+            Campaign is running. You can still change the schedule window and save to rebuild the
+            upcoming queue; stop the campaign to edit other settings.
           </p>
         )}
 
@@ -372,16 +402,18 @@ export default function CampaignReviewStep({
               {busy === "preview" ? "Calculating..." : "Update preview"}
             </button>
           )}
-          {!running && (
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={Boolean(busy) || !form.keyword || !form.targetUrl}
-              style={secondaryButtonStyle(Boolean(busy) || !form.keyword || !form.targetUrl)}
-            >
-              {busy === "save" ? "Saving..." : "Save campaign"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={Boolean(busy) || !form.keyword || !form.targetUrl}
+            style={secondaryButtonStyle(Boolean(busy) || !form.keyword || !form.targetUrl)}
+          >
+            {busy === "save"
+              ? "Saving..."
+              : running
+                ? "Save & reschedule"
+                : "Save campaign"}
+          </button>
           {!running ? (
             <button
               type="button"
