@@ -231,22 +231,47 @@ export async function waitForSerpRedirectSettle(page: Page, timeoutMs = 15_000):
 }
 
 export async function clickSerpResult(page: Page, result: SerpResult): Promise<void> {
-  const byHref = page.locator(`a[href="${result.url}"]`).first();
-  if (await byHref.count()) {
-    await byHref.click();
+  // Google often duplicates /goto hrefs: a visible organic link plus a hidden empty <a>.
+  // Prefer a visible match so we don't hang waiting on the invisible twin.
+  const visibleByHref = page.locator(`a[href="${result.url}"]`).filter({ visible: true });
+  if ((await visibleByHref.count()) > 0) {
+    const link = visibleByHref.first();
+    await link.scrollIntoViewIfNeeded().catch(() => undefined);
+    await link.click({ timeout: 15_000 });
     await waitForSerpRedirectSettle(page);
     return;
   }
 
-  const titleSnippet = result.title.slice(0, 40);
-  const byTitle = page.locator(`a:has-text("${titleSnippet}")`).first();
-  if (await byTitle.count()) {
-    await byTitle.click();
+  const titleSnippet = result.title.replace(/\s+/g, " ").trim().slice(0, 40);
+  if (titleSnippet.length >= 4) {
+    const byTitle = page.locator("a").filter({ hasText: titleSnippet, visible: true });
+    if ((await byTitle.count()) > 0) {
+      const link = byTitle.first();
+      await link.scrollIntoViewIfNeeded().catch(() => undefined);
+      await link.click({ timeout: 15_000 });
+      await waitForSerpRedirectSettle(page);
+      return;
+    }
+
+    const byRegex = page
+      .locator("a")
+      .filter({ hasText: new RegExp(escapeRegex(titleSnippet), "i"), visible: true });
+    if ((await byRegex.count()) > 0) {
+      const link = byRegex.first();
+      await link.scrollIntoViewIfNeeded().catch(() => undefined);
+      await link.click({ timeout: 15_000 });
+      await waitForSerpRedirectSettle(page);
+      return;
+    }
+  }
+
+  // Last resort: force-click any matching href (including non-visible) via JS.
+  const forced = page.locator(`a[href="${result.url}"]`).first();
+  if ((await forced.count()) > 0) {
+    await forced.evaluate((el: HTMLElement) => el.click());
     await waitForSerpRedirectSettle(page);
     return;
   }
 
-  const byRegex = page.locator(`a`).filter({ hasText: new RegExp(escapeRegex(titleSnippet)) }).first();
-  await byRegex.click();
-  await waitForSerpRedirectSettle(page);
+  throw new Error(`Could not click SERP result: ${titleSnippet || result.url}`);
 }
