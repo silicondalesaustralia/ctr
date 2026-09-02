@@ -59,6 +59,29 @@ export async function typeAndSubmitQuery(
   await page.keyboard.press("Enter");
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
   await acceptConsentIfPresent(page);
+  await ensureFullGoogleSearch(page, query);
+}
+
+/** Google sometimes serves lite HTML (`gbv=2`) to headless Orbita — no local pack DOM. */
+export function isLiteGooglePage(url: string): boolean {
+  return /[?&]gbv=2/i.test(url) || url.includes("heirloom-hp");
+}
+
+export async function ensureFullGoogleSearch(page: Page, query: string): Promise<void> {
+  if (!isLiteGooglePage(page.url())) return;
+
+  const fullUrl = `https://www.google.com.au/search?q=${encodeURIComponent(query)}&hl=en-AU&gl=au`;
+  await page.goto(fullUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await acceptConsentIfPresent(page);
+
+  if (isLiteGooglePage(page.url())) {
+    await navigateGoogleLocalFinder(page, query);
+  }
+}
+
+export async function navigateGoogleLocalFinder(page: Page, query: string): Promise<void> {
+  const { openLocalFinder } = await import("./local-pack.js");
+  await openLocalFinder(page, query);
 }
 
 export async function checkBlocked(page: Page): Promise<{
