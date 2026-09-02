@@ -48,13 +48,13 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
 }
 
 describe("warmup eligibility", () => {
-  it("requires age, benign site clicks, and graduation pass", () => {
+  it("requires site clicks and graduation pass (no min age by default)", () => {
     const fresh = makeIdentity({
       createdAt: new Date(),
       warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS,
       warmupGraduationPassed: true,
     });
-    expect(isWarmupEligible(fresh)).toBe(false);
+    expect(isWarmupEligible(fresh)).toBe(true);
 
     const noGraduation = makeIdentity({
       warmupSiteClicks: WARMUP_BENIGN_SITE_CLICKS,

@@ -9,6 +9,7 @@ import {
   WARMUP_MIN_DAYS,
   WARMUP_SESSION_GAP_MINUTES,
   WARMUP_SPREAD_DAYS,
+  WARMUP_WINDOW_HOURS,
 } from "./warmup-config.js";
 import {
   addMinutes,
@@ -255,28 +256,27 @@ export async function rebuildWarmupSchedule(identity: Identity): Promise<number>
   return scheduleWarmupForIdentity(identity);
 }
 
-/** Pack pending warmups into same-day slots (e.g. after config change). */
+/** Pack pending warmups into same-day slots for specific identities. */
 export async function acceleratePendingWarmups(identityIds?: string[]): Promise<number> {
-  const now = new Date();
-  const where = {
-    status: "scheduled" as const,
-    ...(identityIds?.length ? { identityId: { in: identityIds } } : {}),
-  };
+  if (!identityIds?.length) {
+    return accelerateAllWarmupsInterleaved();
+  }
 
+  const now = new Date();
   const pending = await prisma.warmupSession.findMany({
-    where,
+    where: { status: "scheduled", identityId: { in: identityIds } },
     orderBy: [{ identityId: "asc" }, { scheduledAt: "asc" }],
   });
 
-  let updated = 0;
   let slotByIdentity = new Map<string, number>();
+  let updated = 0;
 
   for (const session of pending) {
     const slot = slotByIdentity.get(session.identityId) ?? 0;
     slotByIdentity.set(session.identityId, slot + 1);
 
-    const leadMinutes = randomBetween(10, 25);
-    const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 20);
+    const leadMinutes = randomBetween(10, 20);
+    const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 15);
     const scheduledAt = addMinutes(now, leadMinutes + slot * gap);
 
     await prisma.warmupSession.update({
@@ -287,6 +287,96 @@ export async function acceleratePendingWarmups(identityIds?: string[]): Promise<
   }
 
   return updated;
+}
+
+/** Round-robin all pending warmups across identities over a window (default 48h). */
+export async function accelerateAllWarmupsInterleaved(
+  windowHours = WARMUP_WINDOW_HOURS,
+): Promise<number> {
+  const pending = await prisma.warmupSession.findMany({
+    where: { status: "scheduled" },
+    orderBy: [{ identityId: "asc" }, { scheduledAt: "asc" }],
+  });
+
+  if (pending.length === 0) return 0;
+
+  const groups = new Map<string, typeof pending>();
+  for (const session of pending) {
+    const list = groups.get(session.identityId) ?? [];
+    list.push(session);
+    groups.set(session.identityId, list);
+  }
+
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "benign" ? -1 : 1;
+      return a.scheduledAt.getTime() - b.scheduledAt.getTime();
+    });
+  }
+
+  const identityOrder = [...groups.keys()].sort();
+  const maxRounds = Math.max(...[...groups.values()].map((list) => list.length));
+  const interleaved: typeof pending = [];
+
+  for (let round = 0; round < maxRounds; round += 1) {
+    for (const identityId of identityOrder) {
+      const list = groups.get(identityId)!;
+      if (round < list.length) interleaved.push(list[round]!);
+    }
+  }
+
+  const now = Date.now();
+  const leadMs = 12 * 60 * 1000;
+  const windowMs = windowHours * 60 * 60 * 1000;
+  const gapMs = interleaved.length > 1 ? windowMs / interleaved.length : windowMs;
+
+  for (let i = 0; i < interleaved.length; i += 1) {
+    const jitterMs = randomBetween(-2, 2) * 60 * 1000;
+    const scheduledAt = new Date(now + leadMs + i * gapMs + jitterMs);
+    await prisma.warmupSession.update({
+      where: { id: interleaved[i]!.id },
+      data: { scheduledAt },
+    });
+  }
+
+  return interleaved.length;
+}
+
+/** Rebuild missing warmups for all warming identities, interleave over windowHours. */
+export async function prepareWarmupPool(windowHours = WARMUP_WINDOW_HOURS): Promise<{
+  scheduled: number;
+  interleaved: number;
+}> {
+  const scheduled = await backfillWarmupForExistingIdentities();
+  const interleaved = await accelerateAllWarmupsInterleaved(windowHours);
+
+  const identities = await prisma.identity.findMany({
+    where: { warmupStatus: "warming" },
+  });
+  for (const identity of identities) {
+    await refreshWarmupEligibility(identity.id);
+  }
+
+  return { scheduled, interleaved };
+}
+
+export async function backfillWarmupForExistingIdentities(): Promise<number> {
+  const identities = await prisma.identity.findMany({
+    where: { warmupStatus: "warming" },
+    orderBy: { externalId: "asc" },
+  });
+
+  let scheduled = 0;
+  for (const identity of identities) {
+    if (isWarmupEligible(identity)) {
+      await refreshWarmupEligibility(identity.id);
+      await cancelPendingWarmupSessions(identity.id);
+      continue;
+    }
+    scheduled += await rebuildWarmupSchedule(identity);
+  }
+
+  return scheduled;
 }
 
 export async function countEligibleIdentities(
@@ -373,25 +463,6 @@ export async function setCampaignIdentities(
       selected: true,
     })),
   });
-}
-
-export async function backfillWarmupForExistingIdentities(): Promise<number> {
-  const identities = await prisma.identity.findMany({
-    where: { warmupStatus: "warming" },
-    orderBy: { externalId: "asc" },
-  });
-
-  let scheduled = 0;
-  for (const identity of identities) {
-    if (isWarmupEligible(identity)) {
-      await refreshWarmupEligibility(identity.id);
-      await cancelPendingWarmupSessions(identity.id);
-      continue;
-    }
-    scheduled += await rebuildWarmupSchedule(identity);
-  }
-
-  return scheduled;
 }
 
 /** Grandfather active/paused campaigns so they can keep using cold identities. */

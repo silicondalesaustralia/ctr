@@ -9,7 +9,7 @@ import {
 
 describe("warmup config", () => {
   it("uses compact warmup defaults", () => {
-    expect(WARMUP_MIN_DAYS).toBe(1);
+    expect(WARMUP_MIN_DAYS).toBe(0);
     expect(WARMUP_SPREAD_DAYS).toBe(1);
     expect(WARMUP_BENIGN_SITE_CLICKS).toBe(2);
   });
