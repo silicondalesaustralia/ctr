@@ -1,5 +1,5 @@
 import { ProfileProvider } from "@prisma/client";
-import { getEnv } from "../../config/env.js";
+import { getEnv, isGoLoginHeadless } from "../../config/env.js";
 import type {
   BrowserProfile,
   BrowserProfileProvider,
@@ -171,7 +171,7 @@ export class GoLoginProvider implements BrowserProfileProvider {
       console.error(`[gologin] Starting cloud profile ${profileId}...`);
       const started = await this.request<GoLoginStartResponse>(`/browser/${profileId}/web`, {
         method: "POST",
-        body: JSON.stringify({ isHeadless: true }),
+        body: JSON.stringify({ isHeadless: isGoLoginHeadless() }),
       });
 
       console.error("[gologin] Waiting for cloud container boot...");

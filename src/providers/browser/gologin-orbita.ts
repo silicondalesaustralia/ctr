@@ -1,4 +1,5 @@
 import { GoLogin } from "gologin";
+import { isGoLoginHeadless } from "../../config/env.js";
 import type { ProxyConfig } from "../proxy/ProxyProvider.js";
 import type { RunningBrowser } from "./BrowserProfileProvider.js";
 import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
@@ -28,15 +29,19 @@ export async function startOrbitaWithProxy(
 
   const proxyServer = `http://${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@${proxy.host}:${proxy.port}`;
 
+  const extraParams = [
+    `--proxy-server=${proxyServer}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+  ];
+  if (isGoLoginHeadless()) {
+    extraParams.push("--headless=new");
+  }
+
   const gl = new GoLogin({
     token: apiToken,
     profile_id: profileId,
-    extra_params: [
-      `--proxy-server=${proxyServer}`,
-      "--headless=new",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-    ],
+    extra_params: extraParams,
     autoUpdateBrowser: true,
     skipOrbitaHashChecking: true,
     // >=135 writes encoded proxy auth into preferences (Chrome/120 profiles otherwise skip auth).
@@ -57,7 +62,9 @@ export async function startOrbitaWithProxy(
   }
 
   activeOrbita.set(profileId, gl);
-  console.error(`[gologin] Orbita ready for ${profileId} (Decodo via worker)`);
+  console.error(
+    `[gologin] Orbita ready for ${profileId} (${isGoLoginHeadless() ? "headless" : "headful"}, Decodo via worker)`,
+  );
 
   return {
     profileId,

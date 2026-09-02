@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Minimal Orbita+Decodo boot probe — no campaign session. */
 import { GoLogin } from "gologin";
-import { getEnv } from "../src/config/env.js";
+import { getEnv, isGoLoginHeadless } from "../src/config/env.js";
 import { createProxyProvider } from "../src/providers/proxy/index.js";
 import { applyDecodoProxyToProfile } from "../src/providers/browser/gologin-proxy.js";
 
@@ -48,15 +48,19 @@ async function main(): Promise<void> {
   );
 
   const proxyServer = `http://${encodeURIComponent(lease.username)}:${encodeURIComponent(lease.password)}@${lease.host}:${lease.port}`;
+  const extraParams = [
+    `--proxy-server=${proxyServer}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+  ];
+  if (isGoLoginHeadless()) {
+    extraParams.push("--headless=new");
+  }
+
   const gl = new GoLogin({
     token: env.GOLOGIN_API_TOKEN!,
     profile_id: profileId,
-    extra_params: [
-      `--proxy-server=${proxyServer}`,
-      "--headless=new",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-    ],
+    extra_params: extraParams,
     autoUpdateBrowser: true,
     skipOrbitaHashChecking: true,
     browserMajorVersion: 135,

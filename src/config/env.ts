@@ -91,6 +91,11 @@ const envSchema = z.object({
    * chromium = stock Playwright only — emergency, no Orbita fingerprints.
    */
   GOLOGIN_BROWSER_RUNTIME: z.enum(["orbita", "cloud", "chromium"]).default("orbita"),
+  /** When false, Orbita runs headful (needs xvfb on Linux worker). Reduces Google blocks. */
+  GOLOGIN_HEADLESS: z
+    .string()
+    .optional()
+    .transform((v) => v !== "false" && v !== "0"),
   MULTILOGIN_API_TOKEN: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_HOST: z.string().optional(),
   DECODO_RESIDENTIAL_PROXY_PORT: z.string().optional(),
@@ -161,6 +166,10 @@ export function isDryRun(): boolean {
 
 export function isRunnerEnabled(): boolean {
   return getEnv().EXPERIMENT_RUNNER_ENABLED;
+}
+
+export function isGoLoginHeadless(): boolean {
+  return getEnv().GOLOGIN_HEADLESS;
 }
 
 export async function isRunnerEnabledAsync(): Promise<boolean> {

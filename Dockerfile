@@ -2,6 +2,10 @@ FROM mcr.microsoft.com/playwright:v1.51.0-jammy
 
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xvfb \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
 RUN npm ci

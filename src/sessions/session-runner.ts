@@ -11,6 +11,7 @@ import { verifyBrowserEgressGeo, type EgressGeo } from "../browser/egress-geo.js
 import { getEnv, isDryRun } from "../config/env.js";
 import { getExperimentQueries } from "../experiments/experiment-service.js";
 import { updateIdentityStats } from "../identities/identity-service.js";
+import { isWarmupEligible } from "../warmup/warmup-service.js";
 import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -114,6 +115,25 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     engagementTemplate: persona.id,
     personaId: persona.id,
   });
+
+  if (
+    input.experiment.requireWarmupIdentities &&
+    input.experiment.slug !== "__warmup__" &&
+    !isWarmupEligible(input.identity)
+  ) {
+    const message = `Identity ${input.identity.externalId} is not warmup-eligible (status=${input.identity.warmupStatus})`;
+    console.error(`[session] ${message}`);
+    await completeSession(session.id, {
+      status: "cancelled",
+      errorMessage: message,
+      personaId: persona.id,
+      sessionTraitsJson: traitsToJson(
+        generateSessionTraits(persona, session.id, input.identity.externalId),
+      ),
+    });
+    await appendSessionEvent(session.id, "error", { message, errorCode: "identity_not_warmed" });
+    return { sessionId: session.id, status: "cancelled", errorCode: "identity_not_warmed" };
+  }
 
   const sessionTraits = generateSessionTraits(
     persona,
