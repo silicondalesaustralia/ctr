@@ -7,6 +7,7 @@ import {
   WARMUP_BENIGN_SITE_CLICKS,
   WARMUP_GRADUATION_RETRY_HOURS,
   WARMUP_MIN_DAYS,
+  WARMUP_SESSION_GAP_MINUTES,
   WARMUP_SPREAD_DAYS,
 } from "./warmup-config.js";
 import {
@@ -197,16 +198,24 @@ function scheduleWarmupRows(identity: Identity, now = new Date()) {
   }
 
   for (let slot = 0; slot < totalSlots; slot += 1) {
-    const dayOffset = Math.min(
-      WARMUP_SPREAD_DAYS - 1,
-      Math.floor((slot / Math.max(totalSlots - 1, 1)) * (WARMUP_SPREAD_DAYS - 1)),
-    );
-    const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
-    const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
+    let scheduledAt: Date;
 
-    let scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
-    if (scheduledAt <= now) {
-      scheduledAt = addMinutes(now, randomBetween(30, 180) + slot * randomBetween(120, 240));
+    if (WARMUP_SPREAD_DAYS <= 1) {
+      const leadMinutes = randomBetween(15, 35);
+      const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 25);
+      scheduledAt = addMinutes(now, leadMinutes + slot * gap);
+    } else {
+      const dayOffset = Math.min(
+        WARMUP_SPREAD_DAYS - 1,
+        Math.floor((slot / Math.max(totalSlots - 1, 1)) * (WARMUP_SPREAD_DAYS - 1)),
+      );
+      const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
+      const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
+
+      scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
+      if (scheduledAt <= now) {
+        scheduledAt = addMinutes(now, randomBetween(30, 180) + slot * randomBetween(120, 240));
+      }
     }
 
     const isGraduationSlot = graduationNeeded && slot === totalSlots - 1;
@@ -244,6 +253,40 @@ export async function scheduleWarmupForIdentity(identity: Identity): Promise<num
 export async function rebuildWarmupSchedule(identity: Identity): Promise<number> {
   await cancelPendingWarmupSessions(identity.id);
   return scheduleWarmupForIdentity(identity);
+}
+
+/** Pack pending warmups into same-day slots (e.g. after config change). */
+export async function acceleratePendingWarmups(identityIds?: string[]): Promise<number> {
+  const now = new Date();
+  const where = {
+    status: "scheduled" as const,
+    ...(identityIds?.length ? { identityId: { in: identityIds } } : {}),
+  };
+
+  const pending = await prisma.warmupSession.findMany({
+    where,
+    orderBy: [{ identityId: "asc" }, { scheduledAt: "asc" }],
+  });
+
+  let updated = 0;
+  let slotByIdentity = new Map<string, number>();
+
+  for (const session of pending) {
+    const slot = slotByIdentity.get(session.identityId) ?? 0;
+    slotByIdentity.set(session.identityId, slot + 1);
+
+    const leadMinutes = randomBetween(10, 25);
+    const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 20);
+    const scheduledAt = addMinutes(now, leadMinutes + slot * gap);
+
+    await prisma.warmupSession.update({
+      where: { id: session.id },
+      data: { scheduledAt },
+    });
+    updated += 1;
+  }
+
+  return updated;
 }
 
 export async function countEligibleIdentities(

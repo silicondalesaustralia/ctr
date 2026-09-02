@@ -5,40 +5,14 @@
  */
 import { prisma } from "../src/db/client.js";
 import {
+  acceleratePendingWarmups,
   rebuildWarmupSchedule,
+  refreshWarmupEligibility,
   setCampaignIdentities,
 } from "../src/warmup/warmup-service.js";
-import { addMinutes, randomBetween } from "../src/utils/helpers.js";
 
 const EXPERIMENT_ID = "cmtieevlq0036lg0ox0qtplli";
 const IDENTITY_EXTERNAL_IDS = ["au_010", "au_014"];
-
-async function accelerateWarmups(identityIds: string[]): Promise<number> {
-  const now = new Date();
-  let updated = 0;
-
-  for (const identityId of identityIds) {
-    const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
-    if (identity.warmupStatus === "eligible") continue;
-
-    const pending = await prisma.warmupSession.findMany({
-      where: { identityId, status: "scheduled" },
-      orderBy: { scheduledAt: "asc" },
-    });
-
-    let cursor = addMinutes(now, randomBetween(30, 90));
-    for (const session of pending) {
-      await prisma.warmupSession.update({
-        where: { id: session.id },
-        data: { scheduledAt: cursor },
-      });
-      cursor = addMinutes(cursor, randomBetween(120, 240));
-      updated += 1;
-    }
-  }
-
-  return updated;
-}
 
 async function main(): Promise<void> {
   const identities = await prisma.identity.findMany({
@@ -61,9 +35,10 @@ async function main(): Promise<void> {
   let scheduled = 0;
   for (const identity of identities) {
     scheduled += await rebuildWarmupSchedule(identity);
+    await refreshWarmupEligibility(identity.id);
   }
 
-  const accelerated = await accelerateWarmups(identities.map((row) => row.id));
+  const accelerated = await acceleratePendingWarmups(identities.map((row) => row.id));
 
   const summary = await prisma.identity.findMany({
     where: { id: { in: identities.map((row) => row.id) } },

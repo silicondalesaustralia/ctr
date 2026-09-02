@@ -1,10 +1,23 @@
 import { createHash } from "node:crypto";
 
-export const WARMUP_MIN_DAYS = 4;
-export const WARMUP_BENIGN_SITE_CLICKS = 3;
-export const WARMUP_SPREAD_DAYS = 4;
-export const WARMUP_GRADUATION_RETRY_HOURS = 36;
-export const WARMUP_BENIGN_RETRY_HOURS = 24;
+function warmupInt(envKey: string, fallback: number): number {
+  const raw = process.env[envKey]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+/** Minimum identity age before campaign eligibility. */
+export const WARMUP_MIN_DAYS = warmupInt("WARMUP_MIN_DAYS", 1);
+/** Benign SERP sessions that must click through to a site. */
+export const WARMUP_BENIGN_SITE_CLICKS = warmupInt("WARMUP_BENIGN_SITE_CLICKS", 2);
+/** Spread scheduled warmups across this many calendar days (1 = same day). */
+export const WARMUP_SPREAD_DAYS = warmupInt("WARMUP_SPREAD_DAYS", 1);
+export const WARMUP_GRADUATION_RETRY_HOURS = warmupInt("WARMUP_GRADUATION_RETRY_HOURS", 6);
+export const WARMUP_BENIGN_RETRY_HOURS = warmupInt("WARMUP_BENIGN_RETRY_HOURS", 4);
+/** Gap between same-day warmup slots (minutes). */
+export const WARMUP_SESSION_GAP_MINUTES = warmupInt("WARMUP_SESSION_GAP_MINUTES", 45);
+
 export const WARMUP_SYSTEM_SLUG = "__warmup__";
 
 const BENIGN_QUERIES = [

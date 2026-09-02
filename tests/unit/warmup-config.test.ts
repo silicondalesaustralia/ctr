@@ -8,10 +8,10 @@ import {
 } from "../../src/warmup/warmup-config.js";
 
 describe("warmup config", () => {
-  it("targets a four-day warmup window", () => {
-    expect(WARMUP_MIN_DAYS).toBe(4);
-    expect(WARMUP_SPREAD_DAYS).toBe(4);
-    expect(WARMUP_BENIGN_SITE_CLICKS).toBe(3);
+  it("uses compact warmup defaults", () => {
+    expect(WARMUP_MIN_DAYS).toBe(1);
+    expect(WARMUP_SPREAD_DAYS).toBe(1);
+    expect(WARMUP_BENIGN_SITE_CLICKS).toBe(2);
   });
 
   it("fills city placeholders in graduation templates", () => {
