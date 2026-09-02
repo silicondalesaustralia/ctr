@@ -57,7 +57,13 @@ export async function typeAndSubmitQuery(
   await sleep(randomBetween(postPause[0], postPause[1]));
 
   await page.keyboard.press("Enter");
-  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  // Enter often triggers redirects (including lite `gbv=2`). Wait for /search and settle
+  // before any follow-up goto — racing that causes net::ERR_ABORTED.
+  await Promise.race([
+    page.waitForURL(/google\.[^/]+\/search\?/i, { timeout: 30_000 }),
+    page.waitForLoadState("domcontentloaded"),
+  ]).catch(() => undefined);
+  await sleep(randomBetween(800, 1600));
   await acceptConsentIfPresent(page);
   await ensureFullGoogleSearch(page, query);
 }
@@ -67,11 +73,27 @@ export function isLiteGooglePage(url: string): boolean {
   return /[?&]gbv=2/i.test(url) || url.includes("heirloom-hp");
 }
 
+function isNavigationAbortError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ERR_ABORTED|Navigation interrupted|interrupted by another navigation/i.test(message);
+}
+
+async function gotoGoogleSearchSettled(page: Page, url: string): Promise<void> {
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  } catch (error) {
+    if (!isNavigationAbortError(error)) throw error;
+    // Chrome aborts when Google redirects mid-goto; the final URL is often usable.
+    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+    await sleep(randomBetween(500, 1200));
+  }
+}
+
 export async function ensureFullGoogleSearch(page: Page, query: string): Promise<void> {
   if (!isLiteGooglePage(page.url())) return;
 
   const fullUrl = `https://www.google.com.au/search?q=${encodeURIComponent(query)}&hl=en-AU&gl=au`;
-  await page.goto(fullUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await gotoGoogleSearchSettled(page, fullUrl);
   await acceptConsentIfPresent(page);
 
   if (isLiteGooglePage(page.url())) {

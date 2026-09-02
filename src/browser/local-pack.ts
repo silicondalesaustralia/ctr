@@ -55,7 +55,16 @@ export function isLocalFinderPage(url: string): boolean {
 export async function openLocalFinder(page: Page, query: string): Promise<void> {
   if (isLocalFinderPage(page.url())) return;
 
-  await page.goto(localFinderUrl(query), { waitUntil: "domcontentloaded", timeout: 60_000 });
+  try {
+    await page.goto(localFinderUrl(query), { waitUntil: "domcontentloaded", timeout: 60_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/ERR_ABORTED|Navigation interrupted|interrupted by another navigation/i.test(message)) {
+      throw error;
+    }
+    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+    await page.waitForTimeout(1000);
+  }
   await acceptConsentIfPresent(page);
   await page.waitForTimeout(2000);
   await scrollPlacesList(page);
