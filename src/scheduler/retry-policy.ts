@@ -35,7 +35,10 @@ export function isProxyTunnelError(message: string): boolean {
     /ERR_TUNNEL_CONNECTION_FAILED/i.test(message) ||
     /ERR_PROXY_CONNECTION_FAILED/i.test(message) ||
     /ERR_SOCKS_CONNECTION_FAILED/i.test(message) ||
-    /tunnel connection failed/i.test(message)
+    /tunnel connection failed/i.test(message) ||
+    /Proxy egress geo lookup failed/i.test(message) ||
+    /^fetch failed$/i.test(message.trim()) ||
+    /ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up/i.test(message)
   );
 }
 

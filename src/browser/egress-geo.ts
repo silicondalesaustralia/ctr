@@ -81,19 +81,24 @@ const LOOKUP_URLS = [
 ] as const;
 
 async function lookupViaFetch(page: Page, url: string): Promise<IpLookupPayload> {
-  return page.evaluate(async (lookupUrl) => {
-    const response = await fetch(lookupUrl, {
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return (await response.json()) as IpLookupPayload;
-  }, url);
+  try {
+    return await page.evaluate(async (lookupUrl) => {
+      const response = await fetch(lookupUrl, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return (await response.json()) as IpLookupPayload;
+    }, url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`geo fetch failed (${url}): ${message}`);
+  }
 }
 
 async function lookupViaNavigation(page: Page, url: string): Promise<IpLookupPayload> {
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
   const text = await page.locator("body").innerText();
   return JSON.parse(text) as IpLookupPayload;
 }

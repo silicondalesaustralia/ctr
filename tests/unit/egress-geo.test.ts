@@ -78,4 +78,11 @@ describe("wrong egress geo retry classification", () => {
     expect(classifyBrowserErrorCode(message)).toBe("proxy_error");
     expect(shouldRetry("proxy_error", 0)).toBe(true);
   });
+
+  it("classifies opaque fetch failed as retryable proxy_error", () => {
+    expect(classifyBrowserErrorCode("fetch failed")).toBe("proxy_error");
+    expect(
+      classifyBrowserErrorCode("Proxy egress geo lookup failed: geo fetch failed (https://ipinfo.io/json): fetch failed"),
+    ).toBe("proxy_error");
+  });
 });
