@@ -288,6 +288,71 @@ export default function CampaignReviewStep({
             </label>
           </div>
 
+          {isGmb && (
+            <fieldset
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 14,
+                margin: 0,
+              }}
+            >
+              <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
+                Identity pool
+              </legend>
+              <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+                Stop the campaign to change this, save, then start again to rebuild the schedule.
+              </p>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                  marginBottom: 10,
+                  opacity: running ? 0.55 : 1,
+                }}
+              >
+                <input
+                  type="radio"
+                  name="reviewIdentityGeoScope"
+                  checked={form.identityGeoScope === "city"}
+                  disabled={running}
+                  onChange={() => onFormChange("identityGeoScope", "city")}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  <strong>Hyper-local (city)</strong>
+                  <div style={{ color: "#64748b", fontSize: 13 }}>
+                    Only identities whose home city matches {form.focusCity || "the geo city"}.
+                  </div>
+                </span>
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                  opacity: running ? 0.55 : 1,
+                }}
+              >
+                <input
+                  type="radio"
+                  name="reviewIdentityGeoScope"
+                  checked={form.identityGeoScope === "country"}
+                  disabled={running}
+                  onChange={() => onFormChange("identityGeoScope", "country")}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  <strong>Country-wide (Australia)</strong>
+                  <div style={{ color: "#64748b", fontSize: 13 }}>
+                    Any eligible AU identity. Proxies still use the focus city when available.
+                  </div>
+                </span>
+              </label>
+            </fieldset>
+          )}
+
           <label>
             <HintLabel
               label="Display / schedule timezone"
@@ -544,13 +609,21 @@ export default function CampaignReviewStep({
               <div>
                 <strong>
                   Need {intensity.identityDeficit} more
-                  {form.campaignKind === "gmb" && form.focusCity
+                  {form.campaignKind === "gmb" && form.identityGeoScope === "city" && form.focusCity
                     ? ` ${form.focusCity}`
-                    : ""}{" "}
+                    : form.campaignKind === "gmb" && form.identityGeoScope === "country"
+                      ? " AU"
+                      : ""}{" "}
                   identities
                 </strong>
                 <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
-                  {form.campaignKind === "gmb" && form.focusCity ? (
+                  {form.campaignKind === "gmb" && form.identityGeoScope === "country" ? (
+                    <>
+                      You have {intensity.activeIdentityCount} eligible country-wide but this plan
+                      needs about {intensity.suggestedIdentities}. Clear any Identities-tab
+                      selection to use the full AU pool.
+                    </>
+                  ) : form.campaignKind === "gmb" && form.focusCity ? (
                     <>
                       You have {intensity.activeIdentityCount} eligible in {form.focusCity} but this
                       plan needs about {intensity.suggestedIdentities}. New identities will be
@@ -574,7 +647,9 @@ export default function CampaignReviewStep({
               >
                 {busy === "identities"
                   ? "Creating..."
-                  : form.campaignKind === "gmb" && form.focusCity
+                  : form.campaignKind === "gmb" &&
+                      form.identityGeoScope === "city" &&
+                      form.focusCity
                     ? `Create ${intensity.identityDeficit} ${form.focusCity} identities`
                     : `Create ${intensity.identityDeficit} identities`}
               </button>

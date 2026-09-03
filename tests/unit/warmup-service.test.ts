@@ -95,6 +95,43 @@ describe("warmup eligibility", () => {
   });
 });
 
+describe("identityMatchesCampaignGeo", () => {
+  it("locks to city in hyper-local mode", async () => {
+    const { identityMatchesCampaignGeo } = await import("../../src/warmup/warmup-service.js");
+    const adelaide = makeIdentity({ city: "Adelaide", region: "SA", country: "AU" });
+    const sydney = makeIdentity({ city: "Sydney", region: "NSW", country: "AU", externalId: "au_002" });
+    expect(
+      identityMatchesCampaignGeo(adelaide, {
+        scope: "city",
+        focusCity: "Adelaide",
+        focusRegion: "SA",
+        country: "AU",
+      }),
+    ).toBe(true);
+    expect(
+      identityMatchesCampaignGeo(sydney, {
+        scope: "city",
+        focusCity: "Adelaide",
+        focusRegion: "SA",
+        country: "AU",
+      }),
+    ).toBe(false);
+  });
+
+  it("allows any country identity in country-wide mode", async () => {
+    const { identityMatchesCampaignGeo } = await import("../../src/warmup/warmup-service.js");
+    const sydney = makeIdentity({ city: "Sydney", region: "NSW", country: "AU", externalId: "au_002" });
+    expect(
+      identityMatchesCampaignGeo(sydney, {
+        scope: "country",
+        focusCity: "Adelaide",
+        focusRegion: "SA",
+        country: "AU",
+      }),
+    ).toBe(true);
+  });
+});
+
 describe("warmup query selection", () => {
   it("assigns a stable commercial graduation query per identity", () => {
     const first = pickGraduationQuery("au_010", "Perth");

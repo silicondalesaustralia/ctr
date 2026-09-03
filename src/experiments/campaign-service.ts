@@ -24,7 +24,9 @@ import { assignMissingPersonas, createAdditionalIdentities } from "../identities
 import {
   computeWarmupProgress,
   countEligibleIdentities,
+  countEligibleIdentitiesInCountry,
   getCampaignIdentityPool,
+  identityMatchesCampaignGeo,
   setCampaignIdentities,
 } from "../warmup/warmup-service.js";
 import { isWarmupExperiment } from "../warmup/warmup-experiment.js";
@@ -55,6 +57,8 @@ export interface CampaignQueryInput {
 export interface UpsertCampaignInput extends CreateExperimentInput {
   campaignKind?: CampaignKind | "url" | "gmb";
   focusCity?: string | null;
+  /** city = hyper-local identities; country = any identity in AU (or experiment.country). */
+  identityGeoScope?: "city" | "country" | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -253,15 +257,19 @@ export async function previewCampaignIntensity(
   const experiment = experimentId
     ? await prisma.experiment.findUnique({
         where: { id: experimentId },
-        select: { requireWarmupIdentities: true },
+        select: { requireWarmupIdentities: true, country: true },
       })
     : null;
   const requireWarmup = experiment?.requireWarmupIdentities ?? true;
-  const identityCount = await countEligibleIdentities(
-    region === "ALL" ? null : region,
-    requireWarmup,
-    resolved.focusCity,
-  );
+  const geoScope = input.identityGeoScope === "country" ? "country" : "city";
+  const identityCount =
+    geoScope === "country"
+      ? await countEligibleIdentitiesInCountry(experiment?.country ?? "AU", requireWarmup)
+      : await countEligibleIdentities(
+          region === "ALL" ? null : region,
+          requireWarmup,
+          resolved.focusCity,
+        );
 
   const siteCurveData =
     resolved.campaignKind === "url" &&
@@ -387,6 +395,12 @@ async function saveCampaignConfig(
       campaignKind: resolved.campaignKind,
       focusRegion: resolved.region === "ALL" ? null : resolved.region,
       focusCity: resolved.focusCity,
+      identityGeoScope:
+        input.identityGeoScope === "country"
+          ? "country"
+          : input.identityGeoScope === "city"
+            ? "city"
+            : (existing?.identityGeoScope ?? "city"),
       gmbBusinessName: resolved.gmbBusinessName,
       gmbPlaceId: resolved.gmbPlaceId,
       gmbMapsUrl: resolved.gmbMapsUrl,
@@ -463,6 +477,7 @@ export async function createCampaign(
     sessionsPerMonth: intensity.totalAllocatedSessions,
     campaignKind: resolved.campaignKind,
     focusCity: resolved.focusCity,
+    identityGeoScope: input.identityGeoScope === "country" ? "country" : "city",
     gmbBusinessName: resolved.gmbBusinessName,
     gmbPlaceId: resolved.gmbPlaceId,
     gmbMapsUrl: resolved.gmbMapsUrl,
@@ -588,14 +603,17 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
       existing.focusCity,
     );
     if (identities.length === 0) {
+      const scope = existing.identityGeoScope === "country" ? "country" : "city";
       const where =
-        existing.focusCity?.trim() ||
-        (existing.focusRegion && existing.focusRegion !== "ALL"
-          ? existing.focusRegion
-          : null);
+        scope === "country"
+          ? existing.country || "AU"
+          : existing.focusCity?.trim() ||
+            (existing.focusRegion && existing.focusRegion !== "ALL"
+              ? existing.focusRegion
+              : null);
       throw new Error(
         where
-          ? `Cannot start: no identities match ${where}. Pick geo-matched identities on the Identities tab (or clear the selection to use the city pool).`
+          ? `Cannot start: no identities match ${where} (${scope}-wide pool). Pick matching identities on the Identities tab, or clear the selection to use the full ${scope} pool.`
           : "Cannot start: no identities in the campaign pool.",
       );
     }
@@ -812,12 +830,16 @@ export async function getCampaignIdentities(experimentId: string): Promise<Campa
 
   const focusRegion = campaign.focusRegion;
   const focusCity = campaign.focusCity;
+  const geoScope = campaign.identityGeoScope === "country" ? "country" : "city";
 
   return identities.map((identity) => {
     const stats = usage.get(identity.id);
-    const inRegionPool = focusCity
-      ? identity.city === focusCity
-      : !focusRegion || identity.region === focusRegion;
+    const inRegionPool = identityMatchesCampaignGeo(identity, {
+      scope: geoScope,
+      focusCity,
+      focusRegion,
+      country: campaign.country,
+    });
     const selected = hasExplicitSelection
       ? selectedIds.has(identity.id)
       : inRegionPool &&
@@ -866,6 +888,7 @@ export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
     campaignKind: campaign.campaignKind,
     region: campaign.focusRegion ?? "ALL",
     focusCity: campaign.focusCity,
+    identityGeoScope: campaign.identityGeoScope,
     gmbBusinessName: campaign.gmbBusinessName,
     campaignDurationDays: campaign.campaignDurationDays,
     monthlySessionTarget: campaign.monthlySessionTarget,
@@ -893,6 +916,7 @@ export function serializeCampaign(
     campaignKind: campaign.campaignKind,
     region: campaign.focusRegion ?? "ALL",
     focusCity: campaign.focusCity,
+    identityGeoScope: campaign.identityGeoScope,
     gmbBusinessName: campaign.gmbBusinessName,
     gmbPlaceId: campaign.gmbPlaceId,
     gmbMapsUrl: campaign.gmbMapsUrl,

@@ -77,6 +77,31 @@ export function identityAllowedForCampaign(
   return isWarmupEligible(identity);
 }
 
+export type IdentityGeoScopeValue = "city" | "country";
+
+/** Pure geo match used by campaign identity pools. */
+export function identityMatchesCampaignGeo(
+  identity: Pick<Identity, "city" | "region" | "country">,
+  opts: {
+    scope: IdentityGeoScopeValue;
+    focusCity?: string | null;
+    focusRegion?: string | null;
+    country?: string | null;
+  },
+): boolean {
+  if (opts.scope === "country") {
+    const country = opts.country?.trim();
+    return !country || identity.country === country;
+  }
+  if (opts.focusCity?.trim()) {
+    return (identity.city ?? "").toLowerCase() === opts.focusCity.trim().toLowerCase();
+  }
+  if (opts.focusRegion && opts.focusRegion !== "ALL") {
+    return identity.region === opts.focusRegion;
+  }
+  return true;
+}
+
 export async function refreshWarmupEligibility(identityId: string): Promise<Identity> {
   const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
   if (identity.warmupStatus === "eligible") {
@@ -396,6 +421,18 @@ export async function countEligibleIdentities(
     .length;
 }
 
+/** Country-wide eligible count (ignores city/region). */
+export async function countEligibleIdentitiesInCountry(
+  country = "AU",
+  requireWarmup = true,
+): Promise<number> {
+  const identities = await prisma.identity.findMany({
+    where: { active: true, country },
+  });
+  return identities.filter((identity) => identityAllowedForCampaign(identity, requireWarmup))
+    .length;
+}
+
 export async function getCampaignIdentityPool(
   experimentId: string,
   focusRegion?: string | null,
@@ -403,19 +440,26 @@ export async function getCampaignIdentityPool(
 ): Promise<Identity[]> {
   const experiment = await prisma.experiment.findUniqueOrThrow({
     where: { id: experimentId },
-    select: { requireWarmupIdentities: true },
+    select: {
+      requireWarmupIdentities: true,
+      identityGeoScope: true,
+      focusRegion: true,
+      focusCity: true,
+      country: true,
+    },
   });
   const requireWarmup = experiment.requireWarmupIdentities;
+  const scope = experiment.identityGeoScope === "country" ? "country" : "city";
+  const city = focusCity ?? experiment.focusCity;
+  const region = focusRegion ?? experiment.focusRegion;
 
-  const matchesGeo = (identity: Identity): boolean => {
-    if (focusCity?.trim()) {
-      return (identity.city ?? "").toLowerCase() === focusCity.trim().toLowerCase();
-    }
-    if (focusRegion && focusRegion !== "ALL") {
-      return identity.region === focusRegion;
-    }
-    return true;
-  };
+  const matchesGeo = (identity: Identity): boolean =>
+    identityMatchesCampaignGeo(identity, {
+      scope,
+      focusCity: city,
+      focusRegion: region,
+      country: experiment.country,
+    });
 
   const selections = await prisma.experimentIdentity.findMany({
     where: { experimentId, selected: true },
@@ -436,10 +480,15 @@ export async function getCampaignIdentityPool(
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
-      ...(focusCity?.trim() ? { city: focusCity.trim() } : {}),
-      ...(!focusCity?.trim() && focusRegion && focusRegion !== "ALL"
-        ? { region: focusRegion }
-        : {}),
+      ...(scope === "country"
+        ? experiment.country
+          ? { country: experiment.country }
+          : {}
+        : city?.trim()
+          ? { city: city.trim() }
+          : !city?.trim() && region && region !== "ALL"
+            ? { region }
+            : {}),
     },
   });
 

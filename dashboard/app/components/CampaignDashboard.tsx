@@ -22,6 +22,7 @@ import {
   type CampaignFormState,
   type CampaignKind,
   type CampaignTab,
+  type IdentityGeoScope,
   type IntensitySummary,
   type PreflightSummary,
   type QueryRow,
@@ -57,6 +58,7 @@ interface CampaignProposal {
   targetUrl: string;
   region: string;
   focusCity?: string | null;
+  identityGeoScope?: IdentityGeoScope | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -89,6 +91,7 @@ interface Campaign {
   campaignKind?: CampaignKind;
   region: string;
   focusCity?: string | null;
+  identityGeoScope?: IdentityGeoScope | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -128,6 +131,7 @@ const defaultForm = (): CampaignFormState => ({
   targetUrl: "",
   region: "ALL",
   focusCity: "",
+  identityGeoScope: "city",
   gmbBusinessName: "",
   gmbPlaceId: "",
   gmbMapsUrl: "",
@@ -317,6 +321,7 @@ export default function CampaignDashboard({
       targetUrl: c.targetUrl,
       region: c.region,
       focusCity: c.focusCity ?? "",
+      identityGeoScope: c.identityGeoScope === "country" ? "country" : "city",
       gmbBusinessName: c.gmbBusinessName ?? "",
       gmbPlaceId: c.gmbPlaceId ?? "",
       gmbMapsUrl: c.gmbMapsUrl ?? "",
@@ -418,6 +423,7 @@ export default function CampaignDashboard({
         form.campaignKind === "gmb" ? form.gmbMapsUrl || form.targetUrl : form.targetUrl,
       region: form.region,
       focusCity: form.focusCity || null,
+      identityGeoScope: form.identityGeoScope,
       gmbBusinessName: form.gmbBusinessName || null,
       gmbPlaceId: form.gmbPlaceId || null,
       gmbMapsUrl: form.gmbMapsUrl || null,
@@ -795,6 +801,7 @@ export default function CampaignDashboard({
           gmbBusinessName={form.gmbBusinessName}
           gmbMapsUrl={form.gmbMapsUrl}
           focusCity={form.focusCity}
+          identityGeoScope={form.identityGeoScope}
           gmbActions={form.gmbActions}
           cities={cities}
           busy={busy === "analyze"}
@@ -810,6 +817,7 @@ export default function CampaignDashboard({
               scheduleTimezone: city?.timezone ?? prev.scheduleTimezone,
             }));
           }}
+          onIdentityGeoScopeChange={(value) => updateForm("identityGeoScope", value)}
           onActionsChange={(value) => updateForm("gmbActions", value)}
           onAnalyze={() => void analyzeCampaign()}
           onBack={() => (isNew ? setStep("mode") : setStep("review"))}

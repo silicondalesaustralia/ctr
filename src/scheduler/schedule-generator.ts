@@ -106,9 +106,8 @@ export async function generateCampaignSchedule(
 
   const dailyTotals = distributeMonthlyTotal(input.totalSessions, durationDays);
   const groups: TreatmentGroup[] = input.treatmentGroups ?? ["search"];
-  const identities = input.experiment.focusRegion
-    ? input.identities.filter((identity) => identity.region === input.experiment.focusRegion)
-    : input.identities;
+  // Identities are already geo-filtered by getCampaignIdentityPool (city vs country).
+  const identities = input.identities;
 
   const desktopIdentities = identities.filter((i) => i.deviceClass === "desktop");
   const mobileIdentities = identities.filter((i) => i.deviceClass === "mobile");

@@ -18,6 +18,7 @@ export interface CreateExperimentInput {
   activate?: boolean;
   campaignKind?: "url" | "gmb";
   focusCity?: string | null;
+  identityGeoScope?: "city" | "country" | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -49,6 +50,7 @@ export async function createExperimentFromInput(
       monthlySessionTarget: input.sessionsPerMonth ?? 100,
       focusRegion: region === "ALL" ? null : region,
       focusCity: input.focusCity ?? null,
+      identityGeoScope: input.identityGeoScope === "country" ? "country" : "city",
       gmbBusinessName: input.gmbBusinessName ?? null,
       gmbPlaceId: input.gmbPlaceId ?? null,
       gmbMapsUrl: input.gmbMapsUrl ?? null,

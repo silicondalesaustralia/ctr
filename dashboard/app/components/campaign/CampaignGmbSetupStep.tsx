@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../../../lib/api";
-import type { GmbActionFlags } from "./shared";
+import type { GmbActionFlags, IdentityGeoScope } from "./shared";
 import { inputStyle, labelStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle } from "./shared";
 
 export interface CityOption {
@@ -27,6 +27,7 @@ interface Props {
   gmbBusinessName: string;
   gmbMapsUrl: string;
   focusCity: string;
+  identityGeoScope: IdentityGeoScope;
   gmbActions: GmbActionFlags;
   cities: CityOption[];
   busy: boolean;
@@ -34,6 +35,7 @@ interface Props {
   onBusinessNameChange: (value: string) => void;
   onMapsUrlChange: (value: string) => void;
   onCityChange: (value: string) => void;
+  onIdentityGeoScopeChange: (value: IdentityGeoScope) => void;
   onActionsChange: (value: GmbActionFlags) => void;
   onAnalyze: () => void;
   onBack: () => void;
@@ -44,6 +46,7 @@ export default function CampaignGmbSetupStep({
   gmbBusinessName,
   gmbMapsUrl,
   focusCity,
+  identityGeoScope,
   gmbActions,
   cities,
   busy,
@@ -51,6 +54,7 @@ export default function CampaignGmbSetupStep({
   onBusinessNameChange,
   onMapsUrlChange,
   onCityChange,
+  onIdentityGeoScopeChange,
   onActionsChange,
   onAnalyze,
   onBack,
@@ -94,7 +98,8 @@ export default function CampaignGmbSetupStep({
       <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>Step 1 of 2 · GMB</p>
       <h2 style={{ margin: "0 0 8px" }}>Google Business Profile</h2>
       <p style={{ color: "#64748b", margin: "0 0 24px", fontSize: 15 }}>
-        Target a Maps listing from the local pack. Geo locks proxies and identities to that city.
+        Target a Maps listing from the local pack. Choose whether sessions use identities from the
+        focus city only, or anywhere in Australia.
       </p>
 
       <div style={{ display: "grid", gap: 16 }}>
@@ -129,7 +134,7 @@ export default function CampaignGmbSetupStep({
         </label>
 
         <label>
-          <span style={labelStyle}>Geo location</span>
+          <span style={labelStyle}>Geo location (query / proxy city)</span>
           <select
             style={inputStyle}
             value={focusCity}
@@ -144,7 +149,46 @@ export default function CampaignGmbSetupStep({
           </select>
         </label>
 
-        {capacity && (
+        <fieldset style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, margin: 0 }}>
+          <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
+            Identity pool
+          </legend>
+          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+            Change anytime while the campaign is stopped, then start again to rebuild the schedule.
+          </p>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
+            <input
+              type="radio"
+              name="identityGeoScope"
+              checked={identityGeoScope === "city"}
+              onChange={() => onIdentityGeoScopeChange("city")}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <strong>Hyper-local (city)</strong>
+              <div style={{ color: "#64748b", fontSize: 13 }}>
+                Only identities whose home city matches the geo location above.
+              </div>
+            </span>
+          </label>
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <input
+              type="radio"
+              name="identityGeoScope"
+              checked={identityGeoScope === "country"}
+              onChange={() => onIdentityGeoScopeChange("country")}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              <strong>Country-wide (Australia)</strong>
+              <div style={{ color: "#64748b", fontSize: 13 }}>
+                Any eligible AU identity. Proxies still use the focus city when available.
+              </div>
+            </span>
+          </label>
+        </fieldset>
+
+        {capacity && identityGeoScope === "city" && (
           <div
             style={{
               background: "#f8fafc",
@@ -160,6 +204,20 @@ export default function CampaignGmbSetupStep({
               Proxies will use city-{capacity.proxyCity}. Create more identities after analyze if
               the plan needs a larger pool.
             </div>
+          </div>
+        )}
+        {identityGeoScope === "country" && (
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 8,
+              padding: 14,
+              fontSize: 14,
+            }}
+          >
+            Country-wide mode uses the full eligible AU identity pool (clear the Identities tab
+            selection to use everyone, or keep an explicit selection).
           </div>
         )}
         {capacityError && (
