@@ -54,9 +54,27 @@ async function pollLoop(): Promise<void> {
   }
 }
 
+const POLL_MS = 60_000;
+const STALE_CLEANUP_MS = 5 * 60_000;
+
 setInterval(() => {
   pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));
-}, 60000);
+}, POLL_MS);
+
+setInterval(() => {
+  cleanupStaleSessions()
+    .then(async () => {
+      const { forceReleaseGoLoginSlot } = await import(
+        "../src/providers/browser/gologin-slot-lock.js"
+      );
+      // Slot TTL is 25m; only force-clear when nothing is actually running.
+      const running = await prisma.session.count({ where: { status: "running" } });
+      if (running === 0) {
+        await forceReleaseGoLoginSlot();
+      }
+    })
+    .catch((error) => logger.error({ event: "stale_session_cleanup_failed", error: String(error) }));
+}, STALE_CLEANUP_MS);
 
 pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));
 
@@ -83,5 +101,5 @@ cleanupStaleSessions().catch((error) =>
 );
 
 console.log(
-  `Session worker started with concurrency=1 (campaign + warmup queues) serp=${SERP_CLICK_STRATEGY} commit=${process.env.RAILWAY_GIT_COMMIT_SHA ?? "local"}`,
+  `Session worker started with concurrency=1 lock=45m (campaign + warmup queues) serp=${SERP_CLICK_STRATEGY} commit=${process.env.RAILWAY_GIT_COMMIT_SHA ?? "local"}`,
 );

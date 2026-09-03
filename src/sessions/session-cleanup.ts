@@ -151,7 +151,41 @@ export async function cleanupStaleScheduledSessions(
   return count;
 }
 
+/**
+ * Warmup rows stay `running` with no sessionId until the job finishes.
+ * After campaign/warmup Session orphans are cleared, re-queue stranded warmups.
+ */
+export async function cleanupStaleWarmupSessions(): Promise<number> {
+  const runningWarmups = await prisma.warmupSession.findMany({
+    where: { status: "running" },
+  });
+
+  let count = 0;
+  for (const warmup of runningWarmups) {
+    const activeSession = await prisma.session.findFirst({
+      where: { identityId: warmup.identityId, status: "running" },
+      select: { id: true },
+    });
+    if (activeSession) continue;
+
+    await prisma.warmupSession.update({
+      where: { id: warmup.id },
+      data: {
+        status: "scheduled",
+        scheduledAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+    });
+    count += 1;
+  }
+
+  if (count > 0) {
+    console.error(`[session] Re-queued ${count} stale warmup session(s)`);
+  }
+  return count;
+}
+
 export async function cleanupStaleSessions(): Promise<void> {
   await cleanupStaleRunningSessions();
   await cleanupStaleScheduledSessions();
+  await cleanupStaleWarmupSessions();
 }

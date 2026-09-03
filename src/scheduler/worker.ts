@@ -1,10 +1,13 @@
 import { Queue, Worker, type Job } from "bullmq";
-import { getEnv, isRunnerEnabledAsync } from "../config/env.js";
+import { isRunnerEnabledAsync } from "../config/env.js";
 import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { runSession } from "../sessions/session-runner.js";
-import { cleanupStaleSessions } from "../sessions/session-cleanup.js";
 import { getRetryDelayMinutes, shouldRetry } from "./retry-policy.js";
+import {
+  BULLMQ_JOB_LOCK_MS,
+  BULLMQ_STALLED_INTERVAL_MS,
+} from "./bullmq-options.js";
 import { addMinutes } from "../utils/helpers.js";
 import { logger } from "../config/logger.js";
 
@@ -129,6 +132,9 @@ export function createSessionWorker(): Worker<SessionJobData> {
     {
       connection: getConnection(),
       concurrency: 1,
+      lockDuration: BULLMQ_JOB_LOCK_MS,
+      stalledInterval: BULLMQ_STALLED_INTERVAL_MS,
+      maxStalledCount: 1,
     },
   );
 }

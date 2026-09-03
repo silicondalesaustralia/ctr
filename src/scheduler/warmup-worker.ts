@@ -3,6 +3,10 @@ import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { runWarmupSession } from "../sessions/warmup-runner.js";
 import { logger } from "../config/logger.js";
+import {
+  BULLMQ_JOB_LOCK_MS,
+  BULLMQ_STALLED_INTERVAL_MS,
+} from "./bullmq-options.js";
 
 const QUEUE_NAME = "warmup-jobs";
 
@@ -121,6 +125,9 @@ export function createWarmupWorker(): Worker<WarmupJobData> {
     {
       connection: getConnection(),
       concurrency: 1,
+      lockDuration: BULLMQ_JOB_LOCK_MS,
+      stalledInterval: BULLMQ_STALLED_INTERVAL_MS,
+      maxStalledCount: 1,
     },
   );
 }
