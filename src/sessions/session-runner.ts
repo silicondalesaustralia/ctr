@@ -43,6 +43,7 @@ export interface RunSessionResult {
   sessionId: string;
   status: string;
   errorCode?: string;
+  blockReason?: string;
 }
 
 async function connectBrowserWithRetry(wsEndpoint: string, maxAttempts = 4) {
@@ -273,7 +274,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
           experimentId: input.experiment.id,
           query: input.queryText,
         });
-        return { sessionId: session.id, status: "blocked" };
+        return { sessionId: session.id, status: "blocked", blockReason: direct.blockReason };
       }
 
       await appendSessionEvent(session.id, "landing_loaded", { url: direct.landingUrl });
@@ -367,7 +368,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
         experimentId: input.experiment.id,
         query: input.queryText,
       });
-      return { sessionId: session.id, status: "blocked" };
+      return { sessionId: session.id, status: "blocked", blockReason: search.blockReason };
     }
 
     if (search.status === "search_abandoned") {

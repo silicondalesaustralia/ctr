@@ -14,6 +14,9 @@ export const RETRY_POLICIES: Record<string, RetryPolicy> = {
   gologin_parallel_limit: UNTIL_SUCCESS,
   target_error: UNTIL_SUCCESS,
   google_error: UNTIL_SUCCESS,
+  /** Soft Google blocks — cool down then retry (headless sorry pages are common). */
+  google_sorry_page: { maxAttempts: 6, delayMinutes: 45 },
+  captcha_detected: { maxAttempts: 4, delayMinutes: 60 },
   /** Intentional run outcomes — do not retry. */
   blocked: { maxAttempts: 0, delayMinutes: 0 },
   target_not_found: { maxAttempts: 0, delayMinutes: 0 },

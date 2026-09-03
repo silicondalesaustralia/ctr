@@ -89,7 +89,10 @@ export async function processScheduledSession(
       },
     });
 
-    const retryKey = result.errorCode ?? result.status;
+    const retryKey =
+      result.status === "blocked" && result.blockReason
+        ? result.blockReason
+        : (result.errorCode ?? result.status);
     if (shouldRetry(retryKey, scheduled.attemptCount + 1)) {
       const delay = getRetryDelayMinutes(retryKey);
       await prisma.scheduledSession.update({
