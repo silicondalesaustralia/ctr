@@ -75,7 +75,7 @@ function reportMissingDatabaseEnv(): void {
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   BROWSER_PROFILE_PROVIDER: z.enum(["mock", "gologin", "multilogin"]).default("mock"),
-  PROXY_PROVIDER: z.enum(["mock", "decodo"]).default("mock"),
+  PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports"]).default("mock"),
   DRY_RUN: z
     .string()
     .optional()
@@ -109,6 +109,10 @@ const envSchema = z.object({
   DECODO_PROXY_PORT: z.string().optional(),
   DECODO_PROXY_USERNAME: z.string().optional(),
   DECODO_PROXY_PASSWORD: z.string().optional(),
+  PREMIUMPORTS_PROXY_HOST: z.string().optional(),
+  PREMIUMPORTS_PROXY_PORT: z.string().optional(),
+  PREMIUMPORTS_PROXY_USERNAME: z.string().optional(),
+  PREMIUMPORTS_PROXY_PASSWORD: z.string().optional(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   GSC_CLIENT_ID: z.string().optional(),
   GSC_CLIENT_SECRET: z.string().optional(),

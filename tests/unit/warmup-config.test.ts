@@ -8,9 +8,9 @@ import {
 } from "../../src/warmup/warmup-config.js";
 
 describe("warmup config", () => {
-  it("uses compact warmup defaults", () => {
-    expect(WARMUP_MIN_DAYS).toBe(0);
-    expect(WARMUP_SPREAD_DAYS).toBe(1);
+  it("uses 4-day warmup defaults", () => {
+    expect(WARMUP_MIN_DAYS).toBe(4);
+    expect(WARMUP_SPREAD_DAYS).toBe(4);
     expect(WARMUP_BENIGN_SITE_CLICKS).toBe(2);
   });
 

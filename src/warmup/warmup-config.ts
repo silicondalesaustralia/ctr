@@ -7,18 +7,18 @@ function warmupInt(envKey: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/** Minimum identity age before campaign eligibility (0 = as soon as clicks + graduation done). */
-export const WARMUP_MIN_DAYS = warmupInt("WARMUP_MIN_DAYS", 0);
+/** Minimum identity age before campaign eligibility (days). */
+export const WARMUP_MIN_DAYS = warmupInt("WARMUP_MIN_DAYS", 4);
 /** Benign SERP sessions that must click through to a site. */
 export const WARMUP_BENIGN_SITE_CLICKS = warmupInt("WARMUP_BENIGN_SITE_CLICKS", 2);
-/** Spread scheduled warmups across this many calendar days (1 = same day per identity). */
-export const WARMUP_SPREAD_DAYS = warmupInt("WARMUP_SPREAD_DAYS", 1);
+/** Spread scheduled warmups across this many calendar days (must cover required actions). */
+export const WARMUP_SPREAD_DAYS = warmupInt("WARMUP_SPREAD_DAYS", 4);
 export const WARMUP_GRADUATION_RETRY_HOURS = warmupInt("WARMUP_GRADUATION_RETRY_HOURS", 3);
 export const WARMUP_BENIGN_RETRY_HOURS = warmupInt("WARMUP_BENIGN_RETRY_HOURS", 2);
 /** Gap between same-day warmup slots for one identity (minutes). */
 export const WARMUP_SESSION_GAP_MINUTES = warmupInt("WARMUP_SESSION_GAP_MINUTES", 30);
-/** Interleave the full identity pool across this window (hours). */
-export const WARMUP_WINDOW_HOURS = warmupInt("WARMUP_WINDOW_HOURS", 48);
+/** Interleave the full identity pool across this window (hours). Default = 4 days. */
+export const WARMUP_WINDOW_HOURS = warmupInt("WARMUP_WINDOW_HOURS", 96);
 
 export const WARMUP_SYSTEM_SLUG = "__warmup__";
 
