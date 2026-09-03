@@ -98,7 +98,22 @@ GSC_REFRESH_TOKEN=
 GA4_PROPERTY_ID=
 ```
 
-## 6. After deploy
+## 6. Auto-deploy (GitHub → Railway)
+
+Both Railway services (`ctr`, `worker`) should be linked to `silicondalesaustralia/ctr` on branch `main`.
+
+**Why deploys sometimes stalled:** `.github/workflows/railway-deploy.yml` used to skip its only job when `RAILWAY_TOKEN` was missing. GitHub then reported **failure / No jobs were run**, and Railway **Wait for CI** blocked the native GitHub deploy — so you had to click Deploy manually.
+
+The workflow now always runs a job (success even without the token). Optional CLI deploy:
+
+1. Railway → Project → Settings → Tokens → create a **project token**
+2. GitHub repo → Settings → Secrets and variables → Actions → New secret  
+   `RAILWAY_TOKEN` = that token
+3. Optional variables (defaults are fine): `RAILWAY_SERVICE_NAME=ctr`, `RAILWAY_WORKER_SERVICE_NAME=worker`
+
+In each Railway service → Settings → Networking / Source: confirm **Wait for CI** is on only if you want Actions to gate deploys (this workflow must stay green).
+
+## 7. After deploy
 
 ```bash
 npm run experiment:create -- ./experiments/test-001.yml

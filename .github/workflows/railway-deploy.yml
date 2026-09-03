@@ -1,5 +1,9 @@
 name: Deploy Railway
 
+# Deploys ctr (API) + worker on every relevant push to main.
+# IMPORTANT: never skip the whole job with `if: secrets.*` — that yields
+# "No jobs were run" failures and can block Railway Wait-for-CI auto-deploy.
+
 on:
   push:
     branches: [main]
@@ -8,28 +12,63 @@ on:
       - "prisma/**"
       - "config/**"
       - "scripts/**"
+      - "fixtures/**"
+      - "experiments/**"
       - "Dockerfile"
       - "package.json"
       - "package-lock.json"
       - "railway.toml"
+      - ".github/workflows/railway-deploy.yml"
+
+concurrency:
+  group: railway-deploy-main
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve deploy credentials
+        id: creds
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::RAILWAY_TOKEN is not set. Skipping CLI deploy; Railway GitHub auto-deploy should still update ctr + worker."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Railway CLI
+        if: steps.creds.outputs.has_token == 'true'
         run: npm install -g @railway/cli
 
-      - name: Deploy API service
-        run: railway up --service "${{ vars.RAILWAY_SERVICE_ID }}" --detach
+      - name: Deploy ctr (API)
+        if: steps.creds.outputs.has_token == 'true'
+        run: |
+          SERVICE_NAME="${RAILWAY_SERVICE_NAME:-ctr}"
+          echo "Deploying service=${SERVICE_NAME}"
+          railway up --service "$SERVICE_NAME" --detach -y
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_NAME: ${{ vars.RAILWAY_SERVICE_NAME }}
 
-      - name: Deploy worker service
-        if: ${{ vars.RAILWAY_WORKER_SERVICE_ID != '' }}
-        run: railway up --service "${{ vars.RAILWAY_WORKER_SERVICE_ID }}" --detach
+      - name: Deploy worker
+        if: steps.creds.outputs.has_token == 'true'
+        run: |
+          SERVICE_NAME="${RAILWAY_WORKER_SERVICE_NAME:-worker}"
+          echo "Deploying service=${SERVICE_NAME}"
+          railway up --service "$SERVICE_NAME" --detach -y
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKER_SERVICE_NAME: ${{ vars.RAILWAY_WORKER_SERVICE_NAME }}
+
+      - name: Confirm auto-deploy path
+        if: steps.creds.outputs.has_token != 'true'
+        run: |
+          echo "Workflow succeeded without CLI deploy."
+          echo "Both Railway services are linked to silicondalesaustralia/ctr — they deploy on push when Wait-for-CI passes."
+          echo "To also deploy via this workflow, add repo secret RAILWAY_TOKEN (Railway → Project Settings → Tokens)."
