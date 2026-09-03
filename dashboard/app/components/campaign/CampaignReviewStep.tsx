@@ -323,7 +323,8 @@ export default function CampaignReviewStep({
                 <span>
                   <strong>Hyper-local (city)</strong>
                   <div style={{ color: "#64748b", fontSize: 13 }}>
-                    Only identities whose home city matches {form.focusCity || "the geo city"}.
+                    Only identities whose home city matches the geo city from Setup
+                    {form.focusCity ? ` (${form.focusCity})` : ""}.
                   </div>
                 </span>
               </label>

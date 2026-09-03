@@ -315,13 +315,17 @@ export default function CampaignDashboard({
   }
 
   function applyCampaign(c: Campaign) {
-    setForm({
+    setForm((prev) => ({
       campaignKind: c.campaignKind === "gmb" ? "gmb" : "url",
       keyword: c.keyword,
       targetUrl: c.targetUrl,
       region: c.region,
       focusCity: c.focusCity ?? "",
-      identityGeoScope: c.identityGeoScope === "country" ? "country" : "city",
+      // Prefer API value; if older API omits the field, keep the in-form selection.
+      identityGeoScope:
+        c.identityGeoScope === "country" || c.identityGeoScope === "city"
+          ? c.identityGeoScope
+          : prev.identityGeoScope,
       gmbBusinessName: c.gmbBusinessName ?? "",
       gmbPlaceId: c.gmbPlaceId ?? "",
       gmbMapsUrl: c.gmbMapsUrl ?? "",
@@ -344,8 +348,8 @@ export default function CampaignDashboard({
       plannedSessionCap: c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
       targetIdentityCount: c.intensity?.suggestedIdentities ?? null,
       organicMaxSessionsPerIdentity: 2,
-      selectedIdentityIds: [],
-    });
+      selectedIdentityIds: prev.selectedIdentityIds,
+    }));
     setIntensity(c.intensity);
     setCampaignActive(c.status === "active");
     setCampaignStatus(c.status);

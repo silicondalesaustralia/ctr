@@ -257,11 +257,16 @@ export async function previewCampaignIntensity(
   const experiment = experimentId
     ? await prisma.experiment.findUnique({
         where: { id: experimentId },
-        select: { requireWarmupIdentities: true, country: true },
+        select: { requireWarmupIdentities: true, country: true, identityGeoScope: true },
       })
     : null;
   const requireWarmup = experiment?.requireWarmupIdentities ?? true;
-  const geoScope = input.identityGeoScope === "country" ? "country" : "city";
+  const geoScope =
+    input.identityGeoScope === "country" || input.identityGeoScope === "city"
+      ? input.identityGeoScope
+      : experiment?.identityGeoScope === "country"
+        ? "country"
+        : "city";
   const identityCount =
     geoScope === "country"
       ? await countEligibleIdentitiesInCountry(experiment?.country ?? "AU", requireWarmup)
