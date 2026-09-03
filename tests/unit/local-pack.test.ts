@@ -30,3 +30,12 @@ describe("namesMatch", () => {
     expect(namesMatch("McLennan Plumbing & Gas 5.0", "McLennan Plumbing & Gas")).toBe(true);
   });
 });
+
+describe("mapsSearchUrl", () => {
+  it("builds AU maps search URL", async () => {
+    const { mapsSearchUrl } = await import("../../src/browser/local-pack.js");
+    expect(mapsSearchUrl("plumber Mount Barker")).toContain(
+      "google.com.au/maps/search/plumber%20Mount%20Barker",
+    );
+  });
+});

@@ -1,7 +1,15 @@
 import type { Page } from "playwright";
 import { acceptConsentIfPresent } from "./blocked-detection.js";
+import {
+  CARD_SELECTORS,
+  collectLocalPackCandidates,
+  mapsSearchUrl,
+  type LocalPackCandidate,
+} from "./local-pack-collect.js";
 
 export type LocalPackSource = "local_pack" | "more_places";
+export type { LocalPackCandidate };
+export { collectLocalPackCandidates, mapsSearchUrl };
 
 export interface LocalPackResult {
   position: number;
@@ -27,21 +35,6 @@ export function namesMatch(candidate: string, target: string): boolean {
   return a === b || a.includes(b) || b.includes(a);
 }
 
-interface LocalPackCandidate {
-  title: string;
-  href: string;
-  placeId: string | null;
-  cid: string | null;
-}
-
-const CARD_SELECTORS =
-  ".Nv2PK, [role='article'], .VkpGBb, .rllt__link, [data-cat='local'], .cXedhc, .section-result, .uMdZh";
-
-const TITLE_SELECTORS =
-  '[role="heading"], .OSrXXb, .qBF1Pd, .dbg0pd, .fontHeadlineSmall, .fontHeadlineLarge, .fontTitleLarge, .qLueuc, .fontHeadline';
-
-const UI_TITLE = /^(directions|website|call|more places|see more|share|save|collapse|results)$/i;
-
 export function localFinderUrl(query: string): string {
   const q = encodeURIComponent(query.trim());
   return `https://www.google.com.au/search?q=${q}&udm=1&hl=en-AU&gl=au`;
@@ -51,12 +44,13 @@ export function isLocalFinderPage(url: string): boolean {
   return /[?&]udm=1/i.test(url);
 }
 
-/** Open Google's local Places list (`udm=1`) — same view as "More places". */
-export async function openLocalFinder(page: Page, query: string): Promise<void> {
-  if (isLocalFinderPage(page.url())) return;
+export function isMapsSearchPage(url: string): boolean {
+  return /google\.[^/]*\/maps\/search/i.test(url);
+}
 
+async function gotoSettled(page: Page, url: string): Promise<void> {
   try {
-    await page.goto(localFinderUrl(query), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!/ERR_ABORTED|Navigation interrupted|interrupted by another navigation/i.test(message)) {
@@ -65,198 +59,25 @@ export async function openLocalFinder(page: Page, query: string): Promise<void> 
     await page.waitForLoadState("domcontentloaded").catch(() => undefined);
     await page.waitForTimeout(1000);
   }
+}
+
+/** Open Google's local Places list (`udm=1`) — same view as "More places". */
+export async function openLocalFinder(page: Page, query: string): Promise<void> {
+  if (isLocalFinderPage(page.url())) return;
+  await gotoSettled(page, localFinderUrl(query));
   await acceptConsentIfPresent(page);
   await page.waitForTimeout(2000);
   await scrollPlacesList(page);
 }
 
-/** Places cards are often clickable divs; title headings matter more than href. */
-export async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidate[]> {
-  const url = page.url();
-  const isLocalFinder = /[?&]udm=1/i.test(url);
-  const modern = await collectModernLocalCandidates(page, isLocalFinder);
-  if (modern.length > 0) return modern;
-
-  const headings = await collectHeadingCandidates(page, isLocalFinder);
-  if (headings.length > 0) return headings;
-
-  return collectBasicHtmlCandidates(page);
-}
-
-async function collectModernLocalCandidates(
-  page: Page,
-  isLocalFinder: boolean,
-): Promise<LocalPackCandidate[]> {
-  return page.evaluate(
-    ({ cardSelectors, titleSelectors, uiTitlePattern, isLocalFinder }) => {
-      const results: Array<{
-        title: string;
-        href: string;
-        placeId: string | null;
-        cid: string | null;
-      }> = [];
-      const seen = new Set<string>();
-      const uiTitle = new RegExp(uiTitlePattern, "i");
-
-      const cards = Array.from(document.querySelectorAll(cardSelectors));
-      for (const card of cards) {
-        const heading = card.querySelector(titleSelectors);
-        let title = (heading?.textContent ?? "").replace(/\s+/g, " ").trim();
-        if (title.length < 2) {
-          const aria = card.getAttribute("aria-label") ?? "";
-          title = aria.split(/[·•|]/)[0]?.replace(/\s+/g, " ").trim() ?? "";
-        }
-        if (title.length < 2) {
-          const link = card.querySelector("a.hfpxzc, a[href*='/maps']") as HTMLAnchorElement | null;
-          const linkAria = link?.getAttribute("aria-label") ?? "";
-          title = linkAria.split(/[·•|]/)[0]?.replace(/\s+/g, " ").trim() ?? "";
-        }
-        if (title.length < 2) continue;
-        if (uiTitle.test(title)) continue;
-        if (title.length > 120) title = title.slice(0, 80).trim();
-
-        const cardText = (card.textContent ?? "").replace(/\s+/g, " ");
-        const looksLikeBusiness =
-          isLocalFinder ||
-          (title.length >= 3 &&
-            (/\d\.\d/.test(cardText) ||
-              /\(\d+\)/.test(cardText) ||
-              /website|directions|open|closed|plumber|gas|·/i.test(cardText) ||
-              card.matches(".Nv2PK, [role='article'], .VkpGBb")));
-        if (!looksLikeBusiness) continue;
-
-        const anchor = card.querySelector(
-          "a.hfpxzc, a[href*='/maps'], a[href*='cid='], a[href*='place'], a[href*='query_place_id='], a[href]",
-        ) as HTMLAnchorElement | null;
-        const href = anchor?.getAttribute("href") ?? "";
-
-        const blob = `${href} ${card.outerHTML.slice(0, 5000)}`;
-        const placeIdMatch = blob.match(/query_place_id=([^&"']+)|(ChIJ[\w-]+)/);
-        const cidMatch = blob.match(
-          /[?&"'\s]cid[=:](\d{6,})|ludocid[=:](\d{6,})|data-cid[=:]["']?(\d{6,})|!1s0x[\da-f]+:0x([\da-f]+)/i,
-        );
-        let cid = cidMatch?.[1] ?? cidMatch?.[2] ?? cidMatch?.[3] ?? null;
-        if (!cid && cidMatch?.[4]) {
-          try {
-            cid = BigInt(`0x${cidMatch[4]}`).toString();
-          } catch {
-            cid = null;
-          }
-        }
-
-        const key = title.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        results.push({
-          title,
-          href,
-          placeId: placeIdMatch?.[1] ?? placeIdMatch?.[2] ?? null,
-          cid,
-        });
-      }
-
-      return results;
-    },
-    {
-      cardSelectors: CARD_SELECTORS,
-      titleSelectors: TITLE_SELECTORS,
-      uiTitlePattern: UI_TITLE.source,
-      isLocalFinder,
-    },
-  );
-}
-
-async function collectHeadingCandidates(
-  page: Page,
-  isLocalFinder: boolean,
-): Promise<LocalPackCandidate[]> {
-  if (!isLocalFinder) return [];
-
-  return page.evaluate((uiTitlePattern) => {
-    const results: Array<{
-      title: string;
-      href: string;
-      placeId: string | null;
-      cid: string | null;
-    }> = [];
-    const seen = new Set<string>();
-    const uiTitle = new RegExp(uiTitlePattern, "i");
-    const root = document.querySelector("#rso") ?? document.querySelector("#search") ?? document.body;
-
-    for (const heading of Array.from(root.querySelectorAll('[role="heading"]'))) {
-      let title = (heading.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (title.length < 3 || title.length > 120 || uiTitle.test(title)) continue;
-
-      const card =
-        heading.closest(".Nv2PK, [role='article'], .VkpGBb, [data-cid], [jsaction]") ??
-        heading.parentElement;
-      if (!card) continue;
-
-      const anchor = card.querySelector(
-        "a.hfpxzc, a[href*='/maps'], a[href*='cid='], a[href*='place'], a[href*='query_place_id=']",
-      ) as HTMLAnchorElement | null;
-      const href = anchor?.getAttribute("href") ?? "";
-      const blob = `${href} ${card.outerHTML.slice(0, 5000)}`;
-      const placeIdMatch = blob.match(/query_place_id=([^&"']+)|(ChIJ[\w-]+)/);
-      const cidMatch = blob.match(/[?&]cid=(\d{6,})/i);
-
-      const key = title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      results.push({
-        title,
-        href,
-        placeId: placeIdMatch?.[1] ?? placeIdMatch?.[2] ?? null,
-        cid: cidMatch?.[1] ?? null,
-      });
-    }
-
-    return results;
-  }, UI_TITLE.source);
-}
-
-async function collectBasicHtmlCandidates(page: Page): Promise<LocalPackCandidate[]> {
-  return page.evaluate((uiTitlePattern) => {
-    const results: Array<{
-      title: string;
-      href: string;
-      placeId: string | null;
-      cid: string | null;
-    }> = [];
-    const seen = new Set<string>();
-    const uiTitle = new RegExp(uiTitlePattern, "i");
-
-    for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
-      const href = anchor.getAttribute("href") ?? "";
-      if (!/maps|cid=|place|query_place_id/i.test(href)) continue;
-
-      let title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (title.length < 3) {
-        const parent = anchor.closest("div, li, td");
-        title = (parent?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
-      }
-      if (title.length < 3 || title.length > 120 || uiTitle.test(title)) continue;
-
-      const blob = `${href} ${anchor.outerHTML}`;
-      const placeIdMatch = blob.match(/query_place_id=([^&"']+)|(ChIJ[\w-]+)/);
-      const cidMatch = blob.match(/[?&]cid=(\d{6,})/i);
-
-      const key = title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      results.push({
-        title,
-        href,
-        placeId: placeIdMatch?.[1] ?? placeIdMatch?.[2] ?? null,
-        cid: cidMatch?.[1] ?? null,
-      });
-    }
-
-    return results;
-  }, UI_TITLE.source);
+/** Fallback when udm=1 serves empty/chrome-only DOM — Maps search sidebar. */
+export async function openMapsSearch(page: Page, query: string): Promise<void> {
+  const target = mapsSearchUrl(query);
+  if (page.url().startsWith(target.split("?")[0]!)) return;
+  await gotoSettled(page, target);
+  await acceptConsentIfPresent(page);
+  await page.waitForTimeout(2500);
+  await scrollPlacesList(page, 6);
 }
 
 function matchCandidate(
@@ -313,7 +134,7 @@ async function waitForLocalCandidates(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
   await page
     .waitForSelector(
-      ".Nv2PK, .VkpGBb, [role='article'], [role='heading'], .rllt__link, #rso a[href*='maps']",
+      ".Nv2PK, .VkpGBb, [role='article'], [role='heading'], .rllt__link, #rso a[href*='maps'], a[href*='/maps/place']",
       { timeout: 12_000 },
     )
     .catch(() => undefined);
@@ -325,6 +146,10 @@ export async function openMorePlaces(page: Page, query?: string): Promise<boolea
     return true;
   }
   return false;
+}
+
+function realBusinessCount(candidates: LocalPackCandidate[]): number {
+  return candidates.filter((c) => !/^(maps|all|images)$/i.test(c.title.trim())).length;
 }
 
 export async function findGmbInLocalPack(
@@ -349,7 +174,6 @@ export async function findGmbInLocalPack(
 
   await openLocalFinder(page, input.query);
   await waitForLocalCandidates(page);
-
   candidates = await collectLocalPackCandidates(page);
   let found = matchCandidate(candidates, input, "more_places");
 
@@ -359,9 +183,32 @@ export async function findGmbInLocalPack(
     found = matchCandidate(candidates, input, "more_places");
   }
 
+  // Mobile often serves empty udm=1 chrome ("Maps" only). Fall back to Maps search.
+  if (!found && realBusinessCount(candidates) < 2) {
+    const mapsQuery = `${input.businessName} ${input.query}`.trim();
+    console.error(
+      `[gmb] udm=1 weak (candidates=${candidates.length}: ${candidates
+        .map((c) => c.title)
+        .slice(0, 8)
+        .join(" | ")}); trying Maps search`,
+    );
+    await openMapsSearch(page, mapsQuery);
+    await waitForLocalCandidates(page);
+    candidates = await collectLocalPackCandidates(page);
+    found = matchCandidate(candidates, input, "more_places");
+
+    if (!found) {
+      await openMapsSearch(page, input.query);
+      await waitForLocalCandidates(page);
+      await scrollPlacesList(page, 8);
+      candidates = await collectLocalPackCandidates(page);
+      found = matchCandidate(candidates, input, "more_places");
+    }
+  }
+
   if (!found) {
     console.error(
-      `[gmb] Not in Places list (udm=1); candidates=${candidates.length}: ${candidates
+      `[gmb] Not found; url=${page.url()} candidates=${candidates.length}: ${candidates
         .map((c) => c.title)
         .slice(0, 15)
         .join(" | ")}`,
@@ -380,7 +227,7 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
         const text = (card.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
         if (!text.includes(needle)) continue;
         const anchor = card.querySelector(
-          "a.hfpxzc, a[href*='/maps'], a[href]",
+          "a.hfpxzc, a[href*='/maps/place'], a[href*='/maps'], a[href]",
         ) as HTMLAnchorElement | null;
         const target = anchor ?? card;
         target.scrollIntoView({ block: "center", inline: "nearest" });
@@ -404,6 +251,19 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
           byHref.click();
           return true;
         }
+      }
+
+      for (const anchor of Array.from(
+        document.querySelectorAll('a[href*="/maps/place"]'),
+      ) as HTMLAnchorElement[]) {
+        const label = (anchor.getAttribute("aria-label") ?? anchor.textContent ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        if (!label.includes(needle)) continue;
+        anchor.scrollIntoView({ block: "center", inline: "nearest" });
+        anchor.click();
+        return true;
       }
       return false;
     },
