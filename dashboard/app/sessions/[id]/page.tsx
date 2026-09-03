@@ -95,19 +95,19 @@ export default function SessionDetailPage() {
               <p><strong>Persona:</strong> {session.personaId ?? session.identity.personaId ?? "—"}</p>
               <p><strong>SERP:</strong> {session.observedPosition ? `#${session.observedPosition} page ${session.serpPage}` : "Not found"}</p>
               <p><strong>Clicked:</strong> {session.targetClicked ? "Yes" : session.targetSkipped ? "Skipped" : "No"}</p>
-              <p><strong>Landing:</strong> {session.landingUrl ?? "—"}</p>
-              <p><strong>Final URL:</strong> {session.finalUrl ?? "—"}</p>
+              <p><strong>Landing:</strong> <span style={urlStyle}>{session.landingUrl ?? "—"}</span></p>
+              <p><strong>Final URL:</strong> <span style={urlStyle}>{session.finalUrl ?? "—"}</span></p>
               <p><strong>Duration:</strong> {session.durationSeconds}s · {session.pageviews} pages · {session.internalClicks} internal clicks · {session.scrollDepth.toFixed(0)}% scroll</p>
             </div>
 
             <div style={panelStyle}>
               <h3 style={{ marginTop: 0 }}>Event timeline</h3>
-              <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <ul style={{ margin: 0, paddingLeft: 20, overflowWrap: "anywhere" }}>
                 {session.events.map((event) => (
                   <li key={`${event.timestamp}-${event.eventType}`} style={{ marginBottom: 8 }}>
                     {new Date(event.timestamp).toLocaleString()} — {event.eventType}
                     {event.metadataJson ? (
-                      <pre style={{ fontSize: 12, color: "#64748b", margin: "4px 0 0" }}>
+                      <pre style={metaStyle}>
                         {event.metadataJson}
                       </pre>
                     ) : null}
@@ -128,4 +128,22 @@ const panelStyle: React.CSSProperties = {
   padding: 24,
   marginBottom: 16,
   boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+  overflow: "hidden",
+  maxWidth: "100%",
+};
+
+const urlStyle: React.CSSProperties = {
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const metaStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748b",
+  margin: "4px 0 0",
+  whiteSpace: "pre-wrap",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  maxWidth: "100%",
+  overflowX: "hidden",
 };
