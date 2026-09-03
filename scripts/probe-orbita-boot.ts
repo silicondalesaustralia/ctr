@@ -61,7 +61,7 @@ async function main(): Promise<void> {
     token: env.GOLOGIN_API_TOKEN!,
     profile_id: profileId,
     extra_params: extraParams,
-    autoUpdateBrowser: true,
+    autoUpdateBrowser: false,
     skipOrbitaHashChecking: true,
     browserMajorVersion: 135,
     timezone: {

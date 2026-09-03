@@ -7,6 +7,7 @@ import {
   BULLMQ_JOB_LOCK_MS,
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
+import { withBrowserJobExclusive } from "./browser-job-mutex.js";
 
 const QUEUE_NAME = "warmup-jobs";
 
@@ -120,7 +121,7 @@ export function createWarmupWorker(): Worker<WarmupJobData> {
   return new Worker<WarmupJobData>(
     QUEUE_NAME,
     async (job: Job<WarmupJobData>) => {
-      await processWarmupSession(job.data.warmupSessionId);
+      await withBrowserJobExclusive(() => processWarmupSession(job.data.warmupSessionId));
     },
     {
       connection: getConnection(),

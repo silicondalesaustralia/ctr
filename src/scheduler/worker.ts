@@ -8,6 +8,7 @@ import {
   BULLMQ_JOB_LOCK_MS,
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
+import { withBrowserJobExclusive } from "./browser-job-mutex.js";
 import { addMinutes } from "../utils/helpers.js";
 import { logger } from "../config/logger.js";
 
@@ -127,7 +128,9 @@ export function createSessionWorker(): Worker<SessionJobData> {
   return new Worker<SessionJobData>(
     QUEUE_NAME,
     async (job: Job<SessionJobData>) => {
-      await processScheduledSession(job.data.scheduledSessionId);
+      await withBrowserJobExclusive(() =>
+        processScheduledSession(job.data.scheduledSessionId),
+      );
     },
     {
       connection: getConnection(),

@@ -5,11 +5,16 @@ import {
   pollAndEnqueueDueWarmupSessions,
 } from "../src/scheduler/warmup-worker.js";
 import { cleanupStaleSessions } from "../src/sessions/session-cleanup.js";
+import { killOrphanBrowserProcesses, logWorkerMemory } from "../src/providers/browser/orphan-browsers.js";
 import { logger } from "../src/config/logger.js";
 import { prisma } from "../src/db/client.js";
 import { maybeRecalculateAdaptivePacing } from "../src/campaign/adaptive-pacing.js";
 import { backfillWarmupForExistingIdentities, backfillCampaignWarmupRequirements } from "../src/warmup/warmup-service.js";
 import { SERP_CLICK_STRATEGY } from "../src/browser/serp-parser.js";
+
+// OOM kills leave Orbita/Chrome behind; clear before accepting jobs.
+killOrphanBrowserProcesses("worker-boot");
+logWorkerMemory("worker-boot");
 
 const worker = createSessionWorker();
 const warmupWorker = createWarmupWorker();

@@ -3,6 +3,7 @@ import { isGoLoginHeadless } from "../../config/env.js";
 import type { ProxyConfig } from "../proxy/ProxyProvider.js";
 import type { RunningBrowser } from "./BrowserProfileProvider.js";
 import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
+import { killOrphanBrowserProcesses, logWorkerMemory } from "./orphan-browsers.js";
 
 type GlRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 
@@ -42,7 +43,8 @@ export async function startOrbitaWithProxy(
     token: apiToken,
     profile_id: profileId,
     extra_params: extraParams,
-    autoUpdateBrowser: true,
+    // true re-downloads Orbita on the worker and OOMs typical Railway plans.
+    autoUpdateBrowser: false,
     skipOrbitaHashChecking: true,
     // >=135 writes encoded proxy auth into preferences (Chrome/120 profiles otherwise skip auth).
     browserMajorVersion: 135,
@@ -54,16 +56,19 @@ export async function startOrbitaWithProxy(
     },
   });
 
+  logWorkerMemory(`before-orbita ${profileId}`);
   console.error(`[gologin] Starting local Orbita for ${profileId}…`);
   const started = await gl.start();
   if (!started.wsUrl) {
     await gl.stop().catch(() => undefined);
+    killOrphanBrowserProcesses("orbita-start-no-ws");
     throw new Error(`Orbita start returned no wsUrl for ${profileId}`);
   }
 
   activeOrbita.set(profileId, gl);
+  logWorkerMemory(`after-orbita ${profileId}`);
   console.error(
-    `[gologin] Orbita ready for ${profileId} (${isGoLoginHeadless() ? "headless" : "headful"}, Decodo via worker)`,
+    `[gologin] Orbita ready for ${profileId} (${isGoLoginHeadless() ? "headless" : "headful"}, proxy via worker)`,
   );
 
   return {
@@ -83,4 +88,6 @@ export async function stopOrbita(profileId: string): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[gologin] Orbita stop failed: ${message}`);
   });
+  killOrphanBrowserProcesses(`after-stop ${profileId}`);
+  logWorkerMemory(`after-stop ${profileId}`);
 }
