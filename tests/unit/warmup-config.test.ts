@@ -3,15 +3,21 @@ import {
   pickBenignWarmupQuery,
   pickGraduationQuery,
   WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_FIRST_DELAY_HOURS,
   WARMUP_MIN_DAYS,
+  WARMUP_SESSION_GAP_MINUTES,
   WARMUP_SPREAD_DAYS,
+  WARMUP_WINDOW_HOURS,
 } from "../../src/warmup/warmup-config.js";
 
 describe("warmup config", () => {
-  it("uses 4-day warmup defaults", () => {
+  it("uses stretched cold-start warmup defaults", () => {
     expect(WARMUP_MIN_DAYS).toBe(4);
-    expect(WARMUP_SPREAD_DAYS).toBe(4);
+    expect(WARMUP_SPREAD_DAYS).toBe(7);
     expect(WARMUP_BENIGN_SITE_CLICKS).toBe(2);
+    expect(WARMUP_SESSION_GAP_MINUTES).toBe(120);
+    expect(WARMUP_WINDOW_HOURS).toBe(168);
+    expect(WARMUP_FIRST_DELAY_HOURS).toBe(36);
   });
 
   it("fills city placeholders in graduation templates", () => {

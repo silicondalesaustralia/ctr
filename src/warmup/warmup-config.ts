@@ -12,13 +12,15 @@ export const WARMUP_MIN_DAYS = warmupInt("WARMUP_MIN_DAYS", 4);
 /** Benign SERP sessions that must click through to a site. */
 export const WARMUP_BENIGN_SITE_CLICKS = warmupInt("WARMUP_BENIGN_SITE_CLICKS", 2);
 /** Spread scheduled warmups across this many calendar days (must cover required actions). */
-export const WARMUP_SPREAD_DAYS = warmupInt("WARMUP_SPREAD_DAYS", 4);
+export const WARMUP_SPREAD_DAYS = warmupInt("WARMUP_SPREAD_DAYS", 7);
 export const WARMUP_GRADUATION_RETRY_HOURS = warmupInt("WARMUP_GRADUATION_RETRY_HOURS", 3);
 export const WARMUP_BENIGN_RETRY_HOURS = warmupInt("WARMUP_BENIGN_RETRY_HOURS", 2);
 /** Gap between same-day warmup slots for one identity (minutes). */
-export const WARMUP_SESSION_GAP_MINUTES = warmupInt("WARMUP_SESSION_GAP_MINUTES", 30);
-/** Interleave the full identity pool across this window (hours). Default = 4 days. */
-export const WARMUP_WINDOW_HOURS = warmupInt("WARMUP_WINDOW_HOURS", 96);
+export const WARMUP_SESSION_GAP_MINUTES = warmupInt("WARMUP_SESSION_GAP_MINUTES", 120);
+/** Interleave the full identity pool across this window (hours). Default = 7 days. */
+export const WARMUP_WINDOW_HOURS = warmupInt("WARMUP_WINDOW_HOURS", 168);
+/** Delay before a brand-new identity's first warmup (hours). */
+export const WARMUP_FIRST_DELAY_HOURS = warmupInt("WARMUP_FIRST_DELAY_HOURS", 36);
 
 export const WARMUP_SYSTEM_SLUG = "__warmup__";
 

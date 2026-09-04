@@ -5,6 +5,7 @@ import {
   pickGraduationQuery,
   WARMUP_BENIGN_RETRY_HOURS,
   WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_FIRST_DELAY_HOURS,
   WARMUP_GRADUATION_RETRY_HOURS,
   WARMUP_MIN_DAYS,
   WARMUP_SESSION_GAP_MINUTES,
@@ -225,22 +226,29 @@ function scheduleWarmupRows(identity: Identity, now = new Date()) {
 
   for (let slot = 0; slot < totalSlots; slot += 1) {
     let scheduledAt: Date;
+    const firstDelayMinutes = WARMUP_FIRST_DELAY_HOURS * 60;
 
     if (WARMUP_SPREAD_DAYS <= 1) {
-      const leadMinutes = randomBetween(15, 35);
-      const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 25);
+      const leadMinutes = firstDelayMinutes + randomBetween(15, 45);
+      const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 45);
       scheduledAt = addMinutes(now, leadMinutes + slot * gap);
     } else {
       const dayOffset = Math.min(
         WARMUP_SPREAD_DAYS - 1,
         Math.floor((slot / Math.max(totalSlots - 1, 1)) * (WARMUP_SPREAD_DAYS - 1)),
       );
+      // Cold profiles: never schedule the first action in the first ~FIRST_DELAY hours.
+      const minDayOffset = firstDelayMinutes >= 24 * 60 ? 1 : 0;
+      const effectiveDayOffset = Math.max(dayOffset, slot === 0 ? minDayOffset : dayOffset);
       const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
-      const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
+      const dayCalendar = addCalendarDays(baseCalendar, effectiveDayOffset);
 
       scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
-      if (scheduledAt <= now) {
-        scheduledAt = addMinutes(now, randomBetween(30, 180) + slot * randomBetween(120, 240));
+      if (scheduledAt <= addMinutes(now, firstDelayMinutes)) {
+        scheduledAt = addMinutes(
+          now,
+          firstDelayMinutes + randomBetween(30, 180) + slot * randomBetween(120, 240),
+        );
       }
     }
 
@@ -398,7 +406,7 @@ export async function backfillWarmupForExistingIdentities(): Promise<number> {
       await cancelPendingWarmupSessions(identity.id);
       continue;
     }
-    scheduled += await rebuildWarmupSchedule(identity);
+    scheduled += await scheduleWarmupForIdentity(identity);
   }
 
   return scheduled;
