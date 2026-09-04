@@ -29,7 +29,15 @@ describe("premiumports-utils", () => {
     expect(shouldSkipCityTargeting("Darwin")).toBe(true);
   });
 
-  it("slugifies multi-word cities", () => {
-    expect(toPremiumPortsCitySlug("Gold Coast")).toBe("goldcoast");
+  it("strips hyphens from session keys so dash params stay parseable", () => {
+    const username = buildPremiumPortsUsername("u_mirfyuibzz", {
+      country: "AU",
+      city: "Adelaide",
+      sessionKey: "abc-def-001",
+    });
+
+    expect(username).toBe(
+      "u_mirfyuibzz-country-au-city-adelaide-session-abcdef001-ttl-30",
+    );
   });
 });

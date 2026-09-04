@@ -31,7 +31,7 @@ export function buildPremiumPortsUsername(
 ): string {
   const country = (input.country || "AU").toLowerCase();
   const sessionKey = (input.sessionKey ?? "session")
-    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
     .slice(0, 24);
   const parts = [baseUsername, `country-${country}`];
 

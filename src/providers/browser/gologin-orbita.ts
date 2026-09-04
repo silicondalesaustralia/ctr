@@ -28,13 +28,11 @@ export async function startOrbitaWithProxy(
     activeOrbita.delete(profileId);
   }
 
-  const proxyServer = `http://${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@${proxy.host}:${proxy.port}`;
-
-  const extraParams = [
-    `--proxy-server=${proxyServer}`,
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-  ];
+  // Orbita 135+ writes authenticated proxy into Preferences
+  // (http://user:pass@host:port). Passing the same via --proxy-server
+  // duplicates auth and yields net::ERR_INVALID_AUTH_CREDENTIALS (seen with
+  // Premium Ports passwords that contain hyphens).
+  const extraParams = ["--no-sandbox", "--disable-dev-shm-usage"];
   if (isGoLoginHeadless()) {
     extraParams.push("--headless=new");
   }
@@ -57,7 +55,9 @@ export async function startOrbitaWithProxy(
   });
 
   logWorkerMemory(`before-orbita ${profileId}`);
-  console.error(`[gologin] Starting local Orbita for ${profileId}…`);
+  console.error(
+    `[gologin] Starting local Orbita for ${profileId} (proxy auth via profile prefs, host=${proxy.host}:${proxy.port})…`,
+  );
   const started = await gl.start();
   if (!started.wsUrl) {
     await gl.stop().catch(() => undefined);

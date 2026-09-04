@@ -47,12 +47,8 @@ async function main(): Promise<void> {
     },
   );
 
-  const proxyServer = `http://${encodeURIComponent(lease.username)}:${encodeURIComponent(lease.password)}@${lease.host}:${lease.port}`;
-  const extraParams = [
-    `--proxy-server=${proxyServer}`,
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-  ];
+  // Match production Orbita 135+: proxy auth comes from profile Preferences only.
+  const extraParams = ["--no-sandbox", "--disable-dev-shm-usage"];
   if (isGoLoginHeadless()) {
     extraParams.push("--headless=new");
   }
