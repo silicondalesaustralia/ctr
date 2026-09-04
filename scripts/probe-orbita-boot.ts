@@ -3,7 +3,7 @@
 import { GoLogin } from "gologin";
 import { getEnv, isGoLoginHeadless } from "../src/config/env.js";
 import { createProxyProvider } from "../src/providers/proxy/index.js";
-import { applyDecodoProxyToProfile } from "../src/providers/browser/gologin-proxy.js";
+import { clearProfileProxy } from "../src/providers/browser/gologin-proxy.js";
 
 const profileId = process.argv[2] ?? "6a8e86efd430d862c7d13847";
 
@@ -33,22 +33,14 @@ async function main(): Promise<void> {
     deviceClass: "mobile",
   });
 
-  await applyDecodoProxyToProfile(
-    (path, init) => request(path, init),
-    profileId,
-    {
-      host: lease.host,
-      port: lease.port,
-      username: lease.username,
-      password: lease.password,
-      country: "AU",
-      city: "Adelaide",
-      sessionKey: lease.sessionKey,
-    },
-  );
+  await clearProfileProxy((path, init) => request(path, init), profileId);
 
-  // Match production Orbita 135+: proxy auth comes from profile Preferences only.
-  const extraParams = ["--no-sandbox", "--disable-dev-shm-usage"];
+  const proxyServer = `http://${encodeURIComponent(lease.username)}:${encodeURIComponent(lease.password)}@${lease.host}:${lease.port}`;
+  const extraParams = [
+    `--proxy-server=${proxyServer}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+  ];
   if (isGoLoginHeadless()) {
     extraParams.push("--headless=new");
   }

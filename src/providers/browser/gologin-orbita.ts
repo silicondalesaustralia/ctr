@@ -2,7 +2,7 @@ import { GoLogin } from "gologin";
 import { isGoLoginHeadless } from "../../config/env.js";
 import type { ProxyConfig } from "../proxy/ProxyProvider.js";
 import type { RunningBrowser } from "./BrowserProfileProvider.js";
-import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
+import { clearProfileProxy } from "./gologin-proxy.js";
 import { killOrphanBrowserProcesses, logWorkerMemory } from "./orphan-browsers.js";
 
 type GlRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -10,8 +10,11 @@ type GlRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 const activeOrbita = new Map<string, InstanceType<typeof GoLogin>>();
 
 /**
- * Launch GoLogin Orbita on the worker with Decodo.
+ * Launch GoLogin Orbita on the worker with a residential proxy.
  * Requires scripts/patch-gologin.js (localhost DNS exclude + major version pin).
+ *
+ * Auth must live on --proxy-server only: GoLogin API omits proxy passwords on
+ * profile download, so Preferences-based auth becomes user@host → INVALID_AUTH.
  */
 export async function startOrbitaWithProxy(
   apiToken: string,
@@ -20,7 +23,7 @@ export async function startOrbitaWithProxy(
   proxy: ProxyConfig,
   timezoneId = "Australia/Adelaide",
 ): Promise<RunningBrowser> {
-  await applyDecodoProxyToProfile(request, profileId, proxy);
+  await clearProfileProxy(request, profileId);
 
   const existing = activeOrbita.get(profileId);
   if (existing) {
@@ -28,11 +31,12 @@ export async function startOrbitaWithProxy(
     activeOrbita.delete(profileId);
   }
 
-  // Orbita 135+ writes authenticated proxy into Preferences
-  // (http://user:pass@host:port). Passing the same via --proxy-server
-  // duplicates auth and yields net::ERR_INVALID_AUTH_CREDENTIALS (seen with
-  // Premium Ports passwords that contain hyphens).
-  const extraParams = ["--no-sandbox", "--disable-dev-shm-usage"];
+  const proxyServer = `http://${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@${proxy.host}:${proxy.port}`;
+  const extraParams = [
+    `--proxy-server=${proxyServer}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+  ];
   if (isGoLoginHeadless()) {
     extraParams.push("--headless=new");
   }
@@ -44,7 +48,7 @@ export async function startOrbitaWithProxy(
     // true re-downloads Orbita on the worker and OOMs typical Railway plans.
     autoUpdateBrowser: false,
     skipOrbitaHashChecking: true,
-    // >=135 writes encoded proxy auth into preferences (Chrome/120 profiles otherwise skip auth).
+    // Pin 135+ for fingerprint parity; proxy auth is via CLI (see clearProfileProxy).
     browserMajorVersion: 135,
     timezone: {
       timezone: timezoneId,
@@ -56,7 +60,7 @@ export async function startOrbitaWithProxy(
 
   logWorkerMemory(`before-orbita ${profileId}`);
   console.error(
-    `[gologin] Starting local Orbita for ${profileId} (proxy auth via profile prefs, host=${proxy.host}:${proxy.port})…`,
+    `[gologin] Starting local Orbita for ${profileId} (CLI proxy auth, host=${proxy.host}:${proxy.port} user=${proxy.username.slice(0, 36)}…)…`,
   );
   const started = await gl.start();
   if (!started.wsUrl) {

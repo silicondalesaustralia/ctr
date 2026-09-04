@@ -11,6 +11,23 @@ type GoLoginProxyState = {
 type GlRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 
 /**
+ * Clear GoLogin profile proxy so Orbita 135+ Preferences do not bind
+ * password-stripped auth (API readback omits password → INVALID_AUTH).
+ */
+export async function clearProfileProxy(
+  request: GlRequest,
+  profileId: string,
+): Promise<void> {
+  await request(`/browser/proxy/many/v2`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      proxies: [{ profileId, proxy: { mode: "none" } }],
+    }),
+  });
+  console.error(`[gologin] Cleared profile proxy on ${profileId} (Orbita uses CLI auth)`);
+}
+
+/**
  * Persist Decodo as a GoLogin proxy entity and attach it by id.
  * Inline-only credential patches are stored but not used by cloud browsers.
  */
