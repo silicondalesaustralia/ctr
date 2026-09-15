@@ -22,6 +22,10 @@ import {
 } from "./gologin-local.js";
 import { startOrbitaWithProxy, stopOrbita } from "./gologin-orbita.js";
 import { applyDecodoProxyToProfile } from "./gologin-proxy.js";
+import { findRegionConfigByCity } from "../../identities/regions.js";
+
+/** Must match `browserMajorVersion` in gologin-orbita.ts */
+const ORBITA_CHROME_MAJOR = 135;
 
 export class GoLoginProvider implements BrowserProfileProvider {
   private readonly apiToken: string;
@@ -64,12 +68,13 @@ export class GoLoginProvider implements BrowserProfileProvider {
         : input.osFamily === "mac"
           ? "MacIntel"
           : "Linux x86_64";
+    const chrome = `Chrome/${ORBITA_CHROME_MAJOR}.0.0.0`;
     const userAgent =
       input.deviceClass === "mobile"
-        ? "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        ? `Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) ${chrome} Mobile Safari/537.36`
         : os === "mac"
-          ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+          ? `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ${chrome} Safari/537.36`
+          : `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ${chrome} Safari/537.36`;
 
     const created = await this.request<{ id: string }>("/browser", {
       method: "POST",
@@ -111,15 +116,19 @@ export class GoLoginProvider implements BrowserProfileProvider {
       }
       const slotToken = await acquireGoLoginSlot(profileId);
       try {
+        const profile = await this.request<{ timezone?: { id?: string } }>(
+          `/browser/${profileId}`,
+        );
+        const timezoneId =
+          profile.timezone?.id ??
+          findRegionConfigByCity(proxy.city ?? "")?.timezone ??
+          "Australia/Sydney";
         const running = await startOrbitaWithProxy(
           this.apiToken,
           (path, init) => this.request(path, init),
           profileId,
           proxy,
-          // Prefer sticky city TZ; SDK timezone option skips broken proxy URL encoding.
-          proxy.city?.toLowerCase() === "adelaide"
-            ? "Australia/Adelaide"
-            : "Australia/Sydney",
+          timezoneId,
         );
         return { ...running, slotToken };
       } catch (error) {
@@ -256,6 +265,11 @@ export class GoLoginProvider implements BrowserProfileProvider {
     } catch {
       return null;
     }
+  }
+
+  /** Permanently remove a GoLogin cloud profile (frees plan seat). */
+  async deleteProfile(profileId: string): Promise<void> {
+    await this.request(`/browser/${profileId}`, { method: "DELETE" });
   }
 }
 
