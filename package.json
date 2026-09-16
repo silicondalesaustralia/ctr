@@ -16,6 +16,7 @@
     "identities:create": "tsx scripts/create-identities.ts",
     "identities:create-additional": "tsx scripts/create-additional-identities.ts",
     "identities:retire-pool": "tsx scripts/retire-identity-pool.ts",
+    "identities:keep-cohort": "tsx scripts/keep-warmup-cohort.ts",
     "identities:validate": "tsx scripts/validate-identities.ts",
     "experiment:create": "tsx scripts/create-experiment.ts",
     "schedule:generate": "tsx scripts/generate-schedule.ts",

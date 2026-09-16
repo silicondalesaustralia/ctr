@@ -32,6 +32,7 @@ interface IpLookupPayload {
   region?: unknown;
   region_name?: unknown;
   city?: unknown;
+  status?: unknown;
 }
 
 function asTrimmedString(value: unknown): string | undefined {
@@ -44,8 +45,11 @@ export function parseEgressGeoPayload(
   payload: IpLookupPayload,
   source: string,
 ): EgressGeo {
-  const ip =
-    asTrimmedString(payload.ip) ?? asTrimmedString(payload.query);
+  if (payload.status === "fail") {
+    throw new Error(`Egress geo lookup rejected by ${source}`);
+  }
+
+  const ip = asTrimmedString(payload.ip) ?? asTrimmedString(payload.query);
   const country = (
     asTrimmedString(payload.country_code) ??
     asTrimmedString(payload.countryCode) ??
@@ -98,29 +102,28 @@ async function lookupViaFetch(page: Page, url: string): Promise<IpLookupPayload>
 }
 
 async function lookupViaNavigation(page: Page, url: string): Promise<IpLookupPayload> {
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20_000 });
   const text = await page.locator("body").innerText();
   return JSON.parse(text) as IpLookupPayload;
 }
 
 /**
- * Resolve the browser's egress IP geo via in-page fetch (uses the active proxy).
- * Throws WrongEgressGeoError when country does not match expectedCountry.
+ * Resolve egress IP geo via the browser proxy.
+ * Uses a dedicated tab so lookups never race the session page's navigations.
  */
 export async function verifyBrowserEgressGeo(
   page: Page,
   expectedCountry = "AU",
 ): Promise<EgressGeo> {
+  const geoPage = await page.context().newPage();
   let lastError: unknown;
 
-  for (const url of LOOKUP_URLS) {
-    for (const mode of ["fetch", "goto"] as const) {
+  try {
+    // Prefer in-page fetch — no main-frame navigation races.
+    for (const url of LOOKUP_URLS) {
       try {
-        const payload =
-          mode === "fetch"
-            ? await lookupViaFetch(page, url)
-            : await lookupViaNavigation(page, url);
-        const egress = parseEgressGeoPayload(payload, `${url} (${mode})`);
+        const payload = await lookupViaFetch(geoPage, url);
+        const egress = parseEgressGeoPayload(payload, `${url} (fetch)`);
         console.error(
           `[geo] egress ip=${egress.ip} country=${egress.country}` +
             `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
@@ -128,14 +131,33 @@ export async function verifyBrowserEgressGeo(
         assertExpectedCountry(egress, expectedCountry);
         return egress;
       } catch (error) {
-        if (error instanceof WrongEgressGeoError) {
-          throw error;
-        }
+        if (error instanceof WrongEgressGeoError) throw error;
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`[geo] lookup failed via ${url} (${mode}): ${message}`);
+        console.error(`[geo] lookup failed via ${url} (fetch): ${message}`);
       }
     }
+
+    // Sequential goto fallbacks only — never overlap navigations.
+    for (const url of LOOKUP_URLS) {
+      try {
+        const payload = await lookupViaNavigation(geoPage, url);
+        const egress = parseEgressGeoPayload(payload, `${url} (goto)`);
+        console.error(
+          `[geo] egress ip=${egress.ip} country=${egress.country}` +
+            `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
+        );
+        assertExpectedCountry(egress, expectedCountry);
+        return egress;
+      } catch (error) {
+        if (error instanceof WrongEgressGeoError) throw error;
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[geo] lookup failed via ${url} (goto): ${message}`);
+      }
+    }
+  } finally {
+    await geoPage.close().catch(() => undefined);
   }
 
   const message = lastError instanceof Error ? lastError.message : String(lastError);
