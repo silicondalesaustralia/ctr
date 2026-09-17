@@ -6,6 +6,7 @@ import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
 import { browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
+import { applyBrowserStealth } from "../browser/stealth.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
 import { getEnv, isDryRun } from "../config/env.js";
@@ -206,6 +207,8 @@ export async function runWarmupSession(
     } else {
       throw new Error("Browser provider did not return a usable browser");
     }
+
+    await applyBrowserStealth(page);
 
     const bandwidth = trackBandwidth(page);
     let egressCountry = "AU";
