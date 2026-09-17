@@ -5,7 +5,7 @@ import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits
 import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
-import { browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
+import { browseAuSites, browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
 import { applyBrowserStealth } from "../browser/stealth.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
@@ -101,6 +101,7 @@ export async function runWarmupSession(
 ): Promise<RunWarmupSessionResult> {
   const env = getEnv();
   const isGraduation = input.kind === "graduation";
+  const isBrowse = input.kind === "browse";
   const warmupExperiment = await getWarmupExperiment();
   const persona = await getPersonaForIdentity(input.identity);
   const session = await createSessionRecord({
@@ -236,8 +237,8 @@ export async function runWarmupSession(
     if (env.DRY_RUN) {
       await completeSession(session.id, {
         status: "completed",
-        googleLoaded: true,
-        searchSubmitted: true,
+        googleLoaded: !isBrowse,
+        searchSubmitted: !isBrowse,
         durationSeconds: 5,
         bytesTransferred: BigInt(0),
         personaId: persona.id,
@@ -246,14 +247,49 @@ export async function runWarmupSession(
       await recordWarmupSessionResult(input.identity.id, {
         kind: input.kind,
         blocked: false,
-        siteClicked: !isGraduation,
+        siteClicked: isBrowse || !isGraduation,
         queryText: input.queryText,
       });
       return {
         sessionId: session.id,
         status: "completed",
-        siteClicked: !isGraduation,
+        siteClicked: isBrowse || !isGraduation,
       };
+    }
+
+    if (isBrowse) {
+      const sites = await browseAuSites(page, { minSites: 2, maxSites: 4, longDwell: true });
+      await appendSessionEvent(session.id, "scroll", {
+        warmup: true,
+        phase: "cookie_age_browse",
+        sites,
+      });
+      await completeSession(session.id, {
+        status: "completed",
+        googleLoaded: false,
+        searchSubmitted: false,
+        durationSeconds: 0,
+        bytesTransferred: BigInt(bandwidth.getTotal()),
+        proxyProvider: env.PROXY_PROVIDER,
+        proxyCountry: egressCountry,
+        proxyRegion: egressRegion,
+        proxyCity: egressCity,
+        proxyIpHash: egressIpHash,
+        personaId: persona.id,
+        sessionTraitsJson: traitsToJson(sessionTraits),
+      });
+      await appendSessionEvent(session.id, "session_completed", {
+        warmup: true,
+        kind: "browse",
+        sites,
+      });
+      await recordWarmupSessionResult(input.identity.id, {
+        kind: "browse",
+        blocked: false,
+        siteClicked: true,
+        queryText: input.queryText,
+      });
+      return { sessionId: session.id, status: "completed", siteClicked: true };
     }
 
     const preSites = await browseAuSitesBeforeGoogle(page);

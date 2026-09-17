@@ -89,7 +89,9 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
 
     const succeeded =
       result.status === "completed" &&
-      (warmup.kind === "graduation" || result.siteClicked);
+      (warmup.kind === "graduation" ||
+        warmup.kind === "browse" ||
+        result.siteClicked);
 
     await prisma.warmupSession.update({
       where: { id: warmupSessionId },

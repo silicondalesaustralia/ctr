@@ -33,6 +33,7 @@
     "warmup:reschedule-cohort": "tsx scripts/reschedule-cohort-warmups.ts",
     "warmup:pause": "tsx scripts/pause-warmups.ts",
     "warmup:probe-one": "tsx scripts/probe-one-warmup.ts",
+    "warmup:cookie-age": "tsx scripts/start-cookie-age.ts",
     "railway:worker:create": "bash scripts/create-railway-worker.sh",
     "gsc:import": "tsx scripts/import-gsc.ts",
     "experiment:analyse": "tsx scripts/analyse-experiment.ts",

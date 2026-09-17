@@ -3,6 +3,9 @@ import {
   pickBenignWarmupQuery,
   pickGraduationQuery,
   WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_BROWSE_FIRST_DELAY_HOURS,
+  WARMUP_BROWSE_SESSIONS,
+  WARMUP_BROWSE_SPREAD_DAYS,
   WARMUP_FIRST_DELAY_HOURS,
   WARMUP_MIN_DAYS,
   WARMUP_SESSION_GAP_MINUTES,
@@ -18,6 +21,9 @@ describe("warmup config", () => {
     expect(WARMUP_SESSION_GAP_MINUTES).toBe(120);
     expect(WARMUP_WINDOW_HOURS).toBe(168);
     expect(WARMUP_FIRST_DELAY_HOURS).toBe(36);
+    expect(WARMUP_BROWSE_SESSIONS).toBe(3);
+    expect(WARMUP_BROWSE_SPREAD_DAYS).toBe(2);
+    expect(WARMUP_BROWSE_FIRST_DELAY_HOURS).toBe(2);
   });
 
   it("fills city placeholders in graduation templates", () => {

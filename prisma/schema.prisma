@@ -126,6 +126,7 @@ enum WarmupSessionStatus {
 }
 
 enum WarmupSessionKind {
+  browse
   benign
   graduation
 }

@@ -23,6 +23,7 @@ Eligibility (defaults):
 | Display | Headful via Xvfb (`GOLOGIN_HEADLESS=false`) |
 | Proxy | Premium Ports sticky AU residential (`PROXY_PROVIDER=premiumports`) |
 | Automation | **Patchright** over CDP (`src/browser/pw.ts`) — was Playwright |
+| Warmup kinds | `browse` (AU sites only) → `benign` (Google) → `graduation` |
 | Queue | BullMQ `warmup-jobs` (concurrency 1) + Redis GoLogin slot lock (1 parallel) |
 | Worker | Railway worker service |
 
@@ -51,11 +52,33 @@ WARMUP_SPREAD_DAYS=7
 WARMUP_WINDOW_HOURS=168
 WARMUP_SESSION_GAP_MINUTES=120
 WARMUP_FIRST_DELAY_HOURS=36
+WARMUP_BROWSE_SESSIONS=3
+WARMUP_BROWSE_SPREAD_DAYS=2
+WARMUP_BROWSE_FIRST_DELAY_HOURS=2
 WARMUP_BENIGN_RETRY_HOURS=2
 WARMUP_GRADUATION_RETRY_HOURS=3
 ```
 
 Decodo vars may still exist for rollback; **do not use** unless intentionally A/B testing.
+
+---
+
+## Cookie-age (current next step)
+
+After Patchright Step 1 failed (`au_080` → `unusual traffic`), new identities get **browse-only** sessions before any Google hit:
+
+1. `browse` × `WARMUP_BROWSE_SESSIONS` (default 3) over ~`WARMUP_BROWSE_SPREAD_DAYS` (2), first after ~`WARMUP_BROWSE_FIRST_DELAY_HOURS` (2)
+2. Then normal `benign` + `graduation` Google warmups
+
+```bash
+# Create + schedule cookie-age (no same-day Google)
+npm run warmup:cookie-age -- --confirm --count 1
+
+# After all browse rows complete → one Google probe
+npm run warmup:probe-one -- --confirm --id=au_XXX
+# Override browse gate only if intentional:
+npm run warmup:probe-one -- --confirm --id=au_XXX --force
+```
 
 ---
 
@@ -65,11 +88,10 @@ Decodo vars may still exist for rollback; **do not use** unless intentionally A/
 2. Start headful Orbita with profile timezone (not Sydney-forced)
 3. Apply CDP stealth patches (`src/browser/stealth.ts`)
 4. Verify egress country = AU
-5. Browse 1–2 AU sites (ABC/BOM/news/etc.) — no Google yet
-6. Open `google.com.au`
-7. Benign: type query → inspect SERP → click organic → short site journey  
-   Graduation: type query → inspect SERP only
-8. On `google_sorry_page` / block: **park identity** (`active=false`), cancel its pending warmups — **no retry**
+5. **If `kind=browse`:** visit 2–4 AU sites with longer dwell — **never open Google** — complete
+6. **If `kind=benign` / `graduation`:** short AU softener → `google.com.au` → query → SERP  
+   Benign: click organic → site journey · Graduation: inspect only
+7. On `google_sorry_page` / `unusual traffic` / block: **park identity**, cancel pending — **no retry**
 
 Profile create UAs are Chrome/135 to match Orbita `browserMajorVersion: 135`.
 
@@ -100,6 +122,9 @@ Operational mode: **paused / probe-only**. Do not mass-reschedule the cohort unt
 | `au_056`–`au_074` | Original “20” cohort | Mixed; several parked after sorry; schedules cancelled |
 | `au_075` | Decodo A/B | `google_sorry_page` (AU/Melbourne) — parked |
 | `au_076` | PP + stealth probe | `google_sorry_page` (AU/Melbourne) — parked |
+| `au_078` | Patchright (pre-fix) | `browser_error` (`this.context is not a function`) — cancelled |
+| `au_080` | Patchright Step-1 probe A | `unusual traffic` (AU/Melbourne) — parked |
+| `au_077` / `au_079` | cancelled by pause before run | no session |
 
 `warmup:pause` cancels scheduled/running warmups and drains BullMQ queues.  
 Backfill will **not** recreate schedules for identities that already have any warmup rows.
@@ -113,12 +138,12 @@ Backfill will **not** recreate schedules for identities that already have any wa
 | `au_055` | premiumports | Playwright | Yes (Sydney) | `google_sorry_page` |
 | `au_075` | decodo | Playwright | Yes (Melbourne) | `google_sorry_page` |
 | `au_076` | premiumports + stealth + pre-Google | Playwright | Yes (Melbourne) | `google_sorry_page` |
-| Patchright probe A | premiumports | **Patchright** | TBD | TBD |
-| Patchright probe B | premiumports | **Patchright** | TBD | TBD |
+| `au_080` | premiumports | **Patchright** | Yes (Melbourne) | `unusual traffic` |
+| Patchright probe B | — | — | — | **not run** (gate failed on A) |
 
-**Conclusion (pre-Patchright):** Not a Premium Ports–only IP problem. Same Orbita path failed on Decodo too.
+**Conclusion:** Not a Premium Ports–only IP problem. Playwright and Patchright both reach AU geo and still get Google interstitial/block on first Google visit.
 
-**Step 1 gate:** two consecutive fresh identities must reach SERP without `google_sorry_page` on Premium Ports + Patchright before any cohort restart. Mass cohort remains paused until that gate passes.
+**Step 1 gate: FAILED.** Fresh Patchright identity `au_080` hit `unusual traffic` (same fail class as `google_sorry_page`). Mass cohort remains paused. Next plan = cookie-age (browse-only, then Google), not Decodo / not more same-day Google probes.
 
 ---
 
@@ -158,17 +183,17 @@ npm run gologin:delete-retired -- --confirm
 
 ## What is not working yet
 
-- Fresh identities reaching Google Search without `google_sorry_page`
+- Fresh identities reaching Google Search without `google_sorry_page` / `unusual traffic` (Patchright Step 1 included)
 
 ---
 
 ## Recommended next steps
 
-1. Stay on `PROXY_PROVIDER=premiumports` (vendor relationship + A/B already done).
+1. Stay on `PROXY_PROVIDER=premiumports`.
 2. **Do not** mass-resume the cohort.
-3. Implement **cookie-age**: browse-only sessions (no Google) for 1–2 days, then one Google probe.
-4. Ask Premium Ports for Google-friendlier AU inventory (mobile/4G or ISP) if available.
-5. If cookie-age still fails: deeper CDP/antidetect work (how Playwright attaches to Orbita), not more same-day Google probes.
+3. Deploy cookie-age (`browse` kind + migration), set browse env vars on Railway.
+4. `npm run warmup:cookie-age -- --confirm --count 1` — wait for browses — then one `warmup:probe-one`.
+5. If that Google probe still fails: ask Premium Ports for mobile/4G/ISP AU; deeper Orbita CDP work.
 
 ---
 

@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
  * Schedule a single benign warmup soon for one clean identity (probe).
- * Usage: npm run warmup:probe-one -- --confirm [--id au_055]
+ * Refuses if cookie-age browses are incomplete unless --force.
+ * Usage: npm run warmup:probe-one -- --confirm [--id=au_055] [--force]
  */
 import { prisma } from "../src/db/client.js";
-import { pickBenignWarmupQuery } from "../src/warmup/warmup-config.js";
+import {
+  pickBenignWarmupQuery,
+  WARMUP_BROWSE_SESSIONS,
+} from "../src/warmup/warmup-config.js";
 
 async function main(): Promise<void> {
   if (!process.argv.includes("--confirm")) {
@@ -13,6 +17,7 @@ async function main(): Promise<void> {
 
   const idFlag = process.argv.find((a) => a.startsWith("--id="));
   const preferred = idFlag?.slice("--id=".length);
+  const force = process.argv.includes("--force");
 
   const candidates = await prisma.identity.findMany({
     where: {
@@ -33,7 +38,21 @@ async function main(): Promise<void> {
     );
   }
 
-  // Cancel any leftover scheduled rows for this identity only.
+  const completedBrowses = await prisma.warmupSession.count({
+    where: {
+      identityId: identity.id,
+      kind: "browse",
+      status: "completed",
+    },
+  });
+  if (!force && WARMUP_BROWSE_SESSIONS > 0 && completedBrowses < WARMUP_BROWSE_SESSIONS) {
+    throw new Error(
+      `Cookie-age incomplete for ${identity.externalId}: ` +
+        `${completedBrowses}/${WARMUP_BROWSE_SESSIONS} browse sessions completed. ` +
+        `Wait for browses, or pass --force to Google-probe anyway.`,
+    );
+  }
+
   await prisma.warmupSession.updateMany({
     where: { identityId: identity.id, status: { in: ["scheduled", "running"] } },
     data: { status: "cancelled" },
@@ -54,7 +73,8 @@ async function main(): Promise<void> {
 
   console.log(
     `Probe scheduled: ${identity.externalId} benign in ~${delayMinutes}m` +
-      ` at=${scheduledAt.toISOString()} query="${queryText}" id=${row.id}`,
+      ` at=${scheduledAt.toISOString()} query="${queryText}" id=${row.id}` +
+      ` (browses=${completedBrowses}/${WARMUP_BROWSE_SESSIONS}${force ? ", forced" : ""})`,
   );
 }
 

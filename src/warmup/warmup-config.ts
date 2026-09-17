@@ -21,6 +21,12 @@ export const WARMUP_SESSION_GAP_MINUTES = warmupInt("WARMUP_SESSION_GAP_MINUTES"
 export const WARMUP_WINDOW_HOURS = warmupInt("WARMUP_WINDOW_HOURS", 168);
 /** Delay before a brand-new identity's first warmup (hours). */
 export const WARMUP_FIRST_DELAY_HOURS = warmupInt("WARMUP_FIRST_DELAY_HOURS", 36);
+/** Browse-only (no Google) sessions before first SERP probe — cookie-age. */
+export const WARMUP_BROWSE_SESSIONS = warmupInt("WARMUP_BROWSE_SESSIONS", 3);
+/** Spread browse-only sessions across this many calendar days (1–2). */
+export const WARMUP_BROWSE_SPREAD_DAYS = warmupInt("WARMUP_BROWSE_SPREAD_DAYS", 2);
+/** Delay before the first browse-only session (hours). Shorter than Google delay. */
+export const WARMUP_BROWSE_FIRST_DELAY_HOURS = warmupInt("WARMUP_BROWSE_FIRST_DELAY_HOURS", 2);
 
 export const WARMUP_SYSTEM_SLUG = "__warmup__";
 

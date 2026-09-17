@@ -5,6 +5,9 @@ import {
   pickGraduationQuery,
   WARMUP_BENIGN_RETRY_HOURS,
   WARMUP_BENIGN_SITE_CLICKS,
+  WARMUP_BROWSE_FIRST_DELAY_HOURS,
+  WARMUP_BROWSE_SESSIONS,
+  WARMUP_BROWSE_SPREAD_DAYS,
   WARMUP_FIRST_DELAY_HOURS,
   WARMUP_GRADUATION_RETRY_HOURS,
   WARMUP_MIN_DAYS,
@@ -182,6 +185,17 @@ export async function recordWarmupSessionResult(
     });
   }
 
+  if (outcome.kind === "browse") {
+    return prisma.identity.update({
+      where: { id: identityId },
+      data: {
+        warmupSessionsCompleted: { increment: 1 },
+        totalSessions: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+    });
+  }
+
   if (!outcome.siteClicked) {
     await scheduleWarmupRetry(identityId, "benign", outcome.queryText);
     return prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
@@ -210,7 +224,17 @@ function benignSessionsNeeded(identity: Identity): number {
   return Math.max(0, WARMUP_BENIGN_SITE_CLICKS - identity.warmupSiteClicks);
 }
 
-function scheduleWarmupRows(identity: Identity, now = new Date()) {
+function kindSortRank(kind: WarmupSessionKind): number {
+  if (kind === "browse") return 0;
+  if (kind === "benign") return 1;
+  return 2;
+}
+
+function scheduleWarmupRows(
+  identity: Identity,
+  now = new Date(),
+  browseNeeded = 0,
+) {
   const rows: Array<{
     identityId: string;
     queryText: string;
@@ -220,52 +244,101 @@ function scheduleWarmupRows(identity: Identity, now = new Date()) {
 
   const benignNeeded = benignSessionsNeeded(identity);
   const graduationNeeded = !identity.warmupGraduationPassed;
-  const totalSlots = benignNeeded + (graduationNeeded ? 1 : 0);
+  const googleSlots = benignNeeded + (graduationNeeded ? 1 : 0);
+  const totalSlots = browseNeeded + googleSlots;
 
   if (totalSlots === 0) {
     return rows;
   }
 
-  for (let slot = 0; slot < totalSlots; slot += 1) {
-    let scheduledAt: Date;
-    const firstDelayMinutes = WARMUP_FIRST_DELAY_HOURS * 60;
+  const browseSpread = Math.max(1, WARMUP_BROWSE_SPREAD_DAYS);
+  const googleSpread = Math.max(1, WARMUP_SPREAD_DAYS);
 
-    if (WARMUP_SPREAD_DAYS <= 1) {
+  for (let slot = 0; slot < totalSlots; slot += 1) {
+    const isBrowse = slot < browseNeeded;
+    const googleSlotIndex = slot - browseNeeded;
+    let scheduledAt: Date;
+
+    if (isBrowse) {
+      const firstDelayMinutes = WARMUP_BROWSE_FIRST_DELAY_HOURS * 60;
+      if (browseSpread <= 1 || browseNeeded <= 1) {
+        const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 45);
+        scheduledAt = addMinutes(now, firstDelayMinutes + randomBetween(10, 40) + slot * gap);
+      } else {
+        const dayOffset = Math.min(
+          browseSpread - 1,
+          Math.floor((slot / Math.max(browseNeeded - 1, 1)) * (browseSpread - 1)),
+        );
+        const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
+        const dayCalendar = addCalendarDays(baseCalendar, dayOffset);
+        scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
+        if (scheduledAt <= addMinutes(now, firstDelayMinutes)) {
+          scheduledAt = addMinutes(
+            now,
+            firstDelayMinutes + randomBetween(15, 90) + slot * randomBetween(90, 180),
+          );
+        }
+      }
+      rows.push({
+        identityId: identity.id,
+        queryText: `browse:${slot + 1}`,
+        kind: "browse",
+        scheduledAt,
+      });
+      continue;
+    }
+
+    const firstDelayMinutes = WARMUP_FIRST_DELAY_HOURS * 60;
+    const browseEndDay = browseNeeded > 0 ? browseSpread : 0;
+    if (googleSpread <= 1 && browseNeeded === 0) {
       const leadMinutes = firstDelayMinutes + randomBetween(15, 45);
       const gap = randomBetween(WARMUP_SESSION_GAP_MINUTES, WARMUP_SESSION_GAP_MINUTES + 45);
-      scheduledAt = addMinutes(now, leadMinutes + slot * gap);
+      scheduledAt = addMinutes(now, leadMinutes + googleSlotIndex * gap);
     } else {
-      const dayOffset = Math.min(
-        WARMUP_SPREAD_DAYS - 1,
-        Math.floor((slot / Math.max(totalSlots - 1, 1)) * (WARMUP_SPREAD_DAYS - 1)),
+      const dayOffset =
+        browseEndDay +
+        Math.min(
+          googleSpread - 1,
+          googleSlots <= 1
+            ? 0
+            : Math.floor((googleSlotIndex / Math.max(googleSlots - 1, 1)) * (googleSpread - 1)),
+        );
+      const minDayOffset = firstDelayMinutes >= 24 * 60 && browseNeeded === 0 ? 1 : 0;
+      const effectiveDayOffset = Math.max(
+        dayOffset,
+        googleSlotIndex === 0 && browseNeeded === 0 ? minDayOffset : dayOffset,
       );
-      // Cold profiles: never schedule the first action in the first ~FIRST_DELAY hours.
-      const minDayOffset = firstDelayMinutes >= 24 * 60 ? 1 : 0;
-      const effectiveDayOffset = Math.max(dayOffset, slot === 0 ? minDayOffset : dayOffset);
       const baseCalendar = getCalendarDateInTimezone(now, identity.timezone);
       const dayCalendar = addCalendarDays(baseCalendar, effectiveDayOffset);
-
       scheduledAt = randomTimeInTimezoneWindow(dayCalendar, "07:00", "22:00", identity.timezone);
-      if (scheduledAt <= addMinutes(now, firstDelayMinutes)) {
+      const minFromNow =
+        browseNeeded > 0
+          ? addMinutes(now, WARMUP_BROWSE_FIRST_DELAY_HOURS * 60 + browseNeeded * 90)
+          : addMinutes(now, firstDelayMinutes);
+      if (scheduledAt <= minFromNow) {
         scheduledAt = addMinutes(
-          now,
-          firstDelayMinutes + randomBetween(30, 180) + slot * randomBetween(120, 240),
+          minFromNow,
+          randomBetween(30, 180) + googleSlotIndex * randomBetween(120, 240),
         );
       }
     }
 
-    const isGraduationSlot = graduationNeeded && slot === totalSlots - 1;
+    const isGraduationSlot = graduationNeeded && googleSlotIndex === googleSlots - 1;
     rows.push({
       identityId: identity.id,
       queryText: isGraduationSlot
         ? pickGraduationQuery(identity.externalId, identity.city)
-        : pickBenignWarmupQuery(identity.city, identity.warmupSiteClicks + slot),
+        : pickBenignWarmupQuery(identity.city, identity.warmupSiteClicks + googleSlotIndex),
       kind: isGraduationSlot ? "graduation" : "benign",
       scheduledAt,
     });
   }
 
-  rows.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+  rows.sort((a, b) => {
+    const byTime = a.scheduledAt.getTime() - b.scheduledAt.getTime();
+    if (byTime !== 0) return byTime;
+    return kindSortRank(a.kind) - kindSortRank(b.kind);
+  });
   return rows;
 }
 
@@ -277,7 +350,12 @@ export async function scheduleWarmupForIdentity(identity: Identity): Promise<num
     return 0;
   }
 
-  const rows = scheduleWarmupRows(identity);
+  const completedBrowses = await prisma.warmupSession.count({
+    where: { identityId: identity.id, kind: "browse", status: "completed" },
+  });
+  const browseNeeded = Math.max(0, WARMUP_BROWSE_SESSIONS - completedBrowses);
+
+  const rows = scheduleWarmupRows(identity, new Date(), browseNeeded);
   if (rows.length === 0) {
     return 0;
   }
@@ -344,7 +422,7 @@ export async function accelerateAllWarmupsInterleaved(
 
   for (const list of groups.values()) {
     list.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "benign" ? -1 : 1;
+      if (a.kind !== b.kind) return kindSortRank(a.kind) - kindSortRank(b.kind);
       return a.scheduledAt.getTime() - b.scheduledAt.getTime();
     });
   }
