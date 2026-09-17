@@ -397,7 +397,7 @@ export async function prepareWarmupPool(windowHours = WARMUP_WINDOW_HOURS): Prom
 
 export async function backfillWarmupForExistingIdentities(): Promise<number> {
   const identities = await prisma.identity.findMany({
-    where: { warmupStatus: "warming" },
+    where: { warmupStatus: "warming", active: true },
     orderBy: { externalId: "asc" },
   });
 
@@ -408,6 +408,15 @@ export async function backfillWarmupForExistingIdentities(): Promise<number> {
       await cancelPendingWarmupSessions(identity.id);
       continue;
     }
+
+    // Do not resurrect schedules after an intentional pause/cancel.
+    const everScheduled = await prisma.warmupSession.count({
+      where: { identityId: identity.id },
+    });
+    if (everScheduled > 0) {
+      continue;
+    }
+
     scheduled += await scheduleWarmupForIdentity(identity);
   }
 
