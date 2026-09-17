@@ -64,7 +64,9 @@ const STEALTH_SOURCE = `(() => {
  * that still show up under CDP control.
  */
 export async function applyBrowserStealth(page: Page): Promise<void> {
-  await page.context().addInitScript({ content: STEALTH_SOURCE });
+  // Patchright BrowserContext.addInitScript → installInjectRoute calls
+  // this.context() which does not exist on BrowserContext (throws).
+  // Page-level addInitScript is enough for Orbita CDP sessions.
   await page.addInitScript({ content: STEALTH_SOURCE });
   await page.evaluate(STEALTH_SOURCE).catch(() => undefined);
 }

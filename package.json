@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node scripts/patch-gologin.js",
+    "postinstall": "node scripts/patch-gologin.js && node scripts/patch-patchright.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src scripts tests",
