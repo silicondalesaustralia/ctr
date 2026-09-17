@@ -1,4 +1,4 @@
-import { chromium, type Page } from "playwright";
+import { chromium, type Page } from "../browser/pw.js";
 import type { Identity } from "@prisma/client";
 import { FAST_DRY_RUN_PERSONA } from "../behaviour/personas.js";
 import { generateSessionTraits } from "../behaviour/session-traits.js";

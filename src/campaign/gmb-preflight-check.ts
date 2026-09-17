@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "../browser/pw.js";
 import { findGmbInLocalPack } from "../browser/local-pack.js";
 import {
   checkBlocked,

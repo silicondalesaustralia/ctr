@@ -31,8 +31,8 @@ export interface RunningBrowser {
   slotToken?: string;
   /** How the browser was started — drives cleanup. */
   runtime?: "cloud" | "orbita" | "chromium";
-  browser?: import("playwright").Browser;
-  context?: import("playwright").BrowserContext;
+  browser?: import("../../browser/pw.js").Browser;
+  context?: import("../../browser/pw.js").BrowserContext;
 }
 
 export interface BrowserProfileProvider {

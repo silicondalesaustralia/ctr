@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
 
 const AU_WARM_SITES = [

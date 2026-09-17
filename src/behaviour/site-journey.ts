@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "../browser/pw.js";
 import {
   DEFAULT_ENGAGEMENT_CONFIG,
   FAST_DRY_RUN_ENGAGEMENT_CONFIG,

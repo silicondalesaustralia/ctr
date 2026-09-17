@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "../../browser/pw.js";
 import type { ProxyConfig } from "../proxy/ProxyProvider.js";
 import type { RunningBrowser } from "./BrowserProfileProvider.js";
 

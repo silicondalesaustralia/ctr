@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 import { acceptConsentIfPresent } from "./blocked-detection.js";
 import {
   CARD_SELECTORS,

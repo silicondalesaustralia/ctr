@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 import { domainMatches } from "../utils/helpers.js";
 
 export interface LinkCandidate {

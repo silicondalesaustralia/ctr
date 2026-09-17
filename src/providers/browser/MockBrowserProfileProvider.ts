@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chromium, type Browser, type BrowserContext } from "playwright";
+import { chromium, type Browser, type BrowserContext } from "../../browser/pw.js";
 import { ProfileProvider, type DeviceClass } from "@prisma/client";
 import type {
   BrowserProfile,

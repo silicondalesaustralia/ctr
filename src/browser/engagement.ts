@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 import { randomBetween, randomFloat, sleep } from "../utils/helpers.js";
 import { pickInternalLink } from "./internal-links.js";
 

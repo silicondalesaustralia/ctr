@@ -4,7 +4,7 @@
  * Usage: npx tsx scripts/probe-gologin-proxy.ts [profileId] [mode]
  * mode: local | patch | add_proxies | gologin_au | headed
  */
-import { chromium } from "playwright";
+import { chromium } from "../src/browser/pw.js";
 import { verifyBrowserEgressGeo } from "../src/browser/egress-geo.js";
 import { getEnv } from "../src/config/env.js";
 import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";

@@ -9,6 +9,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
 RUN npm ci
+RUN npx patchright install chromium
 
 COPY prisma ./prisma
 RUN npx prisma generate

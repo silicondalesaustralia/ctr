@@ -1,4 +1,4 @@
-import { chromium, type Page, type Response } from "playwright";
+import { chromium, type Page, type Response } from "../browser/pw.js";
 import type { Experiment, Identity, SessionEventType, TreatmentGroup } from "@prisma/client";
 import { loadBehaviourOverrides } from "../behaviour/experiment-behaviour.js";
 import { getPersonaForIdentity } from "../behaviour/personas.js";

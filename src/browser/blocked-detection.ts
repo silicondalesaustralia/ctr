@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 
 const BLOCKED_PATTERNS = [
   /unusual traffic/i,

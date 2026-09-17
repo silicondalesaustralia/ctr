@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Dump local-pack candidates for a GMB query (Orbita + Decodo). */
-import { chromium } from "playwright";
+import { chromium } from "../src/browser/pw.js";
 import { getEnv } from "../src/config/env.js";
 import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";
 import { createProxyProvider } from "../src/providers/proxy/index.js";

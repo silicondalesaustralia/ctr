@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "./pw.js";
 import { getEnv } from "../config/env.js";
 import { getMockSerpUrl, loadMockSerpInPage } from "../utils/helpers.js";
 import {

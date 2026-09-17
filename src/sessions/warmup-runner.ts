@@ -1,4 +1,4 @@
-import { chromium, type Page, type Response } from "playwright";
+import { chromium, type Page, type Response } from "../browser/pw.js";
 import type { Identity, SessionEventType, WarmupSessionKind } from "@prisma/client";
 import { getPersonaForIdentity } from "../behaviour/personas.js";
 import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits.js";

@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "../browser/pw.js";
 import type { GmbAction } from "../campaign/gmb-types.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
 

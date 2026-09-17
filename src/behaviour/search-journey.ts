@@ -1,5 +1,5 @@
 import type { ExperimentQuery } from "@prisma/client";
-import type { Page } from "playwright";
+import type { Page } from "../browser/pw.js";
 import { isDryRun } from "../config/env.js";
 import {
   checkBlocked,

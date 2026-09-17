@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page } from "../browser/pw.js";
 import { randomBetween, randomFloat, sleep } from "../utils/helpers.js";
 import {
   effectivePauseMs,

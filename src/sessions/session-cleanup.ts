@@ -1,4 +1,4 @@
-import type { Browser } from "playwright";
+import type { Browser } from "../browser/pw.js";
 import { prisma } from "../db/client.js";
 import type {
   BrowserProfileProvider,
