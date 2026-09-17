@@ -155,9 +155,11 @@ export async function recordWarmupSessionResult(
       data: {
         blockedSessions: { increment: 1 },
         lastUsedAt: new Date(),
+        // Park identity — do not re-hit Google with the same fingerprint.
+        active: false,
       },
     });
-    await scheduleWarmupRetry(identityId, outcome.kind, outcome.queryText);
+    await cancelPendingWarmupSessions(identityId);
     return prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
   }
 

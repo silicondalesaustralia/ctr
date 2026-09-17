@@ -30,6 +30,8 @@
     "worker": "tsx scripts/run-worker.ts",
     "warmup:status": "tsx scripts/check-warmup-status.ts",
     "warmup:accelerate": "tsx scripts/accelerate-all-warmups.ts",
+    "warmup:reschedule-cohort": "tsx scripts/reschedule-cohort-warmups.ts",
+    "warmup:pause": "tsx scripts/pause-warmups.ts",
     "railway:worker:create": "bash scripts/create-railway-worker.sh",
     "gsc:import": "tsx scripts/import-gsc.ts",
     "experiment:analyse": "tsx scripts/analyse-experiment.ts",
