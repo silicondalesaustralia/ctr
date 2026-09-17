@@ -5,6 +5,7 @@ import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits
 import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
+import { browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
 import { getEnv, isDryRun } from "../config/env.js";
@@ -251,6 +252,13 @@ export async function runWarmupSession(
         siteClicked: !isGraduation,
       };
     }
+
+    const preSites = await browseAuSitesBeforeGoogle(page);
+    await appendSessionEvent(session.id, "scroll", {
+      warmup: true,
+      phase: "pre_google_browse",
+      sites: preSites,
+    });
 
     await openGoogle(page);
     await appendSessionEvent(session.id, "google_loaded");
