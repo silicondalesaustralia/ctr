@@ -11,6 +11,7 @@ import {
   WARMUP_SESSION_GAP_MINUTES,
   WARMUP_SPREAD_DAYS,
   WARMUP_WINDOW_HOURS,
+  warmupInfraRetryDelayMs,
 } from "../../src/warmup/warmup-config.js";
 
 describe("warmup config", () => {
@@ -24,6 +25,10 @@ describe("warmup config", () => {
     expect(WARMUP_BROWSE_SESSIONS).toBe(3);
     expect(WARMUP_BROWSE_SPREAD_DAYS).toBe(2);
     expect(WARMUP_BROWSE_FIRST_DELAY_HOURS).toBe(2);
+    expect(warmupInfraRetryDelayMs(1)).toBe(5 * 60 * 1000);
+    expect(warmupInfraRetryDelayMs(2)).toBe(15 * 60 * 1000);
+    expect(warmupInfraRetryDelayMs(4)).toBe(180 * 60 * 1000);
+    expect(warmupInfraRetryDelayMs(17)).toBe(180 * 60 * 1000);
   });
 
   it("fills city placeholders in graduation templates", () => {

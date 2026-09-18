@@ -287,6 +287,7 @@ export async function runSerpPreflightChecks(input: {
       region: proxyLease.region,
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
+      timezone: identity.timezone,
     });
     cloudStarted = useGoLogin;
 

@@ -7,6 +7,8 @@ export interface ProxyConfig {
   region?: string;
   city?: string;
   sessionKey?: string;
+  /** Profile timezone. Avoids a GoLogin GET that has been timing out. */
+  timezone?: string;
 }
 
 export interface ProxyLease {

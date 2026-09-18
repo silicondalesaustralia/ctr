@@ -195,6 +195,7 @@ export async function runWarmupSession(
       region: proxyLease.region,
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
+      timezone: input.identity.timezone,
     });
     cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
 

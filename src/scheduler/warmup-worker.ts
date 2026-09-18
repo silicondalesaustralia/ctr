@@ -8,6 +8,7 @@ import {
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
+import { warmupInfraRetryDelayMs } from "../warmup/warmup-config.js";
 
 const QUEUE_NAME = "warmup-jobs";
 
@@ -74,7 +75,7 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
         data: {
           status: "scheduled",
           sessionId: result.sessionId,
-          scheduledAt: new Date(Date.now() + 5 * 60 * 1000),
+          scheduledAt: new Date(Date.now() + warmupInfraRetryDelayMs(warmup.attemptCount)),
         },
       });
       logger.info({

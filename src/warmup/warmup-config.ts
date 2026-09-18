@@ -28,6 +28,14 @@ export const WARMUP_BROWSE_SPREAD_DAYS = warmupInt("WARMUP_BROWSE_SPREAD_DAYS", 
 /** Delay before the first browse-only session (hours). Shorter than Google delay. */
 export const WARMUP_BROWSE_FIRST_DELAY_HOURS = warmupInt("WARMUP_BROWSE_FIRST_DELAY_HOURS", 2);
 
+const INFRA_RETRY_MINUTES = [5, 15, 45, 180];
+
+/** Back off GoLogin/proxy failures. Never retry every 5 minutes indefinitely. */
+export function warmupInfraRetryDelayMs(attemptCount: number): number {
+  const index = Math.max(0, Math.min(attemptCount - 1, INFRA_RETRY_MINUTES.length - 1));
+  return INFRA_RETRY_MINUTES[index]! * 60 * 1000;
+}
+
 export const WARMUP_SYSTEM_SLUG = "__warmup__";
 
 const BENIGN_QUERIES = [

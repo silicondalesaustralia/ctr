@@ -217,6 +217,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       region: proxyLease.region,
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
+      timezone: input.identity.timezone,
     });
     // Only GoLogin *cloud* needs the remote /web stop path.
     cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";

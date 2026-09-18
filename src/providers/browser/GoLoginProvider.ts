@@ -36,27 +36,43 @@ export class GoLoginProvider implements BrowserProfileProvider {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      signal: AbortSignal.timeout(30_000),
-      headers: {
-        Authorization: `Bearer ${this.apiToken}`,
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
+    const attempts = 3;
+    let lastError: unknown;
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`GoLogin API error ${response.status}: ${body}`);
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          signal: AbortSignal.timeout(60_000),
+          headers: {
+            Authorization: `Bearer ${this.apiToken}`,
+            "Content-Type": "application/json",
+            ...(init?.headers ?? {}),
+          },
+        });
+
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(`GoLogin API error ${response.status}: ${body}`);
+        }
+
+        const text = await response.text();
+        if (!text) return {} as T;
+        return JSON.parse(text) as T;
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        const retryable =
+          message.includes("aborted") ||
+          message.includes("timeout") ||
+          message.includes("fetch failed");
+        if (!retryable || attempt === attempts) break;
+        console.error(`[gologin] ${path} attempt ${attempt} failed (${message}); retrying`);
+        await sleep(2_000 * attempt);
+      }
     }
 
-    const text = await response.text();
-    if (!text) {
-      return {} as T;
-    }
-
-    return JSON.parse(text) as T;
+    throw lastError;
   }
 
   async createProfile(input: CreateProfileInput): Promise<BrowserProfile> {
@@ -116,11 +132,10 @@ export class GoLoginProvider implements BrowserProfileProvider {
       }
       const slotToken = await acquireGoLoginSlot(profileId);
       try {
-        const profile = await this.request<{ timezone?: { id?: string } }>(
-          `/browser/${profileId}`,
-        );
+        // Identity timezone is already stored. GET /browser/{id} was aborting
+        // after 30s and the worker retried that forever.
         const timezoneId =
-          profile.timezone?.id ??
+          proxy.timezone ??
           findRegionConfigByCity(proxy.city ?? "")?.timezone ??
           "Australia/Sydney";
         const running = await startOrbitaWithProxy(
