@@ -61,7 +61,16 @@ export async function scrollPageToDepth(
   let scrollActions = 0;
   let maxDepth = 0;
 
-  const docHeight = await page.evaluate(() => document.body.scrollHeight);
+  const docHeight = await page.evaluate(async () => {
+    const started = Date.now();
+    while (!document.body && Date.now() - started < 8_000) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return (document.body ?? document.documentElement)?.scrollHeight ?? 0;
+  });
+  if (docHeight <= 0) {
+    return { scrollDepth: 0, scrollActions: 0, timeToFirstScrollMs: 0 };
+  }
   const viewport = page.viewportSize()?.height ?? 768;
   const maxScroll = Math.max(docHeight - viewport, 1);
   const targetPx = (targetDepthPercent / 100) * maxScroll;
