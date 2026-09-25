@@ -87,7 +87,7 @@ npm run warmup:probe-one -- --confirm --id=au_XXX --force
 1. Allocate Premium Ports lease (AU + city sticky)
 2. Start headful Orbita with profile timezone (not Sydney-forced)
 3. Apply CDP stealth patches (`src/browser/stealth.ts`)
-4. Verify egress country = AU
+4. Verify egress country = AU **and city matches identity** (retry as `proxy_error` on soft PP miss)
 5. **If `kind=browse`:** visit 2–4 AU sites with longer dwell — **never open Google** — complete
 6. **If `kind=benign` / `graduation`:** short AU softener → `google.com.au` → query → SERP  
    Benign: click organic → site journey · Graduation: inspect only
@@ -107,24 +107,26 @@ Profile create UAs are Chrome/135 to match Orbita `browserMajorVersion: 135`.
 | Warmup backfill only for never-scheduled active IDs | Stop worker/dashboard from resurrecting cancelled schedules |
 | Pre-Google AU browse | Soften “cold profile → Google only” |
 | Stealth init scripts | Patch common `navigator.webdriver` / chrome / plugins tells |
-| Ops scripts | `identities:retire-pool`, `identities:keep-cohort`, `warmup:pause`, `warmup:probe-one`, `warmup:reschedule-cohort` |
+| Ops scripts | `identities:retire-pool`, `identities:keep-cohort`, `warmup:pause`, `warmup:probe-one`, `warmup:cookie-age` |
+| Cookie-age `browse` kind | AU sites only for 1–2 days before first Google |
+| Egress **city** gate | Reject wrong-metro exits before Google (retry as `proxy_error`) |
 
 ---
 
 ## Pool status (as of last audits)
 
-Operational mode: **paused / probe-only**. Do not mass-reschedule the cohort until a probe succeeds.
+Operational mode: **paused / probe-only**. Do not mass-reschedule until a second fresh identity also graduates clean.
 
 | Identity | Role | Last known outcome |
 |----------|------|--------------------|
 | `au_001`–`au_054` | Retired / disabled / historical | Ignore for warmup |
 | `au_055` | PP probe | `google_sorry_page` (AU/Sydney) — parked |
-| `au_056`–`au_074` | Original “20” cohort | Mixed; several parked after sorry; schedules cancelled |
+| `au_056`–`au_074` | Original “20” cohort | Mixed; schedules cancelled; idle |
 | `au_075` | Decodo A/B | `google_sorry_page` (AU/Melbourne) — parked |
 | `au_076` | PP + stealth probe | `google_sorry_page` (AU/Melbourne) — parked |
-| `au_078` | Patchright (pre-fix) | `browser_error` (`this.context is not a function`) — cancelled |
-| `au_080` | Patchright Step-1 probe A | `unusual traffic` (AU/Melbourne) — parked |
-| `au_077` / `au_079` | cancelled by pause before run | no session |
+| `au_080` | Patchright same-day probe | `unusual traffic` (AU/Melbourne) — parked |
+| `au_082` | Cookie-age success | **eligible** — browses + 2 benign + graduation, no block |
+| `au_083` | Cookie-age replicate | 3× Melbourne browse OK → Google **Sydney** → `unusual traffic` — parked |
 
 `warmup:pause` cancels scheduled/running warmups and drains BullMQ queues.  
 Backfill will **not** recreate schedules for identities that already have any warmup rows.
@@ -138,12 +140,11 @@ Backfill will **not** recreate schedules for identities that already have any wa
 | `au_055` | premiumports | Playwright | Yes (Sydney) | `google_sorry_page` |
 | `au_075` | decodo | Playwright | Yes (Melbourne) | `google_sorry_page` |
 | `au_076` | premiumports + stealth + pre-Google | Playwright | Yes (Melbourne) | `google_sorry_page` |
-| `au_080` | premiumports | **Patchright** | Yes (Melbourne) | `unusual traffic` |
-| Patchright probe B | — | — | — | **not run** (gate failed on A) |
+| `au_080` | premiumports | Patchright | Yes (Melbourne) | `unusual traffic` |
+| `au_082` | premiumports + cookie-age | Patchright | Mixed (1st Google Perth, later Melbourne) | **clean → eligible** |
+| `au_083` | premiumports + cookie-age | Patchright | Browses Melbourne; Google **Sydney** | `unusual traffic` — parked |
 
-**Conclusion:** Not a Premium Ports–only IP problem. Playwright and Patchright both reach AU geo and still get Google interstitial/block on first Google visit.
-
-**Step 1 gate: FAILED.** Fresh Patchright identity `au_080` hit `unusual traffic` (same fail class as `google_sorry_page`). Mass cohort remains paused. Next plan = cookie-age (browse-only, then Google), not Decodo / not more same-day Google probes.
+**Conclusion:** Cookie-age can work (`au_082`) but is not proven repeatable. Soft Premium Ports city targeting let `au_083` age in Melbourne then search from Sydney — city gate now retries that before Google.
 
 ---
 
@@ -183,17 +184,18 @@ npm run gologin:delete-retired -- --confirm
 
 ## What is not working yet
 
-- Fresh identities reaching Google Search without `google_sorry_page` / `unusual traffic` (Patchright Step 1 included)
+- Repeatable cookie-age → Google without block (`au_083` failed after `au_082` passed)
+- Soft PP city targeting without the new city gate (fixed in code; deploy required)
 
 ---
 
 ## Recommended next steps
 
-1. Stay on `PROXY_PROVIDER=premiumports`.
-2. **Do not** mass-resume the cohort.
-3. Deploy cookie-age (`browse` kind + migration), set browse env vars on Railway.
-4. `npm run warmup:cookie-age -- --confirm --count 1` — wait for browses — then one `warmup:probe-one`.
-5. If that Google probe still fails: ask Premium Ports for mobile/4G/ISP AU; deeper Orbita CDP work.
+1. Stay on `PROXY_PROVIDER=premiumports`. Deploy egress **city** gate.
+2. **Do not** mass-resume the cohort; leave `au_082` eligible/idle.
+3. After deploy: `npm run warmup:cookie-age -- --confirm --count 1` — require Melbourne egress on every session including first Google.
+4. Ask Premium Ports about Melbourne inventory reliability / mobile-4G AU if city misses stay common.
+5. Only after a second clean graduate: consider one campaign search on `au_082`.
 
 ---
 

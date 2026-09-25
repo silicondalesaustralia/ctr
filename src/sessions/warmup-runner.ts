@@ -5,6 +5,7 @@ import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits
 import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
+import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { browseAuSites, browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
 import { applyBrowserStealth } from "../browser/stealth.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
@@ -218,7 +219,10 @@ export async function runWarmupSession(
     let egressCity = input.identity.city;
     let egressIpHash = hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`);
     if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
-      const egress = await verifyBrowserEgressGeo(page, "AU");
+      const expectedCity = shouldSkipCityTargeting(input.identity.city)
+        ? undefined
+        : input.identity.city;
+      const egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
       egressCountry = egress.country;
       egressRegion = egress.region ?? input.identity.region;
       egressCity = egress.city ?? input.identity.city;

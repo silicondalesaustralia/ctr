@@ -68,6 +68,22 @@ describe("egress geo parsing", () => {
       ),
     ).toThrow(WrongEgressGeoError);
   });
+
+  it("throws WrongEgressGeoError when city misses soft PP targeting", async () => {
+    const { assertExpectedCity } = await import("../../src/browser/egress-geo.js");
+    expect(() =>
+      assertExpectedCity(
+        {
+          ip: "1.2.3.4",
+          country: "AU",
+          city: "Sydney",
+          source: "test",
+        },
+        "AU",
+        "Melbourne",
+      ),
+    ).toThrow(/expected AU\/Melbourne, got AU\/Sydney/);
+  });
 });
 
 describe("wrong egress geo retry classification", () => {

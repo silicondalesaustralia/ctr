@@ -16,6 +16,7 @@ import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
+import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
   appendSessionEvent,
@@ -236,7 +237,10 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
     const bandwidth = trackBandwidth(page);
     let egress: EgressGeo | undefined;
     if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
-      egress = await verifyBrowserEgressGeo(page, "AU");
+      const expectedCity = shouldSkipCityTargeting(input.identity.city)
+        ? undefined
+        : input.identity.city;
+      egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
     }
     const proxyMeta = proxyFields(env, input.identity, proxyLease, egress);
     if (egress) {

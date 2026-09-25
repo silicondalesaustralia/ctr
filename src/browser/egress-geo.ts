@@ -11,15 +11,23 @@ export interface EgressGeo {
 export class WrongEgressGeoError extends Error {
   readonly egress: EgressGeo;
   readonly expectedCountry: string;
+  readonly expectedCity?: string;
 
-  constructor(egress: EgressGeo, expectedCountry: string) {
+  constructor(egress: EgressGeo, expectedCountry: string, expectedCity?: string) {
+    const expected =
+      expectedCity?.trim()
+        ? `${expectedCountry}/${expectedCity.trim()}`
+        : expectedCountry;
+    const got = egress.city
+      ? `${egress.country}/${egress.city}`
+      : egress.country;
     super(
-      `Proxy egress geo mismatch: expected ${expectedCountry}, got ${egress.country}` +
-        `${egress.city ? ` (${egress.city})` : ""} ip=${egress.ip}`,
+      `Proxy egress geo mismatch: expected ${expected}, got ${got} ip=${egress.ip}`,
     );
     this.name = "WrongEgressGeoError";
     this.egress = egress;
     this.expectedCountry = expectedCountry;
+    this.expectedCity = expectedCity?.trim() || undefined;
   }
 }
 
@@ -69,12 +77,34 @@ export function parseEgressGeoPayload(
   };
 }
 
+export function normalizeCityName(city: string): string {
+  return city.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
+}
+
 export function assertExpectedCountry(
   egress: EgressGeo,
   expectedCountry: string,
 ): void {
   if (egress.country.toUpperCase() !== expectedCountry.toUpperCase()) {
     throw new WrongEgressGeoError(egress, expectedCountry.toUpperCase());
+  }
+}
+
+/** Soft Premium Ports city targeting can land another AU city — reject before Google. */
+export function assertExpectedCity(
+  egress: EgressGeo,
+  expectedCountry: string,
+  expectedCity: string,
+): void {
+  assertExpectedCountry(egress, expectedCountry);
+  const want = normalizeCityName(expectedCity);
+  const got = egress.city ? normalizeCityName(egress.city) : "";
+  if (!got || got !== want) {
+    throw new WrongEgressGeoError(
+      egress,
+      expectedCountry.toUpperCase(),
+      expectedCity,
+    );
   }
 }
 
@@ -107,13 +137,28 @@ async function lookupViaNavigation(page: Page, url: string): Promise<IpLookupPay
   return JSON.parse(text) as IpLookupPayload;
 }
 
+function assertEgressGeo(
+  egress: EgressGeo,
+  expectedCountry: string,
+  expectedCity?: string,
+): void {
+  if (expectedCity?.trim()) {
+    assertExpectedCity(egress, expectedCountry, expectedCity);
+    return;
+  }
+  assertExpectedCountry(egress, expectedCountry);
+}
+
 /**
  * Resolve egress IP geo via the browser proxy.
  * Uses a dedicated tab so lookups never race the session page's navigations.
+ * When expectedCity is set, Soft PP city misses become proxy_error retries
+ * instead of Google from the wrong metro.
  */
 export async function verifyBrowserEgressGeo(
   page: Page,
   expectedCountry = "AU",
+  expectedCity?: string,
 ): Promise<EgressGeo> {
   const geoPage = await page.context().newPage();
   let lastError: unknown;
@@ -128,7 +173,7 @@ export async function verifyBrowserEgressGeo(
           `[geo] egress ip=${egress.ip} country=${egress.country}` +
             `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
         );
-        assertExpectedCountry(egress, expectedCountry);
+        assertEgressGeo(egress, expectedCountry, expectedCity);
         return egress;
       } catch (error) {
         if (error instanceof WrongEgressGeoError) throw error;
@@ -147,7 +192,7 @@ export async function verifyBrowserEgressGeo(
           `[geo] egress ip=${egress.ip} country=${egress.country}` +
             `${egress.city ? ` city=${egress.city}` : ""} via ${egress.source}`,
         );
-        assertExpectedCountry(egress, expectedCountry);
+        assertEgressGeo(egress, expectedCountry, expectedCity);
         return egress;
       } catch (error) {
         if (error instanceof WrongEgressGeoError) throw error;
