@@ -7,6 +7,7 @@ import {
   type LocalPackCandidate,
 } from "./local-pack-collect.js";
 import { trustedClickPicked } from "./serp-trusted-click.js";
+import { goToNextSerpPage } from "./serp-pagination.js";
 
 export type LocalPackSource = "local_pack" | "more_places";
 export type { LocalPackCandidate };
@@ -85,6 +86,7 @@ function matchCandidate(
   candidates: LocalPackCandidate[],
   input: { businessName: string; placeId?: string | null; cid?: string | null },
   source: LocalPackSource,
+  offset = 0,
 ): LocalPackResult | null {
   const rawId = input.placeId?.trim() ?? "";
   const cidFromId = rawId.toLowerCase().startsWith("cid:")
@@ -96,7 +98,7 @@ function matchCandidate(
     rawId && !rawId.toLowerCase().startsWith("cid:") && !/^\d{6,}$/.test(rawId) ? rawId : null;
   const cid = (input.cid ?? cidFromId)?.replace(/^cid:/i, "") ?? null;
 
-  let position = 0;
+  let position = offset;
   for (const candidate of candidates) {
     position += 1;
     const idMatch =
@@ -182,6 +184,21 @@ export async function findGmbInLocalPack(
     await scrollPlacesList(page, 8);
     candidates = await collectLocalPackCandidates(page);
     found = matchCandidate(candidates, input, "more_places");
+  }
+
+  // Places list pages ~20 businesses; ranks near 20 drift onto page 2 between sessions.
+  const firstPageCount = realBusinessCount(candidates);
+  if (!found && firstPageCount >= 10 && isLocalFinderPage(page.url())) {
+    if (await goToNextSerpPage(page, false)) {
+      await waitForLocalCandidates(page);
+      await scrollPlacesList(page, 8);
+      const pageTwo = await collectLocalPackCandidates(page);
+      found = matchCandidate(pageTwo, input, "more_places", firstPageCount);
+      console.error(`[gmb] Places page 2: candidates=${pageTwo.length} found=${found?.position ?? "no"}`);
+      if (!found) candidates = pageTwo;
+    } else {
+      console.error(`[gmb] Places page 1 had ${firstPageCount} businesses; no page 2 link`);
+    }
   }
 
   // Mobile often serves empty udm=1 chrome ("Maps" only). Fall back to Maps search.

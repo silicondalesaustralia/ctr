@@ -125,8 +125,11 @@ async function loadNextByUrl(page: Page): Promise<boolean> {
   }
 }
 
-/** Advance to the next batch of results: pager click when present, otherwise scroll-load. */
-export async function goToNextSerpPage(page: Page): Promise<boolean> {
+/**
+ * Advance to the next batch of results: pager click when present, otherwise scroll-load.
+ * `directUrl: false` for layouts whose page size is not 10 (e.g. Places list).
+ */
+export async function goToNextSerpPage(page: Page, directUrl = true): Promise<boolean> {
   const immediate = await clickPagerNext(page);
   if (immediate !== null) {
     if (immediate) await settleAfterPaging(page);
@@ -135,7 +138,7 @@ export async function goToNextSerpPage(page: Page): Promise<boolean> {
 
   const found = await scrollForMore(page);
   if (found === "batch") return true;
-  if (found !== "pager") return loadNextByUrl(page);
+  if (found !== "pager") return directUrl ? loadNextByUrl(page) : false;
 
   const paged = await clickPagerNext(page);
   if (paged) await settleAfterPaging(page);
