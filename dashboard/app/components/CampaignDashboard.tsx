@@ -92,6 +92,10 @@ interface Campaign {
   region: string;
   focusCity?: string | null;
   identityGeoScope?: IdentityGeoScope | null;
+  requireWarmupIdentities?: boolean;
+  geoLatitude?: number | null;
+  geoLongitude?: number | null;
+  geoRadiusKm?: number | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -132,6 +136,10 @@ const defaultForm = (): CampaignFormState => ({
   region: "ALL",
   focusCity: "",
   identityGeoScope: "city",
+  identityPool: "warmed",
+  geoLatitude: null,
+  geoLongitude: null,
+  geoRadiusKm: null,
   gmbBusinessName: "",
   gmbPlaceId: "",
   gmbMapsUrl: "",
@@ -326,6 +334,10 @@ export default function CampaignDashboard({
         c.identityGeoScope === "country" || c.identityGeoScope === "city"
           ? c.identityGeoScope
           : prev.identityGeoScope,
+      identityPool: c.requireWarmupIdentities === false ? "any" : "warmed",
+      geoLatitude: c.geoLatitude ?? null,
+      geoLongitude: c.geoLongitude ?? null,
+      geoRadiusKm: c.geoRadiusKm ?? null,
       gmbBusinessName: c.gmbBusinessName ?? "",
       gmbPlaceId: c.gmbPlaceId ?? "",
       gmbMapsUrl: c.gmbMapsUrl ?? "",
@@ -428,6 +440,10 @@ export default function CampaignDashboard({
       region: form.region,
       focusCity: form.focusCity || null,
       identityGeoScope: form.identityGeoScope,
+      requireWarmupIdentities: form.identityPool === "warmed",
+      geoLatitude: form.geoLatitude,
+      geoLongitude: form.geoLongitude,
+      geoRadiusKm: form.geoRadiusKm,
       gmbBusinessName: form.gmbBusinessName || null,
       gmbPlaceId: form.gmbPlaceId || null,
       gmbMapsUrl: form.gmbMapsUrl || null,
@@ -887,6 +903,7 @@ export default function CampaignDashboard({
               selectedIds={form.selectedIdentityIds}
               onSelectionChange={(ids) => updateForm("selectedIdentityIds", ids)}
               readonly={campaignActive}
+              allowUnwarmed={form.identityPool === "any"}
             />
           </div>
         </>

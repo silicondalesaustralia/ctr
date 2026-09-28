@@ -2,7 +2,7 @@ import { DeviceClass, ProfileProvider, type Identity } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
-import { getEnv } from "../config/env.js";
+import { activeProfileProvider } from "./provider-compat.js";
 import { AU_REGIONS, findRegionConfigByCity, isRegionCoherent, pickWeightedRegion } from "./regions.js";
 import { isWarmupEligible, scheduleWarmupForIdentity } from "../warmup/warmup-service.js";
 
@@ -11,6 +11,11 @@ export interface CreateIdentitiesOptions {
   desktopPercent?: number;
   /** Force all new identities into this city (e.g. Adelaide for GMB). */
   city?: string;
+}
+
+/** Camoufox is desktop Firefox only — mobile identities cannot be created under it. */
+function effectiveDesktopPercent(desktopPercent: number): number {
+  return activeProfileProvider() === ProfileProvider.camoufox ? 100 : desktopPercent;
 }
 
 function externalIdForIndex(index: number): string {
@@ -68,18 +73,14 @@ async function createIdentityBatch(
   city?: string,
 ): Promise<Identity[]> {
   const browserProvider = createBrowserProvider();
-  const env = getEnv();
-  const provider =
-    env.BROWSER_PROFILE_PROVIDER === "gologin"
-      ? ProfileProvider.gologin
-      : ProfileProvider.mock;
+  const provider = activeProfileProvider();
 
   const forcedRegion = city ? findRegionConfigByCity(city) : undefined;
   if (city && !forcedRegion) {
     throw new Error(`Unknown city for identity creation: ${city}`);
   }
 
-  const desktopCount = Math.round((count * desktopPercent) / 100);
+  const desktopCount = Math.round((count * effectiveDesktopPercent(desktopPercent)) / 100);
   const created: Identity[] = [];
 
   for (let offset = 0; offset < count; offset += 1) {
@@ -140,13 +141,9 @@ export async function createIdentities(
 ): Promise<Identity[]> {
   const { count, desktopPercent = 65 } = options;
   const browserProvider = createBrowserProvider();
-  const env = getEnv();
-  const provider =
-    env.BROWSER_PROFILE_PROVIDER === "gologin"
-      ? ProfileProvider.gologin
-      : ProfileProvider.mock;
+  const provider = activeProfileProvider();
 
-  const desktopCount = Math.round((count * desktopPercent) / 100);
+  const desktopCount = Math.round((count * effectiveDesktopPercent(desktopPercent)) / 100);
   const created: Identity[] = [];
 
   for (let i = 0; i < count; i += 1) {

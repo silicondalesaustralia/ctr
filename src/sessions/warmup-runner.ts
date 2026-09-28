@@ -5,6 +5,7 @@ import { generateSessionTraits, traitsToJson } from "../behaviour/session-traits
 import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
+import { assertEgressPrefixClean } from "../providers/proxy/ip-reputation.js";
 import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { browseAuSites, browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
 import { applyBrowserStealth } from "../browser/stealth.js";
@@ -78,7 +79,7 @@ async function finishBlocked(
   reason: string | undefined,
   bandwidth: ReturnType<typeof trackBandwidth>,
   personaId: string,
-  extra?: { googleLoaded?: boolean; searchSubmitted?: boolean },
+  extra?: { googleLoaded?: boolean; searchSubmitted?: boolean; egressIp?: string },
 ) {
   await completeSession(sessionId, {
     status: "blocked",
@@ -94,6 +95,7 @@ async function finishBlocked(
     blocked: true,
     siteClicked: false,
     queryText,
+    egressIp: extra?.egressIp,
   });
 }
 
@@ -211,18 +213,23 @@ export async function runWarmupSession(
       throw new Error("Browser provider did not return a usable browser");
     }
 
-    await applyBrowserStealth(page);
+    if (runningBrowser.runtime !== "camoufox") {
+      await applyBrowserStealth(page);
+    }
 
     const bandwidth = trackBandwidth(page);
     let egressCountry = "AU";
     let egressRegion = input.identity.region;
     let egressCity = input.identity.city;
     let egressIpHash = hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`);
+    let egressIp: string | undefined;
     if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
       const expectedCity = shouldSkipCityTargeting(input.identity.city)
         ? undefined
         : input.identity.city;
       const egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
+      if (!isBrowse) await assertEgressPrefixClean(egress.ip);
+      egressIp = egress.ip;
       egressCountry = egress.country;
       egressRegion = egress.region ?? input.identity.region;
       egressCity = egress.city ?? input.identity.city;
@@ -317,7 +324,7 @@ export async function runWarmupSession(
         blockedAfterLoad.reason,
         bandwidth,
         persona.id,
-        { googleLoaded: true },
+        { googleLoaded: true, egressIp },
       );
       return { sessionId: session.id, status: "blocked", siteClicked: false };
     }
@@ -340,7 +347,7 @@ export async function runWarmupSession(
         blockedAfterSearch.reason,
         bandwidth,
         persona.id,
-        { googleLoaded: true, searchSubmitted: true },
+        { googleLoaded: true, searchSubmitted: true, egressIp },
       );
       return { sessionId: session.id, status: "blocked", siteClicked: false };
     }

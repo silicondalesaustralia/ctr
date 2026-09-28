@@ -4,6 +4,8 @@ import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { runSession } from "../sessions/session-runner.js";
 import { getRetryDelayMinutes, shouldRetry } from "./retry-policy.js";
+import { BLOCK_RETRY_DELAY_MINUTES } from "../identities/block-policy.js";
+import { isIdentityRunnable } from "../identities/provider-compat.js";
 import {
   BULLMQ_JOB_LOCK_MS,
   BULLMQ_STALLED_INTERVAL_MS,
@@ -58,6 +60,19 @@ export async function processScheduledSession(
   });
 
   if (!scheduled || scheduled.status !== "scheduled") return;
+  if (!isIdentityRunnable(scheduled.identity)) {
+    await prisma.scheduledSession.update({
+      where: { id: scheduledSessionId },
+      data: { status: "cancelled" },
+    });
+    logger.warn({
+      event: "scheduled_session_provider_mismatch",
+      scheduledSessionId,
+      identityId: scheduled.identity.externalId,
+      profileProvider: scheduled.identity.profileProvider,
+    });
+    return;
+  }
 
   await prisma.scheduledSession.update({
     where: { id: scheduledSessionId },
@@ -97,8 +112,13 @@ export async function processScheduledSession(
       result.status === "blocked" && result.blockReason
         ? result.blockReason
         : (result.errorCode ?? result.status);
-    if (shouldRetry(retryKey, scheduled.attemptCount + 1)) {
-      const delay = getRetryDelayMinutes(retryKey);
+    const retry =
+      result.status === "blocked"
+        ? result.retryOnFreshIp === true
+        : shouldRetry(retryKey, scheduled.attemptCount + 1);
+    if (retry) {
+      const delay =
+        result.status === "blocked" ? BLOCK_RETRY_DELAY_MINUTES : getRetryDelayMinutes(retryKey);
       await prisma.scheduledSession.update({
         where: { id: scheduledSessionId },
         data: {

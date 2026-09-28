@@ -31,6 +31,7 @@ import {
 } from "../warmup/warmup-service.js";
 import { isWarmupExperiment } from "../warmup/warmup-experiment.js";
 import { findRegionByCity } from "../campaign/geo-capacity.js";
+import { resolveCampaignGeo } from "../campaign/campaign-geo-input.js";
 import { parseGmbTarget } from "../campaign/gmb-target.js";
 import {
   actionsFromFlags,
@@ -59,6 +60,12 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   focusCity?: string | null;
   /** city = hyper-local identities; country = any identity in AU (or experiment.country). */
   identityGeoScope?: "city" | "country" | null;
+  /** false = cold (unwarmed) identities may run this campaign. */
+  requireWarmupIdentities?: boolean;
+  /** Campaign GPS centre; each identity gets a stable point within geoRadiusKm. */
+  geoLatitude?: number | null;
+  geoLongitude?: number | null;
+  geoRadiusKm?: number | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -406,6 +413,9 @@ async function saveCampaignConfig(
           : input.identityGeoScope === "city"
             ? "city"
             : (existing?.identityGeoScope ?? "city"),
+      requireWarmupIdentities:
+        input.requireWarmupIdentities ?? existing?.requireWarmupIdentities ?? true,
+      ...resolveCampaignGeo(input, existing),
       gmbBusinessName: resolved.gmbBusinessName,
       gmbPlaceId: resolved.gmbPlaceId,
       gmbMapsUrl: resolved.gmbMapsUrl,
@@ -922,6 +932,10 @@ export function serializeCampaign(
     region: campaign.focusRegion ?? "ALL",
     focusCity: campaign.focusCity,
     identityGeoScope: campaign.identityGeoScope,
+    requireWarmupIdentities: campaign.requireWarmupIdentities,
+    geoLatitude: campaign.geoLatitude,
+    geoLongitude: campaign.geoLongitude,
+    geoRadiusKm: campaign.geoRadiusKm,
     gmbBusinessName: campaign.gmbBusinessName,
     gmbPlaceId: campaign.gmbPlaceId,
     gmbMapsUrl: campaign.gmbMapsUrl,

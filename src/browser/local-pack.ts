@@ -6,6 +6,7 @@ import {
   mapsSearchUrl,
   type LocalPackCandidate,
 } from "./local-pack-collect.js";
+import { trustedClickPicked } from "./serp-trusted-click.js";
 
 export type LocalPackSource = "local_pack" | "more_places";
 export type { LocalPackCandidate };
@@ -218,8 +219,8 @@ export async function findGmbInLocalPack(
 }
 
 export async function clickLocalPackResult(page: Page, result: LocalPackResult): Promise<void> {
-  const clicked = await page.evaluate(
-    ({ title, href, cardSelectors }) => {
+  const handle = await page.evaluateHandle(
+    ({ title, href, cardSelectors }): HTMLElement | null => {
       const needle = title.toLowerCase().slice(0, 24);
       const cards = Array.from(document.querySelectorAll(cardSelectors)) as HTMLElement[];
 
@@ -231,8 +232,7 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
         ) as HTMLAnchorElement | null;
         const target = anchor ?? card;
         target.scrollIntoView({ block: "center", inline: "nearest" });
-        target.click();
-        return true;
+        return target;
       }
 
       const headings = Array.from(document.querySelectorAll('[role="heading"]')) as HTMLElement[];
@@ -241,15 +241,14 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
         if (!text.includes(needle)) continue;
         const card = heading.closest(".Nv2PK, [role='article'], .VkpGBb, div") ?? heading;
         card.scrollIntoView({ block: "center", inline: "nearest" });
-        (card as HTMLElement).click();
-        return true;
+        return card as HTMLElement;
       }
 
       if (href) {
         const byHref = document.querySelector(`a[href="${CSS.escape(href)}"]`) as HTMLElement | null;
         if (byHref) {
-          byHref.click();
-          return true;
+          byHref.scrollIntoView({ block: "center", inline: "nearest" });
+          return byHref;
         }
       }
 
@@ -262,14 +261,14 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
           .toLowerCase();
         if (!label.includes(needle)) continue;
         anchor.scrollIntoView({ block: "center", inline: "nearest" });
-        anchor.click();
-        return true;
+        return anchor;
       }
-      return false;
+      return null;
     },
     { title: result.title, href: result.href, cardSelectors: CARD_SELECTORS },
   );
 
+  const clicked = await trustedClickPicked(page, handle.asElement(), "local-pack");
   if (!clicked) {
     throw new Error(`Could not click local pack result: ${result.title}`);
   }

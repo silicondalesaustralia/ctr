@@ -9,6 +9,7 @@ import {
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
 import { warmupInfraRetryDelayMs } from "../warmup/warmup-config.js";
+import { isIdentityRunnable } from "../identities/provider-compat.js";
 
 const QUEUE_NAME = "warmup-jobs";
 
@@ -50,6 +51,19 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
 
   if (!warmup || warmup.status !== "scheduled") return;
   if (!warmup.identity.active) return;
+  if (!isIdentityRunnable(warmup.identity)) {
+    await prisma.warmupSession.update({
+      where: { id: warmupSessionId },
+      data: { status: "cancelled" },
+    });
+    logger.warn({
+      event: "warmup_session_provider_mismatch",
+      warmupSessionId,
+      identityId: warmup.identity.externalId,
+      profileProvider: warmup.identity.profileProvider,
+    });
+    return;
+  }
 
   await prisma.warmupSession.update({
     where: { id: warmupSessionId },
@@ -141,7 +155,8 @@ export async function pollAndEnqueueDueWarmupSessions(): Promise<number> {
     where: {
       status: "scheduled",
       scheduledAt: { lte: new Date() },
-      identity: { active: true, warmupStatus: "warming" },
+      // Eligible identities only have maintenance browses queued (warmup rows are cancelled on graduation).
+      identity: { active: true, warmupStatus: { in: ["warming", "eligible"] } },
     },
     take: 5,
   });

@@ -30,14 +30,28 @@ export interface RunningBrowser {
   /** Redis token for the single GoLogin cloud-slot lock (plan allows 1 parallel). */
   slotToken?: string;
   /** How the browser was started — drives cleanup. */
-  runtime?: "cloud" | "orbita" | "chromium";
+  runtime?: "cloud" | "orbita" | "chromium" | "camoufox";
   browser?: import("../../browser/pw.js").Browser;
   context?: import("../../browser/pw.js").BrowserContext;
 }
 
+export interface GeoPoint {
+  latitude: number;
+  longitude: number;
+}
+
+export interface StartProfileOptions {
+  /** Browser GPS location (Camoufox only); otherwise derived from the proxy IP. */
+  geoPoint?: GeoPoint;
+}
+
 export interface BrowserProfileProvider {
   createProfile(input: CreateProfileInput): Promise<BrowserProfile>;
-  startProfile(profileId: string, proxy?: ProxyConfig): Promise<RunningBrowser>;
+  startProfile(
+    profileId: string,
+    proxy?: ProxyConfig,
+    options?: StartProfileOptions,
+  ): Promise<RunningBrowser>;
   stopProfile(profileId: string, running?: RunningBrowser): Promise<void>;
   updateProxy(profileId: string, proxy: ProxyConfig): Promise<void>;
   getProfile(profileId: string): Promise<BrowserProfile | null>;

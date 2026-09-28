@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AuthGate from "../components/AuthGate";
 import AppLayout from "../components/AppLayout";
+import WarmPoolPanel from "../components/WarmPoolPanel";
 import { apiGet, apiPost } from "../../lib/api";
 import { cellStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle, thStyle } from "../components/campaign/shared";
 import type { WarmupProgress } from "../components/campaign/CampaignIdentityPicker";
@@ -107,13 +108,14 @@ function IdentitiesPage() {
 
   return (
     <AppLayout title="Identities">
+      <WarmPoolPanel />
       <section style={panelStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
           <div>
             <h1 style={{ margin: "0 0 8px" }}>Identities</h1>
             <p style={{ color: "#64748b", margin: 0, fontSize: 15 }}>
-              Browser profiles warm up automatically after creation. Campaigns can only use eligible
-              identities.
+              Browser profiles warm up automatically after creation. Each campaign chooses warmed-only
+              or any identity (including unwarmed) in its review step.
             </p>
           </div>
           <button

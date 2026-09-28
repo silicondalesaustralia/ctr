@@ -1,5 +1,6 @@
 import type { Page } from "../browser/pw.js";
 import type { GmbAction } from "../campaign/gmb-types.js";
+import { trustedClickPicked } from "../browser/serp-trusted-click.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
 
 export interface GmbActionResult {
@@ -10,7 +11,7 @@ export interface GmbActionResult {
 }
 
 async function clickByLabels(page: Page, labels: string[]): Promise<boolean> {
-  return page.evaluate((needles) => {
+  const handle = await page.evaluateHandle((needles): HTMLElement | null => {
     const lowered = needles.map((n) => n.toLowerCase());
     const candidates = Array.from(
       document.querySelectorAll("a, button, [role='button'], [data-value], [aria-label]"),
@@ -34,11 +35,11 @@ async function clickByLabels(page: Page, labels: string[]): Promise<boolean> {
         continue;
       }
       el.scrollIntoView({ block: "center", inline: "nearest" });
-      el.click();
-      return true;
+      return el;
     }
-    return false;
+    return null;
   }, labels);
+  return (await trustedClickPicked(page, handle.asElement(), "gmb-action")) !== null;
 }
 
 export async function dwellOnListing(page: Page, secondsMin = 4, secondsMax = 12): Promise<void> {

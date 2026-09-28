@@ -4,4 +4,11 @@
  * Keep this as the only import site for browser runtime APIs.
  */
 export { chromium, firefox } from "playwright-core";
-export type { Browser, BrowserContext, Page, Response } from "playwright-core";
+export type {
+  Browser,
+  BrowserContext,
+  ElementHandle,
+  Locator,
+  Page,
+  Response,
+} from "playwright-core";

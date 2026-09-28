@@ -43,6 +43,7 @@ function makeIdentity(overrides: Partial<Identity> = {}): Identity {
     warmupSiteClicks: 0,
     warmupGraduationPassed: false,
     warmupEligibleAt: null,
+    consecutiveBlocks: 0,
     ...overrides,
   };
 }

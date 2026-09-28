@@ -7,9 +7,10 @@ import {
   isGoogleRedirectPage,
   resolveGoogleSerpHref,
 } from "../utils/helpers.js";
+import { SERP_ANCHOR_SELECTOR, trustedClickAnchor } from "./serp-trusted-click.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
-export const SERP_CLICK_STRATEGY = "v2-title-first-dom";
+export const SERP_CLICK_STRATEGY = "v3-title-first-mouse";
 
 export interface SerpResult {
   position: number;
@@ -250,11 +251,11 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
     `[serp] ${SERP_CLICK_STRATEGY} click title="${titleSnippet.slice(0, 40)}" hrefKind=${result.hrefKind ?? "unknown"}`,
   );
 
-  const clickedVia = await page.evaluate(
-    ({ title, href }) => {
-      const organicAnchors = Array.from(
-        document.querySelectorAll("#search a[href], #rso a[href], div.MjjYud a[href]"),
-      ) as HTMLElement[];
+  // Pick in-page (no DOM mutation), then click with a real mouse via the locator so
+  // the event is trusted and Camoufox's humanized cursor moves to it.
+  const pick = await page.evaluate(
+    ({ title, href, selector }) => {
+      const organicAnchors = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
 
       const needle = title.toLowerCase().slice(0, 24);
       if (needle.length >= 4) {
@@ -278,8 +279,7 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
             continue;
           }
           el.scrollIntoView({ block: "center", inline: "nearest" });
-          el.click();
-          return "title";
+          return { via: "title", index: organicAnchors.indexOf(el) };
         }
       }
 
@@ -304,8 +304,7 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
         }
         if ((el.textContent ?? "").trim().length > 0) {
           el.scrollIntoView({ block: "center", inline: "nearest" });
-          el.click();
-          return "href-visible";
+          return { via: "href-visible", index: organicAnchors.indexOf(el) };
         }
       }
 
@@ -322,19 +321,19 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
           continue;
         }
         el.scrollIntoView({ block: "center", inline: "nearest" });
-        el.click();
-        return "href-visible";
+        return { via: "href-visible", index: organicAnchors.indexOf(el) };
       }
 
       return null;
     },
-    { title: titleSnippet, href: result.url },
+    { title: titleSnippet, href: result.url, selector: SERP_ANCHOR_SELECTOR },
   );
 
-  if (!clickedVia) {
+  if (!pick) {
     throw new Error(`Could not click SERP result (${SERP_CLICK_STRATEGY}): ${titleSnippet}`);
   }
 
+  const clickedVia = await trustedClickAnchor(page, pick.index, pick.via);
   console.error(`[serp] clicked via ${clickedVia}`);
   await waitForSerpRedirectSettle(page);
 }

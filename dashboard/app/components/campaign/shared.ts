@@ -12,6 +12,7 @@ export type CampaignKind = "url" | "gmb";
 
 /** Hyper-local city pool vs any identity in the campaign country. */
 export type IdentityGeoScope = "city" | "country";
+export type IdentityPool = "warmed" | "any";
 
 export interface GmbActionFlags {
   website: boolean;
@@ -81,6 +82,10 @@ export interface CampaignFormState {
   region: string;
   focusCity: string;
   identityGeoScope: IdentityGeoScope;
+  identityPool: IdentityPool;
+  geoLatitude: number | null;
+  geoLongitude: number | null;
+  geoRadiusKm: number | null;
   gmbBusinessName: string;
   gmbPlaceId: string;
   gmbMapsUrl: string;

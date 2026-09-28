@@ -11,11 +11,14 @@ import { verifyBrowserEgressGeo, type EgressGeo } from "../browser/egress-geo.js
 import { getEnv, isDryRun } from "../config/env.js";
 import { getExperimentQueries } from "../experiments/experiment-service.js";
 import { updateIdentityStats } from "../identities/identity-service.js";
+import { registerGoogleBlock, registerGoogleClean } from "../identities/block-policy.js";
+import { assertEgressPrefixClean } from "../providers/proxy/ip-reputation.js";
 import { isWarmupEligible } from "../warmup/warmup-service.js";
 import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
+import { campaignGeoPoint } from "../providers/browser/camoufox-geo.js";
 import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
@@ -45,6 +48,8 @@ export interface RunSessionResult {
   status: string;
   errorCode?: string;
   blockReason?: string;
+  /** Google blocked but the identity is not parked — retry once on a fresh IP. */
+  retryOnFreshIp?: boolean;
 }
 
 async function connectBrowserWithRetry(wsEndpoint: string, maxAttempts = 4) {
@@ -219,7 +224,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
       timezone: input.identity.timezone,
-    });
+    }, { geoPoint: campaignGeoPoint(input.experiment, input.identity.externalId) });
     // Only GoLogin *cloud* needs the remote /web stop path.
     cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
 
@@ -241,6 +246,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
         ? undefined
         : input.identity.city;
       egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
+      await assertEgressPrefixClean(egress.ip);
     }
     const proxyMeta = proxyFields(env, input.identity, proxyLease, egress);
     if (egress) {
@@ -373,7 +379,17 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
         experimentId: input.experiment.id,
         query: input.queryText,
       });
-      return { sessionId: session.id, status: "blocked", blockReason: search.blockReason };
+      const block = await registerGoogleBlock(input.identity.id, egress?.ip);
+      return {
+        sessionId: session.id,
+        status: "blocked",
+        blockReason: search.blockReason,
+        retryOnFreshIp: !block.parked,
+      };
+    }
+
+    if (search.googleLoaded) {
+      await registerGoogleClean(input.identity.id);
     }
 
     if (search.status === "search_abandoned") {

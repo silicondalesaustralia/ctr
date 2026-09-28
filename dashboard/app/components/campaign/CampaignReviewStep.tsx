@@ -2,6 +2,7 @@
 
 import type { CampaignFormState, IntensitySummary, PreflightSummary, QueryRow, SettingRationale } from "./shared";
 import HintLabel from "./HintLabel";
+import CampaignTargetingFields from "./CampaignTargetingFields";
 import {
   cellStyle,
   getStartCampaignBlockReason,
@@ -353,6 +354,8 @@ export default function CampaignReviewStep({
               </label>
             </fieldset>
           )}
+
+          <CampaignTargetingFields form={form} running={running} onFormChange={onFormChange} />
 
           <label>
             <HintLabel

@@ -1,4 +1,5 @@
 import { getEnv } from "../../config/env.js";
+import { CamoufoxProvider } from "./CamoufoxProvider.js";
 import { createGoLoginProvider } from "./GoLoginProvider.js";
 import { MultiloginProvider } from "./MultiloginProvider.js";
 import { MockBrowserProfileProvider } from "./MockBrowserProfileProvider.js";
@@ -10,6 +11,9 @@ export function createBrowserProvider(): BrowserProfileProvider {
   const env = getEnv();
   if (env.BROWSER_PROFILE_PROVIDER === "gologin") {
     return createGoLoginProvider();
+  }
+  if (env.BROWSER_PROFILE_PROVIDER === "camoufox") {
+    return new CamoufoxProvider();
   }
   if (env.BROWSER_PROFILE_PROVIDER === "multilogin") {
     return MultiloginProvider.create();

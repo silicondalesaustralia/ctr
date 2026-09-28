@@ -45,12 +45,18 @@ interface Props {
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   readonly?: boolean;
+  /** Campaign identity pool = "any": warming identities are selectable too. */
+  allowUnwarmed?: boolean;
 }
 
 function warmupLabel(warmup: WarmupProgress): string {
   if (warmup.eligible) return "Eligible";
   const graduation = warmup.graduationPassed ? "graduation done" : "graduation pending";
   return `Warming (${warmup.siteClicks}/${warmup.minSiteClicks} site opens, ${graduation}, ${warmup.ageDays}/${warmup.minDays}d)`;
+}
+
+function isUsable(row: IdentityPickerRow, allowUnwarmed: boolean): boolean {
+  return row.active && (allowUnwarmed || row.warmup.eligible);
 }
 
 function warmupColor(warmup: WarmupProgress): string {
@@ -63,7 +69,9 @@ export default function CampaignIdentityPicker({
   selectedIds,
   onSelectionChange,
   readonly = false,
+  allowUnwarmed = false,
 }: Props) {
+  const usable = (row: IdentityPickerRow) => isUsable(row, allowUnwarmed);
   const [identities, setIdentities] = useState<IdentityPickerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +101,7 @@ export default function CampaignIdentityPicker({
             regionLabel === "ALL" || !regionLabel || row.region === regionLabel,
           selected:
             regionLabel === "ALL" || !regionLabel || row.region === regionLabel
-              ? row.warmup.eligible
+              ? isUsable(row, allowUnwarmed)
               : false,
         }));
         setIdentities(rows);
@@ -101,7 +109,7 @@ export default function CampaignIdentityPicker({
           initializedSelection.current = true;
           onSelectionChange(
             rows
-              .filter((row) => row.warmup.eligible && row.inRegionPool !== false)
+              .filter((row) => isUsable(row, allowUnwarmed) && row.inRegionPool !== false)
               .map((row) => row.id),
           );
         }
@@ -112,7 +120,7 @@ export default function CampaignIdentityPicker({
     } finally {
       setLoading(false);
     }
-  }, [campaignId, onSelectionChange, regionLabel]);
+  }, [campaignId, onSelectionChange, regionLabel, allowUnwarmed]);
 
   useEffect(() => {
     void load();
@@ -129,9 +137,7 @@ export default function CampaignIdentityPicker({
   function selectEligibleInRegion() {
     if (readonly) return;
     onSelectionChange(
-      identities
-        .filter((row) => row.warmup.eligible && row.inRegionPool !== false)
-        .map((row) => row.id),
+      identities.filter((row) => usable(row) && row.inRegionPool !== false).map((row) => row.id),
     );
   }
 
@@ -160,7 +166,7 @@ export default function CampaignIdentityPicker({
   }
 
   const selectedEligible = identities.filter(
-    (row) => selectedIds.includes(row.id) && row.warmup.eligible,
+    (row) => selectedIds.includes(row.id) && usable(row),
   ).length;
 
   return (
@@ -177,7 +183,7 @@ export default function CampaignIdentityPicker({
         {!readonly && (
           <>
             <button type="button" style={secondaryButtonStyle(false)} onClick={selectEligibleInRegion}>
-              Select eligible in {regionLabel}
+              Select {allowUnwarmed ? "all active" : "eligible"} in {regionLabel}
             </button>
             <button type="button" style={secondaryButtonStyle(false)} onClick={clearSelection}>
               Clear selection

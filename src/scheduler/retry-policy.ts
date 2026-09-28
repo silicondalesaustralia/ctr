@@ -47,7 +47,7 @@ export function isProxyTunnelError(message: string): boolean {
 }
 
 export function isWrongEgressGeoError(message: string): boolean {
-  return /Proxy egress geo mismatch/i.test(message);
+  return /Proxy egress geo mismatch|Proxy egress IP prefix flagged/i.test(message);
 }
 
 export function classifyBrowserErrorCode(message: string): string {

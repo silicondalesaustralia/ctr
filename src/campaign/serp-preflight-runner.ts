@@ -13,6 +13,7 @@ import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
+import { isIdentityRunnable } from "../identities/provider-compat.js";
 import { updatePreflightJobProgress } from "./preflight-jobs.js";
 import { checkGmbQueryOnPage } from "./gmb-preflight-check.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
@@ -60,7 +61,8 @@ export async function pickPreflightIdentity(
     return identity;
   }
 
-  function filterPool(identities: Identity[]): Identity[] {
+  function filterPool(allIdentities: Identity[]): Identity[] {
+    const identities = allIdentities.filter((identity) => isIdentityRunnable(identity));
     if (!requireGoLogin) return identities;
     const valid = identities.filter((identity) =>
       isValidGoLoginProfileId(identity.externalProfileId),

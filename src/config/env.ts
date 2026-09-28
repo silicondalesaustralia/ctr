@@ -74,7 +74,9 @@ function reportMissingDatabaseEnv(): void {
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  BROWSER_PROFILE_PROVIDER: z.enum(["mock", "gologin", "multilogin"]).default("mock"),
+  BROWSER_PROFILE_PROVIDER: z.enum(["mock", "gologin", "multilogin", "camoufox"]).default("mock"),
+  /** Persistent Camoufox user-data dirs (Railway volume in prod). Headful follows GOLOGIN_HEADLESS. */
+  CAMOUFOX_PROFILE_DIR: z.string().default("./tmp/camoufox-profiles"),
   PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports"]).default("mock"),
   DRY_RUN: z
     .string()

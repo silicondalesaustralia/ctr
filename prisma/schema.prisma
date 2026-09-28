@@ -83,6 +83,7 @@ enum ProfileProvider {
   gologin
   multilogin
   mock
+  camoufox
 }
 
 enum DeviceClass {
@@ -175,6 +176,10 @@ model Experiment {
   gscSiteUrl           String?          @map("gsc_site_url")
   lastPacingRecalcAt   DateTime?        @map("last_pacing_recalc_at")
   requireWarmupIdentities Boolean       @default(true) @map("require_warmup_identities")
+  /** Browser GPS centre for local campaigns; each identity gets a stable point within geoRadiusKm. */
+  geoLatitude          Float?           @map("geo_latitude")
+  geoLongitude         Float?           @map("geo_longitude")
+  geoRadiusKm          Float?           @map("geo_radius_km")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
@@ -252,6 +257,8 @@ model Identity {
   warmupSiteClicks   Int             @default(0) @map("warmup_site_clicks")
   warmupGraduationPassed Boolean     @default(false) @map("warmup_graduation_passed")
   warmupEligibleAt DateTime?       @map("warmup_eligible_at")
+  /** Google blocks since the last clean Google session; park at 2. */
+  consecutiveBlocks Int            @default(0) @map("consecutive_blocks")
 
   scheduledSessions ScheduledSession[]
   sessions          Session[]
@@ -418,6 +425,28 @@ model ExperimentNote {
   experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
 
   @@map("experiment_notes")
+}
+
+/** Pinned Camoufox device identity for one profile (reused every launch). */
+model BrowserFingerprint {
+  profileId       String   @id @map("profile_id")
+  os              String
+  fingerprintJson String   @map("fingerprint_json")
+  webglVendor     String   @map("webgl_vendor")
+  webglRenderer   String   @map("webgl_renderer")
+  seedsJson       String   @map("seeds_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("browser_fingerprints")
+}
+
+/** /24 egress prefixes that recently hit a Google block — skipped before Google. */
+model BlockedIpPrefix {
+  prefix        String   @id
+  blockCount    Int      @default(1) @map("block_count")
+  lastBlockedAt DateTime @default(now()) @map("last_blocked_at")
+
+  @@map("blocked_ip_prefixes")
 }
 
 model AppSetting {

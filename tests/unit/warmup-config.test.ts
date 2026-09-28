@@ -15,15 +15,15 @@ import {
 } from "../../src/warmup/warmup-config.js";
 
 describe("warmup config", () => {
-  it("uses stretched cold-start warmup defaults", () => {
-    expect(WARMUP_MIN_DAYS).toBe(4);
-    expect(WARMUP_SPREAD_DAYS).toBe(7);
-    expect(WARMUP_BENIGN_SITE_CLICKS).toBe(2);
+  it("uses light Camoufox warmup defaults", () => {
+    expect(WARMUP_MIN_DAYS).toBe(2);
+    expect(WARMUP_SPREAD_DAYS).toBe(2);
+    expect(WARMUP_BENIGN_SITE_CLICKS).toBe(1);
     expect(WARMUP_SESSION_GAP_MINUTES).toBe(120);
-    expect(WARMUP_WINDOW_HOURS).toBe(168);
-    expect(WARMUP_FIRST_DELAY_HOURS).toBe(36);
-    expect(WARMUP_BROWSE_SESSIONS).toBe(3);
-    expect(WARMUP_BROWSE_SPREAD_DAYS).toBe(2);
+    expect(WARMUP_WINDOW_HOURS).toBe(48);
+    expect(WARMUP_FIRST_DELAY_HOURS).toBe(12);
+    expect(WARMUP_BROWSE_SESSIONS).toBe(2);
+    expect(WARMUP_BROWSE_SPREAD_DAYS).toBe(1);
     expect(WARMUP_BROWSE_FIRST_DELAY_HOURS).toBe(2);
     expect(warmupInfraRetryDelayMs(1)).toBe(5 * 60 * 1000);
     expect(warmupInfraRetryDelayMs(2)).toBe(15 * 60 * 1000);

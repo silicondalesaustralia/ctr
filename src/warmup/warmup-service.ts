@@ -1,6 +1,12 @@
 import type { Identity, WarmupSessionKind, WarmupStatus } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import {
+  BLOCK_RETRY_DELAY_MINUTES,
+  registerGoogleBlock,
+  registerGoogleClean,
+} from "../identities/block-policy.js";
+import { isIdentityRunnable } from "../identities/provider-compat.js";
+import {
   pickBenignWarmupQuery,
   pickGraduationQuery,
   WARMUP_BENIGN_RETRY_HOURS,
@@ -42,6 +48,7 @@ export interface WarmupSessionOutcome {
   blocked: boolean;
   siteClicked: boolean;
   queryText: string;
+  egressIp?: string;
 }
 
 export function computeWarmupProgress(identity: Identity, scheduledRemaining = 0): WarmupProgress {
@@ -77,6 +84,7 @@ export function identityAllowedForCampaign(
   requireWarmup: boolean,
 ): boolean {
   if (!identity.active) return false;
+  if (!isIdentityRunnable(identity)) return false;
   if (!requireWarmup) return true;
   return isWarmupEligible(identity);
 }
@@ -155,15 +163,26 @@ export async function recordWarmupSessionResult(
   if (outcome.blocked) {
     await prisma.identity.update({
       where: { id: identityId },
-      data: {
-        blockedSessions: { increment: 1 },
-        lastUsedAt: new Date(),
-        // Park identity — do not re-hit Google with the same fingerprint.
-        active: false,
-      },
+      data: { blockedSessions: { increment: 1 }, lastUsedAt: new Date() },
     });
-    await cancelPendingWarmupSessions(identityId);
+    const block = await registerGoogleBlock(identityId, outcome.egressIp);
+    if (block.parked) {
+      await cancelPendingWarmupSessions(identityId);
+    } else {
+      await prisma.warmupSession.create({
+        data: {
+          identityId,
+          queryText: outcome.queryText,
+          kind: outcome.kind,
+          scheduledAt: addMinutes(new Date(), BLOCK_RETRY_DELAY_MINUTES),
+        },
+      });
+    }
     return prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
+  }
+
+  if (outcome.kind !== "browse") {
+    await registerGoogleClean(identityId);
   }
 
   if (outcome.kind === "graduation") {
