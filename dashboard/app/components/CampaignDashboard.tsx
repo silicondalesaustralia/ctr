@@ -379,8 +379,12 @@ export default function CampaignDashboard({
       if (suggested) {
         setForm((prev) => ({ ...prev, gscConnectionId: connectionId, gscSiteUrl: suggested }));
       }
-    } catch {
+    } catch (err) {
       setGscSites([]);
+      setError(
+        `Could not load GSC properties: ${err instanceof Error ? err.message : String(err)}. ` +
+          "Reconnect this account under Manage GSC accounts.",
+      );
     } finally {
       setGscSitesLoading(false);
     }
