@@ -225,9 +225,17 @@ export async function findGmbInLocalPack(
     if (!found) {
       await openMapsSearch(page, input.query);
       await waitForLocalCandidates(page);
-      await scrollPlacesList(page, 8);
-      candidates = await collectLocalPackCandidates(page);
-      found = matchCandidate(candidates, input, "more_places");
+      // Maps feed lazy-loads ~20 at a time; keep scrolling until found or the list stops growing.
+      let stalls = 0;
+      for (let round = 0; round < 8 && !found && stalls < 2; round += 1) {
+        const before = candidates.length;
+        await scrollPlacesList(page, round === 0 ? 8 : 5);
+        candidates = await collectLocalPackCandidates(page);
+        found = matchCandidate(candidates, input, "more_places");
+        stalls = candidates.length > before ? 0 : stalls + 1;
+        if (candidates.length >= 60) break;
+      }
+      console.error(`[gmb] Maps feed scanned ${candidates.length} businesses found=${found?.position ?? "no"}`);
     }
   }
 
