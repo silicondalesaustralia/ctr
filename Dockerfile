@@ -11,6 +11,7 @@ COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
 COPY scripts/patch-patchright.js ./scripts/patch-patchright.js
 RUN npm ci
 RUN npx patchright install chromium
+RUN npx camoufox-js fetch
 
 COPY prisma ./prisma
 RUN npx prisma generate

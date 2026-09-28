@@ -5,6 +5,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+tmp/
 playwright-report/
 test-results/
 dashboard/.next/
