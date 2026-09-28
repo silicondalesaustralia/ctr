@@ -64,8 +64,15 @@ async function scrollForMore(page: Page): Promise<"pager" | "batch" | null> {
   const deadline = Date.now() + 25_000;
 
   while (Date.now() < deadline) {
-    await page.mouse.wheel(0, randomBetween(700, 1_200));
+    const scrollY = await page.evaluate(() => window.scrollY);
+    const step = randomBetween(700, 1_200);
+    await page.mouse.wheel(0, step);
     await sleep(randomBetween(600, 1_300));
+    if ((await page.evaluate(() => window.scrollY)) === scrollY) {
+      // Wheel over a carousel/map scrolls that element, not the document.
+      await page.evaluate((dy) => window.scrollBy({ top: dy, behavior: "smooth" }), step);
+      await sleep(randomBetween(400, 800));
+    }
     if (await pagerPresent(page)) return "pager";
 
     const atBottom = await page.evaluate(
@@ -99,6 +106,25 @@ async function settleAfterPaging(page: Page): Promise<void> {
   await page.waitForTimeout(2000);
 }
 
+/** Pager never rendered: request the same `start=` URL the Next link would point to. */
+async function loadNextByUrl(page: Page): Promise<boolean> {
+  // Shopping-heavy SERPs can show only a few organic titles on a non-final page.
+  if ((await countResultTitles(page)) === 0) return false;
+  const current = new URL(page.url());
+  if (!current.searchParams.get("q")) return false;
+  const next = new URL(current.toString());
+  next.searchParams.set("start", String(Number(current.searchParams.get("start") ?? "0") + 10));
+  console.error(`[serp] pager missing; loading start=${next.searchParams.get("start")}`);
+  try {
+    await page.goto(next.toString(), { waitUntil: "domcontentloaded", timeout: 30_000, referer: current.toString() });
+    await settleAfterPaging(page);
+    return true;
+  } catch (error: unknown) {
+    console.error(`[serp] direct next-page load failed: ${error instanceof Error ? error.message : String(error)}`);
+    return false;
+  }
+}
+
 /** Advance to the next batch of results: pager click when present, otherwise scroll-load. */
 export async function goToNextSerpPage(page: Page): Promise<boolean> {
   const immediate = await clickPagerNext(page);
@@ -109,7 +135,7 @@ export async function goToNextSerpPage(page: Page): Promise<boolean> {
 
   const found = await scrollForMore(page);
   if (found === "batch") return true;
-  if (found !== "pager") return false;
+  if (found !== "pager") return loadNextByUrl(page);
 
   const paged = await clickPagerNext(page);
   if (paged) await settleAfterPaging(page);

@@ -54,19 +54,6 @@ function normalizeQueryInputWeights(queries: CampaignQueryInput[]): CampaignQuer
   }));
 }
 
-function pickPrimaryKeyword(
-  originalKeyword: string,
-  found: Array<{ text: string; globalPosition: number }>,
-): string {
-  const original = found.find(
-    (row) => row.text.toLowerCase() === originalKeyword.toLowerCase(),
-  );
-  if (original) return original.text;
-
-  const sorted = [...found].sort((a, b) => a.globalPosition - b.globalPosition);
-  return sorted[0]?.text ?? originalKeyword;
-}
-
 function recommendIntensity(avgPosition: number): TreatmentIntensity {
   if (avgPosition >= 22) return "strong";
   if (avgPosition >= 12) return "normal";
@@ -126,22 +113,13 @@ export async function rebuildProposalAfterPreflight(
   const notFoundCount = preflightResults.filter(
     (row) => !row.found && row.status === "not_found",
   ).length;
+  const limitedCount = preflightResults.filter((row) => row.status === "limited").length;
 
   const enabledQueries = mergedQueries.filter((query) => query.active !== false);
-  const rankedFindable = enabledQueries
-    .map((query) => {
-      const result = resultByQuery.get(query.text.toLowerCase());
-      const live = liveSerpPosition(result);
-      if (live == null) return null;
-      return { text: query.text, globalPosition: live };
-    })
-    .filter((row): row is { text: string; globalPosition: number } => row != null);
-
-  const keyword =
-    rankedFindable.length > 0
-      ? pickPrimaryKeyword(previousKeyword, rankedFindable)
-      : previousKeyword;
-  const keywordAdjusted = keyword.toLowerCase() !== previousKeyword.toLowerCase();
+  // The primary keyword is the user's choice; preflight only reports on it.
+  const keyword = previousKeyword;
+  const primaryResult = resultByQuery.get(keyword.toLowerCase());
+  const primaryNotFound = primaryResult != null && liveSerpPosition(primaryResult) == null;
 
   const planningInputs = normalizeQueryInputWeights(
     enabledQueries.map((query) => {
@@ -251,11 +229,19 @@ export async function rebuildProposalAfterPreflight(
     },
   ];
 
-  if (keywordAdjusted) {
+  if (limitedCount > 0) {
+    rationales.push({
+      setting: "Limited Google results",
+      value: `${limitedCount} queries`,
+      reason: "Google returned a truncated results list to the preflight browser, so 3 pages could not be checked. Not conclusive — GSC positions are still used for planning.",
+    });
+  }
+
+  if (primaryNotFound) {
     rationales.push({
       setting: "Primary keyword",
       value: keyword,
-      reason: `"${previousKeyword}" was not findable live — suggested best-ranked enabled query as primary.`,
+      reason: `"${keyword}" was not found within 3 pages from the preflight location — kept as primary.`,
     });
   }
 

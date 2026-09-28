@@ -174,7 +174,7 @@ async function checkQueryOnPage(
         serpPage: pagesSearched,
         position: null,
         globalPosition: null,
-        status: "not_found",
+        status: pagesSearched < maxSerpPages ? "limited" : "not_found",
       };
     }
 

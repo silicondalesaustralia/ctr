@@ -115,9 +115,9 @@ describe("rebuildProposalAfterPreflight", () => {
 
     expect(updated.queries.length).toBe(3);
     expect(updated.queries[0]?.startingPosition).toBe(8);
-    expect(updated.queries[1]?.startingPosition).toBeUndefined();
-    expect(updated.keyword).toBe("selling food from home mount barker sa online");
-    expect(updated.preflight?.keywordAdjusted).toBe(true);
+    expect(updated.queries[1]?.startingPosition).toBeNull();
+    expect(updated.keyword).toBe(proposal.keyword);
+    expect(updated.preflight?.keywordAdjusted).toBe(false);
     expect(updated.preflight?.findableCount).toBe(1);
     expect(updated.intensity.totalAllocatedSessions).toBeGreaterThan(0);
     expect(updated.rationales.some((r) => r.setting === "Google preflight")).toBe(true);

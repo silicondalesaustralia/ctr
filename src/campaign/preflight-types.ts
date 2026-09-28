@@ -1,4 +1,5 @@
-export type PreflightQueryStatus = "found" | "not_found" | "blocked" | "error";
+/** `limited`: Google ran out of results before the page limit, so absence is inconclusive. */
+export type PreflightQueryStatus = "found" | "not_found" | "limited" | "blocked" | "error";
 
 export interface PreflightQueryResult {
   query: string;

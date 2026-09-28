@@ -106,6 +106,8 @@ export default function CampaignReviewStep({
   const isGmb = form.campaignKind === "gmb";
   const notFoundQueries =
     preflightSummary?.results.filter((row) => !row.found).map((row) => row.query) ?? [];
+  const limitedCount =
+    preflightSummary?.results.filter((row) => row.status === "limited").length ?? 0;
   return (
     <>
       <section style={panelStyle}>
@@ -167,8 +169,8 @@ export default function CampaignReviewStep({
                         : ""
                     }`
                   : `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 3 pages.${
-                      preflightSummary.keywordAdjusted
-                        ? ` Primary keyword updated to "${form.keyword}".`
+                      limitedCount > 0
+                        ? ` ${limitedCount} inconclusive (Google showed the preflight browser a truncated results list).`
                         : ""
                     }`
                 : form.campaignKind === "gmb"
@@ -718,9 +720,11 @@ export default function CampaignReviewStep({
                         : row.preflightSerpPage != null
                           ? `p${row.preflightSerpPage} #${row.preflightPosition}`
                           : `#${row.preflightPosition}`
-                      : row.preflightStatus
-                        ? "Not found"
-                        : "—";
+                      : row.preflightStatus === "limited"
+                        ? "Inconclusive"
+                        : row.preflightStatus
+                          ? "Not found"
+                          : "—";
                   const rowStyle = row.active ? undefined : { opacity: 0.55 };
                   return (
                     <tr key={row.text} style={rowStyle}>
