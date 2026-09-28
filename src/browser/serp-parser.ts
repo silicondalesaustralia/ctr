@@ -56,6 +56,9 @@ export function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
 }
 
 const ORGANIC_SELECTORS = [
+  // Result-title anchors are the most layout-stable organic signal (Chrome and Firefox SERPs).
+  "#rso a[href]:has(h3)",
+  "#search a[href]:has(h3)",
   "#search .g a[href]",
   "#rso .g a[href]",
   "div.MjjYud a[href]",
@@ -70,10 +73,16 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
     const links: Array<{ href: string; title: string; displayedUrl: string }> = [];
     const seen = new Set<string>();
 
+    const looksOrganic = (link: { href: string; displayedUrl: string }) =>
+      /^\/(url|goto)\?/.test(link.href) ||
+      /google\.[a-z.]+\/(url|goto)\?/.test(link.href) ||
+      (/^https?:/.test(link.href) && !/google\./.test(link.href)) ||
+      link.displayedUrl.length > 3;
+
     for (const selector of selectors) {
       for (const anchor of Array.from(document.querySelectorAll(selector))) {
         const href = anchor.getAttribute("href");
-        if (!href || href.startsWith("#") || href.includes("google.com/search")) {
+        if (!href || href.startsWith("#") || href.startsWith("/search") || href.includes("google.com/search")) {
           continue;
         }
         if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {
@@ -105,14 +114,16 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
 
         links.push({ href, title, displayedUrl });
       }
-      if (links.length > 0) {
+      if (links.some(looksOrganic)) {
         return links;
       }
+      links.length = 0;
+      seen.clear();
     }
 
     for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
       const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || href.includes("google.com/search")) {
+      if (!href || href.startsWith("#") || href.startsWith("/search") || href.includes("google.com/search")) {
         continue;
       }
       if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {

@@ -12,6 +12,13 @@ export async function pickRandomOrganicResult(page: Page): Promise<SerpResult | 
   const organic = candidates.filter((candidate) => isOrganicCandidate(candidate));
 
   if (organic.length === 0) {
+    const sample = candidates
+      .slice(0, 6)
+      .map((c) => `${c.href.slice(0, 60)} «${c.title.slice(0, 30)}» cite=${c.displayedUrl.slice(0, 30)}`)
+      .join(" | ");
+    console.error(
+      `[serp] no organic candidates url=${page.url().slice(0, 120)} total=${candidates.length} ${sample}`,
+    );
     return null;
   }
 
