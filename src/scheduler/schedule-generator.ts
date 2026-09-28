@@ -131,6 +131,8 @@ export async function generateCampaignSchedule(
   const identityLastScheduled = new Map<string, Date>();
   const scheduleTimezone = input.experiment.scheduleTimezone;
   const startCalendar = getCalendarDateInTimezone(startDate, scheduleTimezone);
+  // Past slots would be picked up immediately by the worker as overdue.
+  const earliest = addMinutes(new Date(), 10);
 
   for (let day = 0; day < durationDays; day += 1) {
     const dayCalendar = addCalendarDays(startCalendar, day);
@@ -168,7 +170,7 @@ export async function generateCampaignSchedule(
           }
         }
 
-        if (scheduledAt > endDate) continue;
+        if (scheduledAt < earliest || scheduledAt > endDate) continue;
 
         const lastForIdentity = identityLastScheduled.get(identity.id);
         if (lastForIdentity) {
