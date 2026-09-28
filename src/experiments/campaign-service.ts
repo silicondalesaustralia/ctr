@@ -267,7 +267,7 @@ export async function previewCampaignIntensity(
         select: { requireWarmupIdentities: true, country: true, identityGeoScope: true },
       })
     : null;
-  const requireWarmup = experiment?.requireWarmupIdentities ?? true;
+  const requireWarmup = input.requireWarmupIdentities ?? experiment?.requireWarmupIdentities ?? true;
   const geoScope =
     input.identityGeoScope === "country" || input.identityGeoScope === "city"
       ? input.identityGeoScope
