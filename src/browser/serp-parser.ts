@@ -73,12 +73,6 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
     const links: Array<{ href: string; title: string; displayedUrl: string }> = [];
     const seen = new Set<string>();
 
-    const looksOrganic = (link: { href: string; displayedUrl: string }) =>
-      /^\/(url|goto)\?/.test(link.href) ||
-      /google\.[a-z.]+\/(url|goto)\?/.test(link.href) ||
-      (/^https?:/.test(link.href) && !/google\./.test(link.href)) ||
-      link.displayedUrl.length > 3;
-
     for (const selector of selectors) {
       for (const anchor of Array.from(document.querySelectorAll(selector))) {
         const href = anchor.getAttribute("href");
@@ -114,7 +108,16 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
 
         links.push({ href, title, displayedUrl });
       }
-      if (links.some(looksOrganic)) {
+      // Inline callback: named functions inside evaluate get tsx's __name helper, which the page lacks.
+      if (
+        links.some(
+          (link) =>
+            /^\/(url|goto)\?/.test(link.href) ||
+            /google\.[a-z.]+\/(url|goto)\?/.test(link.href) ||
+            (/^https?:/.test(link.href) && !/google\./.test(link.href)) ||
+            link.displayedUrl.length > 3,
+        )
+      ) {
         return links;
       }
       links.length = 0;
