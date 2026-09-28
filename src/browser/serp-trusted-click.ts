@@ -1,7 +1,7 @@
 import type { ElementHandle, Page } from "./pw.js";
 import { randomBetween } from "../utils/helpers.js";
 
-export const SERP_ANCHOR_SELECTOR = "#search a[href], #rso a[href], div.MjjYud a[href]";
+export const SERP_ANCHOR_SELECTOR = "#center_col a[href], #search a[href], #rso a[href], div.MjjYud a[href]";
 
 interface HitCheck {
   hit: boolean;

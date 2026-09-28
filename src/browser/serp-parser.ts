@@ -8,6 +8,7 @@ import {
   resolveGoogleSerpHref,
 } from "../utils/helpers.js";
 import { SERP_ANCHOR_SELECTOR, trustedClickPicked } from "./serp-trusted-click.js";
+import { goToNextSerpPage, RESULT_TITLE_SELECTOR } from "./serp-pagination.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
 export const SERP_CLICK_STRATEGY = "v5-point-mouse";
@@ -56,7 +57,9 @@ export function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
 }
 
 const ORGANIC_SELECTORS = [
-  // Result-title anchors are the most layout-stable organic signal (Chrome and Firefox SERPs).
+  // Result-title anchors are the most layout-stable organic signal (Chrome and Firefox SERPs);
+  // #center_col also covers batches appended by continuous scroll outside #rso.
+  RESULT_TITLE_SELECTOR,
   "#rso a[href]:has(h3)",
   "#search a[href]:has(h3)",
   "#search .g a[href]",
@@ -201,21 +204,7 @@ export async function findTargetOnCurrentPage(
   return null;
 }
 
-export async function goToNextSerpPage(page: Page): Promise<boolean> {
-  const nextButton = page
-    .locator(
-      'a#pnnext, a:has-text("Next"), a[aria-label="Next page"], a[aria-label="More search results"]',
-    )
-    .first();
-
-  if (!(await nextButton.isVisible().catch(() => false))) {
-    return false;
-  }
-
-  await nextButton.click();
-  await page.waitForTimeout(2000);
-  return true;
-}
+export { goToNextSerpPage };
 
 export async function findTargetInSerp(
   page: Page,
