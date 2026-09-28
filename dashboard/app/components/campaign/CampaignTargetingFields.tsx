@@ -94,7 +94,7 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
           />
           <input
             style={inputStyle}
-            placeholder="-35.0666, 138.8583"
+            placeholder="Blank = no GPS (e.g. -35.0666, 138.8583)"
             value={pointText}
             disabled={running}
             onChange={(e) => setPointText(e.target.value)}
@@ -110,7 +110,7 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
             min={0.5}
             max={50}
             step={0.5}
-            placeholder="3"
+            placeholder="Default 3"
             value={form.geoRadiusKm ?? ""}
             disabled={running}
             onChange={(e) =>
