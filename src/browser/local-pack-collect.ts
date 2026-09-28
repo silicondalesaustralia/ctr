@@ -22,7 +22,22 @@ export function mapsSearchUrl(query: string): string {
   return `https://www.google.com.au/maps/search/${q}?hl=en-AU`;
 }
 
+/** Google often redirects just after a SERP/Places load; retry once the new document settles. */
 export async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidate[]> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await collectOnce(page);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt >= 2 || !/context was destroyed|navigation/i.test(message)) throw error;
+      console.error(`[gmb] candidate scan interrupted by navigation; retrying (${attempt + 1})`);
+      await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+      await page.waitForTimeout(1_500);
+    }
+  }
+}
+
+async function collectOnce(page: Page): Promise<LocalPackCandidate[]> {
   const url = page.url();
   const isLocalFinder = /[?&]udm=1/i.test(url);
   const isMapsHost = /google\.[^/]*\/maps/i.test(url);

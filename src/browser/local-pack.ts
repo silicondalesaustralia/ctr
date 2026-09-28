@@ -120,14 +120,21 @@ function matchCandidate(
 
 async function scrollPlacesList(page: Page, iterations = 10): Promise<void> {
   for (let i = 0; i < iterations; i += 1) {
-    await page.evaluate(() => {
-      const feed =
-        document.querySelector("[role='feed']") ??
-        document.querySelector("#search") ??
-        document.scrollingElement;
-      if (feed) feed.scrollBy(0, 700);
-      else window.scrollBy(0, 700);
-    });
+    const scrolled = await page
+      .evaluate(() => {
+        const feed =
+          document.querySelector("[role='feed']") ??
+          document.querySelector("#search") ??
+          document.scrollingElement;
+        if (feed) feed.scrollBy(0, 700);
+        else window.scrollBy(0, 700);
+      })
+      .then(() => true)
+      .catch((error: unknown) => {
+        console.error(`[gmb] places scroll interrupted: ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+      });
+    if (!scrolled) await page.waitForLoadState("domcontentloaded").catch(() => undefined);
     await page.waitForTimeout(450);
   }
 }
