@@ -146,7 +146,7 @@ export async function runGmbSearchJourney(
   const actionResults: GmbActionResult[] = [];
   const secondary = pickSecondaryAction(actions);
   if (secondary) {
-    const result = await performGmbAction(page, secondary);
+    const result = await performGmbAction(page, secondary, found.title || businessName);
     actionResults.push(result);
     const eventType =
       secondary === "website"

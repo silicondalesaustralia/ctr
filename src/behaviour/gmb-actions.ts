@@ -10,12 +10,46 @@ export interface GmbActionResult {
   detail?: string;
 }
 
-async function clickByLabels(page: Page, labels: string[]): Promise<boolean> {
-  const handle = await page.evaluateHandle((needles): HTMLElement | null => {
+const PRECISE_SELECTORS: Record<Exclude<GmbAction, "open_listing">, string> = {
+  website: "a[data-item-id='authority']",
+  directions: "button[data-value='Directions'], button[data-value='Get directions']",
+  call: "button[data-item-id^='phone:'], a[data-item-id^='phone:']",
+};
+
+/**
+ * Click an action control inside the target business's panel only. Maps keeps
+ * the results feed beside the open listing, and every competitor card there has
+ * its own Website / Directions / phone controls.
+ */
+async function clickByLabels(
+  page: Page,
+  labels: string[],
+  precise: string,
+  businessName: string,
+): Promise<boolean> {
+  const handle = await page.evaluateHandle(({ needles, preciseSelector, name }): HTMLElement | null => {
     const lowered = needles.map((n) => n.toLowerCase());
-    const candidates = Array.from(
-      document.querySelectorAll("a, button, [role='button'], [data-value], [aria-label]"),
-    ) as HTMLElement[];
+    const target = name.toLowerCase();
+    const panels = Array.from(document.querySelectorAll("[role='main'][aria-label]")) as HTMLElement[];
+    const panel =
+      panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().includes(target)) ??
+      panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().startsWith(target.slice(0, 12))) ??
+      null;
+    if (!panel) return null;
+
+    const preciseHit = Array.from(panel.querySelectorAll(preciseSelector)).find(
+      (el) => !el.closest("[role='feed'], [role='article']"),
+    ) as HTMLElement | undefined;
+    if (preciseHit) {
+      preciseHit.scrollIntoView({ block: "center", inline: "nearest" });
+      return preciseHit;
+    }
+
+    const candidates = (
+      Array.from(
+        panel.querySelectorAll("a, button, [role='button'], [data-value], [aria-label]"),
+      ) as HTMLElement[]
+    ).filter((el) => !el.closest("[role='feed'], [role='article']"));
 
     for (const el of candidates) {
       const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -38,7 +72,7 @@ async function clickByLabels(page: Page, labels: string[]): Promise<boolean> {
       return el;
     }
     return null;
-  }, labels);
+  }, { needles: labels, preciseSelector: precise, name: businessName });
   return (await trustedClickPicked(page, handle.asElement(), "gmb-action")) !== null;
 }
 
@@ -51,6 +85,7 @@ export async function dwellOnListing(page: Page, secondsMin = 4, secondsMax = 12
 export async function performGmbAction(
   page: Page,
   action: GmbAction,
+  businessName: string,
 ): Promise<GmbActionResult> {
   if (action === "open_listing") {
     return { action, attempted: true, success: true, detail: "listing already open" };
@@ -63,9 +98,9 @@ export async function performGmbAction(
         ? ["directions", "get directions", "route"]
         : ["call", "phone"];
 
-  const success = await clickByLabels(page, labels);
+  const success = await clickByLabels(page, labels, PRECISE_SELECTORS[action], businessName);
   if (!success) {
-    return { action, attempted: true, success: false, detail: "control not found" };
+    return { action, attempted: true, success: false, detail: "control not found in target panel" };
   }
 
   await page.waitForTimeout(1500);
