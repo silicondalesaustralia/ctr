@@ -1,216 +1,103 @@
-# CTR Warmup / Browser Setup — Current State
+# CTR Browser Setup — Current State
 
-Last updated: 2026-09-17
+Last updated: 2026-09-28
 
-## Goal
+## Summary
 
-Warm Australian GoLogin/Orbita identities through Premium Ports residential proxies until they are campaign-eligible, without Google `sorry` / CAPTCHA blocks.
+Production runs on **Camoufox** (Firefox-based anti-detect browser). GoLogin/Orbita + Patchright
+was retired after control tests showed the browser stack itself was what Google detected:
 
-Eligibility (defaults):
+| Test | Result |
+|------|--------|
+| Orbita, home IP, no proxy | Blocked |
+| Camoufox, home IP, cold (no warming) | 6/6 clean |
+| Camoufox, Premium Ports, cold | 2/3 clean (one flagged 179.x IP) |
+| Camoufox on Railway worker, Premium Ports Adelaide, cold `au_085` | 3/3 Google clean; real mouse click → site visit |
 
-- Age ≥ `WARMUP_MIN_DAYS` (4)
-- ≥ `WARMUP_BENIGN_SITE_CLICKS` (2) successful SERP → site clicks
-- Graduation SERP inspect passed
+GoLogin seats are no longer needed (legacy GoLogin identities are skipped under Camoufox).
 
 ---
 
 ## Runtime stack
 
-| Layer | Current setting |
-|-------|-----------------|
-| Browser profiles | GoLogin (`BROWSER_PROFILE_PROVIDER=gologin`) |
-| Browser runtime | Local Orbita on Railway worker (`GOLOGIN_BROWSER_RUNTIME=orbita`) |
-| Display | Headful via Xvfb (`GOLOGIN_HEADLESS=false`) |
-| Proxy | Premium Ports sticky AU residential (`PROXY_PROVIDER=premiumports`) |
-| Automation | **Patchright** over CDP (`src/browser/pw.ts`) — was Playwright |
-| Warmup kinds | `browse` (AU sites only) → `benign` (Google) → `graduation` |
-| Queue | BullMQ `warmup-jobs` (concurrency 1) + Redis GoLogin slot lock (1 parallel) |
-| Worker | Railway worker service |
+| Layer | Setting |
+|-------|---------|
+| Browser | Camoufox via `camoufox-js` 0.12 (`BROWSER_PROFILE_PROVIDER=camoufox`) |
+| Automation | `playwright-core` 1.60.0 (pinned — must match camoufox-js) via `src/browser/pw.ts` |
+| Fingerprint | Pinned per identity in `browser_fingerprints` (device, WebGL, canvas/audio/font seeds) |
+| Profile (cookies) | Persistent dir on Railway volume `worker-volume` → `CAMOUFOX_PROFILE_DIR=/data/camoufox` |
+| Display | Headful via Xvfb (`GOLOGIN_HEADLESS=false`, reused flag) |
+| Proxy | Premium Ports sticky AU residential, new lease per session |
+| Devices | Desktop only (Camoufox is desktop Firefox) |
+| Queue | BullMQ `session-jobs` + `warmup-jobs`, concurrency 1 |
 
-Proxy is **not** stored on the identity. Each session allocates a new sticky lease (city-targeted username, ~30 min TTL).
+## Railway env
 
----
+Worker: `BROWSER_PROFILE_PROVIDER=camoufox`, `CAMOUFOX_PROFILE_DIR=/data/camoufox`,
+`GOLOGIN_HEADLESS=false`, `PROXY_PROVIDER=premiumports`, `PREMIUMPORTS_*`,
+`WARMUP_MIN_DAYS=2`, `WARMUP_BENIGN_SITE_CLICKS=1`, `WARMUP_SPREAD_DAYS=2`,
+`WARMUP_WINDOW_HOURS=48`, `WARMUP_FIRST_DELAY_HOURS=12`.
 
-## Railway worker env (expected)
-
-```bash
-BROWSER_PROFILE_PROVIDER=gologin
-GOLOGIN_BROWSER_RUNTIME=orbita
-GOLOGIN_HEADLESS=false
-PROXY_PROVIDER=premiumports
-EXPERIMENT_RUNNER_ENABLED=true
-
-PREMIUMPORTS_PROXY_HOST=…
-PREMIUMPORTS_PROXY_PORT=8888
-PREMIUMPORTS_PROXY_USERNAME=…
-PREMIUMPORTS_PROXY_PASSWORD=…
-
-# Warmup pacing defaults
-WARMUP_MIN_DAYS=4
-WARMUP_BENIGN_SITE_CLICKS=2
-WARMUP_SPREAD_DAYS=7
-WARMUP_WINDOW_HOURS=168
-WARMUP_SESSION_GAP_MINUTES=120
-WARMUP_FIRST_DELAY_HOURS=36
-WARMUP_BROWSE_SESSIONS=3
-WARMUP_BROWSE_SPREAD_DAYS=2
-WARMUP_BROWSE_FIRST_DELAY_HOURS=2
-WARMUP_BENIGN_RETRY_HOURS=2
-WARMUP_GRADUATION_RETRY_HOURS=3
-```
-
-Decodo vars may still exist for rollback; **do not use** unless intentionally A/B testing.
+API (`ctr`): `BROWSER_PROFILE_PROVIDER=camoufox` (so dashboard-created identities are Camoufox).
+The API service deploys via `railway up --service ctr`; the worker deploys from git pushes to `main`.
 
 ---
 
-## Cookie-age (current next step)
+## Session flow
 
-After Patchright Step 1 failed (`au_080` → `unusual traffic`), new identities get **browse-only** sessions before any Google hit:
+1. Allocate Premium Ports lease; launch Camoufox with the identity's pinned fingerprint and profile dir
+2. Timezone/locale/WebRTC from the egress IP; optional campaign GPS point (see below)
+3. Egress gate: country AU + city must match identity, and the IP's /24 must not be recently
+   flagged (`blocked_ip_prefixes`, 14 days) — otherwise `proxy_error` → retry on a fresh lease
+4. Google search → pick result → **real mouse click** at a verified, uncovered point on the title
+   (native link click fallback); a click that doesn't navigate is an error, not a success
+5. Site journey
 
-1. `browse` × `WARMUP_BROWSE_SESSIONS` (default 3) over ~`WARMUP_BROWSE_SPREAD_DAYS` (2), first after ~`WARMUP_BROWSE_FIRST_DELAY_HOURS` (2)
-2. Then normal `benign` + `graduation` Google warmups
+## Block policy (retry once)
 
-```bash
-# Create + schedule cookie-age (no same-day Google)
-npm run warmup:cookie-age -- --confirm --count 1
+On a Google block: flag the egress /24, increment `identities.consecutive_blocks`.
+First block → retry in 30 min on a fresh IP. Second consecutive block → park identity.
+Any clean Google load resets the streak. Applies to campaign and warmup sessions.
 
-# After all browse rows complete → one Google probe
-npm run warmup:probe-one -- --confirm --id=au_XXX
-# Override browse gate only if intentional:
-npm run warmup:probe-one -- --confirm --id=au_XXX --force
-```
+## Campaign settings (review step → "Identities & GPS targeting")
 
----
+- **Identity pool:** "Warmed only" or "Any, including unwarmed" (`requireWarmupIdentities`)
+- **GPS centre + radius:** paste `lat, lng` from Google Maps. Each identity gets a stable point
+  within the radius (default 3 km), granted to google.com.au. Leave blank to skip GPS.
 
-## Warmup session flow (current code)
+## Warm pool (Identities page)
 
-1. Allocate Premium Ports lease (AU + city sticky)
-2. Start headful Orbita with profile timezone (not Sydney-forced)
-3. Apply CDP stealth patches (`src/browser/stealth.ts`)
-4. Verify egress country = AU **and city matches identity** (retry as `proxy_error` on soft PP miss)
-5. **If `kind=browse`:** visit 2–4 AU sites with longer dwell — **never open Google** — complete
-6. **If `kind=benign` / `graduation`:** short AU softener → `google.com.au` → query → SERP  
-   Benign: click organic → site journey · Graduation: inspect only
-7. On `google_sorry_page` / `unusual traffic` / block: **park identity**, cancel pending — **no retry**
-
-Profile create UAs are Chrome/135 to match Orbita `browserMajorVersion: 135`.
-
----
-
-## Important behaviours / fixes shipped
-
-| Change | Why |
-|--------|-----|
-| UA Chrome/135 + real profile TZ into Orbita | Kill UA/TZ mismatch |
-| Geo lookup on dedicated tab, fetch-first | Stop false `proxy_error` from navigation races |
-| Park on block (no 2h Google retry) | Stop burning flagged fingerprints |
-| Warmup backfill only for never-scheduled active IDs | Stop worker/dashboard from resurrecting cancelled schedules |
-| Pre-Google AU browse | Soften “cold profile → Google only” |
-| Stealth init scripts | Patch common `navigator.webdriver` / chrome / plugins tells |
-| Ops scripts | `identities:retire-pool`, `identities:keep-cohort`, `warmup:pause`, `warmup:probe-one`, `warmup:cookie-age` |
-| Cookie-age `browse` kind | AU sites only for 1–2 days before first Google |
-| Egress **city** gate | Reject wrong-metro exits before Google (retry as `proxy_error`) |
-
----
-
-## Pool status (as of last audits)
-
-Operational mode: **paused / probe-only**. Do not mass-reschedule until a second fresh identity also graduates clean.
-
-| Identity | Role | Last known outcome |
-|----------|------|--------------------|
-| `au_001`–`au_054` | Retired / disabled / historical | Ignore for warmup |
-| `au_055` | PP probe | `google_sorry_page` (AU/Sydney) — parked |
-| `au_056`–`au_074` | Original “20” cohort | Mixed; schedules cancelled; idle |
-| `au_075` | Decodo A/B | `google_sorry_page` (AU/Melbourne) — parked |
-| `au_076` | PP + stealth probe | `google_sorry_page` (AU/Melbourne) — parked |
-| `au_080` | Patchright same-day probe | `unusual traffic` (AU/Melbourne) — parked |
-| `au_082` | Cookie-age success | **eligible** — browses + 2 benign + graduation, no block |
-| `au_083` | Cookie-age replicate | 3× Melbourne browse OK → Google **Sydney** → `unusual traffic` — parked |
-
-`warmup:pause` cancels scheduled/running warmups and drains BullMQ queues.  
-Backfill will **not** recreate schedules for identities that already have any warmup rows.
-
----
-
-## A/B results (proxy vendor + automation)
-
-| Probe | Provider | Client | Geo OK? | Google |
-|-------|----------|--------|---------|--------|
-| `au_055` | premiumports | Playwright | Yes (Sydney) | `google_sorry_page` |
-| `au_075` | decodo | Playwright | Yes (Melbourne) | `google_sorry_page` |
-| `au_076` | premiumports + stealth + pre-Google | Playwright | Yes (Melbourne) | `google_sorry_page` |
-| `au_080` | premiumports | Patchright | Yes (Melbourne) | `unusual traffic` |
-| `au_082` | premiumports + cookie-age | Patchright | Mixed (1st Google Perth, later Melbourne) | **clean → eligible** |
-| `au_083` | premiumports + cookie-age | Patchright | Browses Melbourne; Google **Sydney** | `unusual traffic` — parked |
-
-**Conclusion:** Cookie-age can work (`au_082`) but is not proven repeatable. Soft Premium Ports city targeting let `au_083` age in Melbourne then search from Sydney — city gate now retries that before Google.
+Per-city target of Camoufox identities (warming + warm). Worker tops up hourly (max 3 new per
+tick) and gives warm identities idle ≥ 7 days a browse session. Light warmup: 2 browse sessions,
+1 benign click, graduation, eligible after ~2 days.
 
 ---
 
 ## Useful commands
 
 ```bash
-# Status
-npm run warmup:status
-npx tsx scripts/audit-active-warmups.ts
-npx tsx scripts/audit-today-wave.ts
-npx tsx scripts/audit-au055.ts --id=au_076
+# End-to-end smoke test (creates real identities + one benign warmup due now)
+BROWSER_PROFILE_PROVIDER=camoufox npx tsx scripts/camoufox-smoke.ts --confirm --city=Adelaide
 
-# Pause everything
-npm run warmup:pause -- --confirm
+# Local visible Camoufox control run (your IP, or --proxy for Premium Ports)
+npx tsx scripts/camoufox-home-control.ts --confirm [--proxy] [--click] [--query="..."]
 
-# Keep only au_055–074 active (older helper)
-npm run identities:keep-cohort -- --confirm
-
-# Single probe (~20 min delay)
-npm run identities:create-additional -- --count 1
-npm run warmup:probe-one -- --confirm --id=au_XXX
-
-# Recycle GoLogin seats
-npm run identities:retire-pool -- --confirm
-npm run gologin:delete-retired -- --confirm
+# Inspect a session + events
+npx tsx scripts/inspect-session.ts --id=<sessionId>
 ```
 
----
+## Open items
 
-## What is confirmed working
-
-- Headful Orbita on Railway (`Orbita ready … (headful, proxy via worker)`)
-- Premium Ports egress to real AU cities
-- Single-slot concurrency
-- Pause / park / no-resurrection backfill
-- Probe tooling
-
-## What is not working yet
-
-- Repeatable cookie-age → Google without block (`au_083` failed after `au_082` passed)
-- Soft PP city targeting without the new city gate (fixed in code; deploy required)
-
----
-
-## Recommended next steps
-
-1. Stay on `PROXY_PROVIDER=premiumports`. Deploy egress **city** gate.
-2. **Do not** mass-resume the cohort; leave `au_082` eligible/idle.
-3. After deploy: `npm run warmup:cookie-age -- --confirm --count 1` — require Melbourne egress on every session including first Google.
-4. Ask Premium Ports about Melbourne inventory reliability / mobile-4G AU if city misses stay common.
-5. Only after a second clean graduate: consider one campaign search on `au_082`.
-
----
+- Live campaign test: "plumber Mount Barker" (GMB + URL) for McLennan Plumbing & Gas, unwarmed pool
+- Retire GoLogin (subscription, legacy identities, `patch-gologin` postinstall) after the live test
+- `railway ssh` needs an SSH key registered on the Railway account (`railway ssh keys add`)
 
 ## Key files
 
-- `src/sessions/warmup-runner.ts` — warmup browser session
-- `src/warmup/warmup-service.ts` — schedule / eligibility / park-on-block / backfill
-- `src/providers/browser/gologin-orbita.ts` — Orbita launch
-- `src/providers/browser/GoLoginProvider.ts` — profile create + TZ
-- `src/providers/proxy/PremiumPortsProvider.ts` — sticky AU proxy
-- `src/browser/pw.ts` — Patchright facade (Chromium CDP client)
-- `src/browser/stealth.ts` — CDP stealth patches
-- `src/browser/pre-google-browse.ts` — AU sites before Google
-- `src/browser/egress-geo.ts` — egress check
-- `scripts/probe-one-warmup.ts` — single identity probe
-- `scripts/pause-warmups.ts` — emergency pause
-- `railway.env.example` — env template
-- `Dockerfile` — Playwright base image + `npx patchright install chromium`
+- `src/providers/browser/CamoufoxProvider.ts` — launch, profile dir, GPS grant
+- `src/providers/browser/camoufox-fingerprint.ts` / `camoufox-geo.ts` — pinned fingerprint, geo config
+- `src/providers/proxy/ip-reputation.ts` — /24 screen
+- `src/identities/block-policy.ts` / `provider-compat.ts` — retry-once, Camoufox-only identities
+- `src/browser/serp-parser.ts` / `serp-trusted-click.ts` — result collection, trusted clicks
+- `src/warmup/warm-pool.ts` / `warm-pool-settings.ts` — warm-pool targets and top-up
+- `dashboard/app/components/campaign/CampaignTargetingFields.tsx`, `WarmPoolPanel.tsx`
