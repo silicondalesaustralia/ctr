@@ -26,13 +26,6 @@ export async function trustedClick(
   }
 }
 
-/** Clicks the nth SERP anchor, preferring its h3 title. */
-export async function trustedClickAnchor(page: Page, index: number, via: string): Promise<string> {
-  const target = page.locator(SERP_ANCHOR_SELECTOR).nth(index);
-  const heading = target.locator("h3").first();
-  return trustedClick(page, (await heading.count()) > 0 ? heading : target, via);
-}
-
 /** Clicks an element picked in-page via evaluateHandle; returns null if nothing was picked. */
 export async function trustedClickPicked(
   page: Page,
