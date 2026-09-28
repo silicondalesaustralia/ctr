@@ -3,14 +3,12 @@ FROM mcr.microsoft.com/playwright:v1.51.0-jammy
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends xvfb \
+  && apt-get install -y --no-install-recommends xvfb build-essential python3 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
-COPY scripts/patch-patchright.js ./scripts/patch-patchright.js
 RUN npm ci
-RUN npx patchright install chromium
 RUN npx camoufox-js fetch
 
 COPY prisma ./prisma
