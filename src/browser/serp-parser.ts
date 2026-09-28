@@ -10,7 +10,7 @@ import {
 import { SERP_ANCHOR_SELECTOR, trustedClickPicked } from "./serp-trusted-click.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
-export const SERP_CLICK_STRATEGY = "v4-handle-mouse";
+export const SERP_CLICK_STRATEGY = "v5-point-mouse";
 
 export interface SerpResult {
   position: number;
@@ -343,10 +343,18 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
     { title: titleSnippet, href: result.url, selector: SERP_ANCHOR_SELECTOR },
   );
 
+  const serpUrl = page.url();
   const clickedVia = await trustedClickPicked(page, pick.asElement(), "serp");
   if (!clickedVia) {
     throw new Error(`Could not click SERP result (${SERP_CLICK_STRATEGY}): ${titleSnippet}`);
   }
-  console.error(`[serp] clicked via ${clickedVia}`);
+  const left = await page
+    .waitForURL((url) => url.href !== serpUrl, { timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  console.error(`[serp] clicked via ${clickedVia} navigated=${left}`);
+  if (!left) {
+    throw new Error(`SERP click did not navigate (${clickedVia}): ${titleSnippet}`);
+  }
   await waitForSerpRedirectSettle(page);
 }
