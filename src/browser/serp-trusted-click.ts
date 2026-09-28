@@ -9,7 +9,11 @@ interface HitCheck {
 }
 
 /** True when the topmost element at (x, y) belongs to the target's link (no overlay on top). */
-async function pointHitsTarget(handle: ElementHandle, x: number, y: number): Promise<HitCheck> {
+async function pointHitsTarget(
+  handle: ElementHandle<Element>,
+  x: number,
+  y: number,
+): Promise<HitCheck> {
   return handle.evaluate(
     (el, point) => {
       const top = document.elementFromPoint(point.x, point.y);
@@ -26,7 +30,11 @@ async function pointHitsTarget(handle: ElementHandle, x: number, y: number): Pro
  * Real (trusted) mouse move + click at a point inside the element, after checking no
  * overlay (e.g. Google's sticky header) sits on top. Falls back to a native link click.
  */
-export async function trustedClick(page: Page, handle: ElementHandle, via: string): Promise<string> {
+export async function trustedClick(
+  page: Page,
+  handle: ElementHandle<Element>,
+  via: string,
+): Promise<string> {
   try {
     await handle.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest" }));
     await page.waitForTimeout(randomBetween(400, 1100));
@@ -53,7 +61,7 @@ export async function trustedClick(page: Page, handle: ElementHandle, via: strin
 /** Clicks an element picked in-page via evaluateHandle; returns null if nothing was picked. */
 export async function trustedClickPicked(
   page: Page,
-  picked: ElementHandle | null,
+  picked: ElementHandle<Element> | null,
   via: string,
 ): Promise<string | null> {
   if (!picked) return null;
