@@ -550,7 +550,7 @@ export default function CampaignDashboard({
         if (job.status === "running") {
           const progress =
             job.testedCount === 0
-              ? "Starting GoLogin browser on Railway..."
+              ? "Starting browser on Railway..."
               : `Checking Google... ${job.testedCount}/${job.totalCount} queries`;
           setMessage(`${progress} (about 2 min per query)`);
           continue;
