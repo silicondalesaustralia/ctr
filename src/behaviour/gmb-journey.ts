@@ -146,7 +146,7 @@ export async function runGmbSearchJourney(
   const actionResults: GmbActionResult[] = [];
   const secondary = pickSecondaryAction(actions);
   if (secondary) {
-    const result = await performGmbAction(page, secondary, found.title || businessName);
+    const { result, sitePage } = await performGmbAction(page, secondary, found.title || businessName);
     actionResults.push(result);
     const eventType =
       secondary === "website"
@@ -156,8 +156,8 @@ export async function runGmbSearchJourney(
           : "gmb_action_call";
     await onEvent(eventType, { success: result.success, detail: result.detail });
 
-    if (secondary === "website" && result.success) {
-      const site = await runSiteJourney({ page, persona, traits, onEvent });
+    if (secondary === "website" && result.success && sitePage) {
+      const site = await runSiteJourney({ page: sitePage, persona, traits, onEvent });
       return {
         status: "completed",
         googleLoaded: true,
@@ -177,7 +177,7 @@ export async function runGmbSearchJourney(
         observedPosition: found.position,
         resultTitle: found.title,
         resultUrl: found.href,
-        landingUrl: site.finalUrl ?? page.url(),
+        landingUrl: site.finalUrl ?? sitePage.url(),
         actionResults,
       };
     }

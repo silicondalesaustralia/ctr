@@ -82,7 +82,42 @@ export async function dwellOnListing(page: Page, secondsMin = 4, secondsMax = 12
   await sleep(randomBetween(800, 2000));
 }
 
+export interface GmbActionOutcome {
+  result: GmbActionResult;
+  /** Page showing the business website (Maps opens it in a new tab). */
+  sitePage: Page | null;
+}
+
+const isGoogleUrl = (url: string): boolean => /^https?:\/\/([^/]+\.)?google\.[^/]+\//i.test(url);
+
 export async function performGmbAction(
+  page: Page,
+  action: GmbAction,
+  businessName: string,
+): Promise<GmbActionOutcome> {
+  if (action === "website") return performWebsiteAction(page, businessName);
+  return { result: await performPanelAction(page, action, businessName), sitePage: null };
+}
+async function performWebsiteAction(page: Page, businessName: string): Promise<GmbActionOutcome> {
+  const popup = page.context().waitForEvent("page", { timeout: 10_000 }).catch(() => null);
+  const clicked = await clickByLabels(page, ["website", "visit website"], PRECISE_SELECTORS.website, businessName);
+  if (!clicked) {
+    return { result: { action: "website", attempted: true, success: false, detail: "control not found in target panel" }, sitePage: null };
+  }
+
+  const opened = await popup;
+  const sitePage = opened ?? page;
+  await sitePage.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
+  await sitePage.waitForTimeout(1500);
+  const url = sitePage.url();
+  if (isGoogleUrl(url) || url === "about:blank") {
+    return { result: { action: "website", attempted: true, success: false, detail: `website did not open (${url.slice(0, 120)})` }, sitePage: null };
+  }
+  if (opened) await opened.bringToFront().catch(() => undefined);
+  return { result: { action: "website", attempted: true, success: true, detail: url }, sitePage };
+}
+
+async function performPanelAction(
   page: Page,
   action: GmbAction,
   businessName: string,
