@@ -12,7 +12,7 @@ import { goToNextSerpPage, RESULT_TITLE_SELECTOR } from "./serp-pagination.js";
 import { expandOmittedResults } from "./serp-omitted.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
-export const SERP_CLICK_STRATEGY = "v5-point-mouse";
+export const SERP_CLICK_STRATEGY = "v6-commit-wait";
 
 export interface SerpResult {
   position: number;
@@ -345,11 +345,12 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
   if (!clickedVia) {
     throw new Error(`Could not click SERP result (${SERP_CLICK_STRATEGY}): ${titleSnippet}`);
   }
+  // "commit": the default waitUntil "load" times out on slow landing pages behind residential proxies.
   const left = await page
-    .waitForURL((url) => url.href !== serpUrl, { timeout: 15_000 })
+    .waitForURL((url) => url.href !== serpUrl, { timeout: 15_000, waitUntil: "commit" })
     .then(() => true)
     .catch(() => false);
-  console.error(`[serp] clicked via ${clickedVia} navigated=${left}`);
+  console.error(`[serp] clicked via ${clickedVia} navigated=${left} url=${page.url().slice(0, 100)}`);
   if (!left) {
     throw new Error(`SERP click did not navigate (${clickedVia}): ${titleSnippet}`);
   }
