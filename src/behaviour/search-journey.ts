@@ -12,6 +12,7 @@ import {
   findTargetOnCurrentPage,
   goToNextSerpPage,
 } from "../browser/serp-parser.js";
+import { expandOmittedResults } from "../browser/serp-omitted.js";
 import { isProbabilisticBehaviourEnabled } from "./behaviour-config.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
 import {
@@ -54,11 +55,19 @@ async function findTargetWithInspection(
   result: Awaited<ReturnType<typeof findTargetOnCurrentPage>>;
   pagesSearched: number;
 }> {
+  let omittedExpanded = false;
   for (let serpPage = 1; serpPage <= maxSerpPages; serpPage += 1) {
     await inspectSerp(page, persona, traits, onEvent);
     const result = await findTargetOnCurrentPage(page, targetDomain, serpPage);
     if (result) {
       return { result, pagesSearched: serpPage };
+    }
+
+    if (!omittedExpanded && (await expandOmittedResults(page))) {
+      omittedExpanded = true;
+      await onEvent("serp_loaded", { omittedResultsIncluded: true });
+      serpPage = 0;
+      continue;
     }
 
     if (serpPage >= maxSerpPages) {

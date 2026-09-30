@@ -9,6 +9,7 @@ import {
 } from "../utils/helpers.js";
 import { SERP_ANCHOR_SELECTOR, trustedClickPicked } from "./serp-trusted-click.js";
 import { goToNextSerpPage, RESULT_TITLE_SELECTOR } from "./serp-pagination.js";
+import { expandOmittedResults } from "./serp-omitted.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
 export const SERP_CLICK_STRATEGY = "v5-point-mouse";
@@ -212,6 +213,7 @@ export async function findTargetInSerp(
   maxPages: number,
 ): Promise<{ result: SerpResult | null; pagesSearched: number }> {
   let pagesSearched = 0;
+  let omittedExpanded = false;
 
   for (let serpPage = 1; serpPage <= maxPages; serpPage += 1) {
     pagesSearched = serpPage;
@@ -220,6 +222,12 @@ export async function findTargetInSerp(
     const result = await findTargetOnCurrentPage(page, targetDomain, serpPage);
     if (result) {
       return { result, pagesSearched };
+    }
+
+    if (!omittedExpanded && (await expandOmittedResults(page))) {
+      omittedExpanded = true;
+      serpPage = 0;
+      continue;
     }
 
     if (serpPage >= maxPages) break;

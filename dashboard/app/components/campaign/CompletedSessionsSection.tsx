@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { cellStyle, panelStyle, thStyle } from "./shared";
 import type { CampaignKind } from "./shared";
-import { formatInTimezone } from "../../../lib/format-timezone";
+import { formatInTimezone, timezoneLabel } from "../../../lib/format-timezone";
 
 export interface SessionRow {
   id: string;
@@ -39,7 +39,10 @@ export default function CompletedSessionsSection({
 
   return (
     <section style={panelStyle}>
-      <h2 style={{ margin: "0 0 16px" }}>Completed sessions</h2>
+      <h2 style={{ margin: "0 0 4px" }}>Completed sessions</h2>
+      <p style={{ margin: "0 0 16px", color: "#64748b" }}>
+        Times shown in {timezoneLabel(scheduleTimezone)}.
+      </p>
       {loading ? (
         <p style={{ color: "#64748b" }}>Loading sessions...</p>
       ) : sessions.length === 0 ? (
