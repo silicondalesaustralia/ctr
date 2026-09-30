@@ -2,6 +2,7 @@ import type { Experiment, ExperimentQuery } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { buildSiteCurveFromExperiment } from "./gsc-demand.js";
 import {
+  applyIntensityPlanOverrides,
   calculateCampaignIntensity,
   normalizeQueryWeights,
 } from "./intensity-calculator.js";
@@ -102,14 +103,25 @@ export async function recalculateCampaignPacing(
 
   const identityCount = await prisma.identity.count({ where: { active: true } });
 
-  const intensity = calculateCampaignIntensity({
-    queries: buildQueryDemandInputs(experiment.queries, positionOverrides),
-    trafficModel: buildTrafficModel(experiment),
-    siteCurveData,
-    activeIdentityCount: identityCount,
-    maxSessionsPerIdentityPerDay: experiment.maxSessionsPerIdentityPerDay,
-    repeatIdentityMinGapDays: experiment.repeatIdentityMinGapDays,
-  });
+  const intensity = applyIntensityPlanOverrides(
+    calculateCampaignIntensity({
+      queries: buildQueryDemandInputs(experiment.queries, positionOverrides),
+      trafficModel: buildTrafficModel(experiment),
+      siteCurveData,
+      activeIdentityCount: identityCount,
+      maxSessionsPerIdentityPerDay: experiment.maxSessionsPerIdentityPerDay,
+      repeatIdentityMinGapDays: experiment.repeatIdentityMinGapDays,
+    }),
+    {
+      plannedSessionCap: experiment.plannedSessionCap,
+      targetIdentityCount: experiment.targetIdentityCount,
+      organicMaxSessionsPerIdentity: experiment.organicMaxSessionsPerIdentity,
+      activeIdentityCount: identityCount,
+      campaignDays: experiment.campaignDurationDays,
+      maxSessionsPerIdentityPerDay: experiment.maxSessionsPerIdentityPerDay,
+      repeatIdentityMinGapDays: experiment.repeatIdentityMinGapDays,
+    },
+  );
 
   const normalized = normalizeQueryWeights(intensity.queries);
   const remainingBudget = Math.max(0, intensity.totalAllocatedSessions - completedCount);

@@ -113,6 +113,9 @@ interface Campaign {
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
   monthlySessionTarget: number;
+  plannedSessionCap?: number | null;
+  targetIdentityCount?: number | null;
+  organicMaxSessionsPerIdentity?: number;
   queries: QueryRow[];
   intensity: IntensitySummary | null;
 }
@@ -357,9 +360,10 @@ export default function CampaignDashboard({
         ...q,
         active: q.active ?? true,
       })),
-      plannedSessionCap: c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
-      targetIdentityCount: c.intensity?.suggestedIdentities ?? null,
-      organicMaxSessionsPerIdentity: 2,
+      plannedSessionCap:
+        c.plannedSessionCap ?? c.intensity?.totalAllocatedSessions ?? c.monthlySessionTarget ?? null,
+      targetIdentityCount: c.targetIdentityCount ?? c.intensity?.suggestedIdentities ?? null,
+      organicMaxSessionsPerIdentity: c.organicMaxSessionsPerIdentity ?? 2,
       selectedIdentityIds: prev.selectedIdentityIds,
     }));
     setIntensity(c.intensity);

@@ -445,6 +445,9 @@ export function createApiServer() {
           maxShareOfGscImpressions: campaign.maxShareOfGscImpressions,
           desktopPercent: campaign.desktopPercent,
           ctrSource: campaign.ctrSource,
+          plannedSessionCap: campaign.plannedSessionCap,
+          targetIdentityCount: campaign.targetIdentityCount,
+          organicMaxSessionsPerIdentity: campaign.organicMaxSessionsPerIdentity,
           queries: campaign.queries.map((q) => ({
             text: q.query,
             type: q.queryType,

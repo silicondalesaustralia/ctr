@@ -422,6 +422,10 @@ async function saveCampaignConfig(
       gmbMapsUrl: resolved.gmbMapsUrl,
       gmbActionsJson: resolved.gmbActionsJson,
       monthlySessionTarget: intensity.totalAllocatedSessions,
+      plannedSessionCap: input.plannedSessionCap ?? null,
+      targetIdentityCount: input.targetIdentityCount ?? null,
+      organicMaxSessionsPerIdentity:
+        input.organicMaxSessionsPerIdentity ?? existing?.organicMaxSessionsPerIdentity ?? 2,
       campaignDurationDays,
       scheduleTimezone:
         input.scheduleTimezone?.trim() ||
@@ -944,6 +948,9 @@ export function serializeCampaign(
     gmbActions: parseActionsJson(campaign.gmbActionsJson),
     country: campaign.country,
     monthlySessionTarget: campaign.monthlySessionTarget,
+    plannedSessionCap: campaign.plannedSessionCap,
+    targetIdentityCount: campaign.targetIdentityCount,
+    organicMaxSessionsPerIdentity: campaign.organicMaxSessionsPerIdentity,
     campaignDurationDays: campaign.campaignDurationDays,
     scheduleTimezone: campaign.scheduleTimezone,
     treatmentIntensity: campaign.treatmentIntensity,

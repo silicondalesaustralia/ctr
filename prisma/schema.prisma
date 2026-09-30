@@ -175,6 +175,10 @@ model Experiment {
   gscConnectionId      String?          @map("gsc_connection_id")
   gscSiteUrl           String?          @map("gsc_site_url")
   lastPacingRecalcAt   DateTime?        @map("last_pacing_recalc_at")
+  /** User overrides from the session plan; null = use the calculated value. */
+  plannedSessionCap    Int?             @map("planned_session_cap")
+  targetIdentityCount  Int?             @map("target_identity_count")
+  organicMaxSessionsPerIdentity Int     @default(2) @map("organic_max_sessions_per_identity")
   requireWarmupIdentities Boolean       @default(true) @map("require_warmup_identities")
   /** Browser GPS centre for local campaigns; each identity gets a stable point within geoRadiusKm. */
   geoLatitude          Float?           @map("geo_latitude")
