@@ -3,6 +3,7 @@
 import type { CampaignFormState, IntensitySummary, PreflightSummary, QueryRow, SettingRationale } from "./shared";
 import HintLabel from "./HintLabel";
 import CampaignTargetingFields from "./CampaignTargetingFields";
+import AddQueryForm from "./AddQueryForm";
 import {
   cellStyle,
   getStartCampaignBlockReason,
@@ -55,6 +56,7 @@ interface Props {
   onFormChange: <K extends keyof CampaignFormState>(key: K, value: CampaignFormState[K]) => void;
   onQueryChange: (index: number, field: keyof QueryRow, value: string) => void;
   onToggleQueryActive: (index: number, active: boolean) => void;
+  onAddQuery: (text: string) => void;
   onBack: () => void;
   onReanalyze: () => void;
   onPreflight: () => void;
@@ -88,6 +90,7 @@ export default function CampaignReviewStep({
   onFormChange,
   onQueryChange,
   onToggleQueryActive,
+  onAddQuery,
   onBack,
   onReanalyze,
   onPreflight,
@@ -462,8 +465,8 @@ export default function CampaignReviewStep({
 
         {running && (
           <p style={{ color: "#64748b", fontSize: 14, marginTop: 16 }}>
-            Campaign is running. You can still change the schedule window and save to rebuild the
-            upcoming queue; stop the campaign to edit other settings.
+            Campaign is running. You can still change the schedule window and queries, then save to
+            rebuild the upcoming queue; stop the campaign to edit other settings.
           </p>
         )}
 
@@ -733,7 +736,7 @@ export default function CampaignReviewStep({
                           type="checkbox"
                           checked={row.active}
                           onChange={(e) => onToggleQueryActive(index, e.target.checked)}
-                          disabled={running}
+                          disabled={Boolean(busy)}
                           aria-label={`Include ${row.text}`}
                         />
                       </td>
@@ -774,6 +777,11 @@ export default function CampaignReviewStep({
               </tbody>
             </table>
           </div>
+          <AddQueryForm
+            existing={form.queries.map((row) => row.text)}
+            disabled={Boolean(busy)}
+            onAdd={onAddQuery}
+          />
         </section>
       )}
     </>

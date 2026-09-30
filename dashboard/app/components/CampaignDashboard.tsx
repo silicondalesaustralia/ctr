@@ -505,6 +505,26 @@ export default function CampaignDashboard({
     }));
   }
 
+  function addQuery(text: string) {
+    setForm((prev) => ({
+      ...prev,
+      queries: [
+        ...prev.queries,
+        {
+          text,
+          type: "long_tail",
+          weight: 0,
+          active: true,
+          monthlySearchVolume: null,
+          startingPosition: null,
+          gscImpressions28d: null,
+          gscClicks28d: null,
+          allocatedSessions: null,
+        },
+      ],
+    }));
+  }
+
   async function runPreflight() {
     setBusy("preflight");
     setError(null);
@@ -891,6 +911,7 @@ export default function CampaignDashboard({
             onFormChange={updateForm}
             onQueryChange={updateQuery}
             onToggleQueryActive={toggleQueryActive}
+            onAddQuery={addQuery}
             onBack={() => setStep("setup")}
             onReanalyze={() => void analyzeCampaign()}
             onPreflight={() => void runPreflight()}
