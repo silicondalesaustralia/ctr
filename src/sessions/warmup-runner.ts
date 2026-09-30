@@ -196,25 +196,47 @@ export async function runWarmupSession(
       onLease: (leaseId) => {
         proxyLeaseId = leaseId;
       },
+      onRunning: (running) => {
+        runningBrowser = running;
+        cloudStarted = useGoLogin && running?.runtime === "cloud";
+      },
+      prepare: async (running) => {
+        let openedPage: Page;
+        if (running.context) {
+          openedPage = running.context.pages()[0] ?? (await running.context.newPage());
+        } else if (running.wsEndpoint) {
+          connectedBrowser = await connectBrowserWithRetry(running.wsEndpoint);
+          const context = connectedBrowser.contexts()[0] ?? (await connectedBrowser.newContext());
+          openedPage = context.pages()[0] ?? (await context.newPage());
+        } else {
+          throw new Error("Browser provider did not return a usable browser");
+        }
+        if (running.runtime !== "camoufox") {
+          await applyBrowserStealth(openedPage);
+        }
+        if (isDryRun() || env.PROXY_PROVIDER === "mock") {
+          return { page: openedPage, egress: undefined };
+        }
+        const expectedCity = shouldSkipCityTargeting(input.identity.city)
+          ? undefined
+          : input.identity.city;
+        const verified = await verifyBrowserEgressGeo(openedPage, "AU", expectedCity);
+        if (!isBrowse) await assertEgressPrefixClean(verified.ip);
+        return { page: openedPage, egress: verified };
+      },
+      discard: async (running) => {
+        await cleanupBrowserSession({
+          ...cleanupRefs,
+          connectedBrowser,
+          runningBrowser: running,
+          cloudStarted: useGoLogin && running.runtime === "cloud",
+          proxyLeaseId: null,
+        });
+        connectedBrowser = null;
+      },
     });
     const proxyLease = started.lease;
-    runningBrowser = started.running;
-    cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
-
-    let page: Page;
-    if (runningBrowser.context) {
-      page = runningBrowser.context.pages()[0] ?? (await runningBrowser.context.newPage());
-    } else if (runningBrowser.wsEndpoint) {
-      connectedBrowser = await connectBrowserWithRetry(runningBrowser.wsEndpoint);
-      const context = connectedBrowser.contexts()[0] ?? (await connectedBrowser.newContext());
-      page = context.pages()[0] ?? (await context.newPage());
-    } else {
-      throw new Error("Browser provider did not return a usable browser");
-    }
-
-    if (runningBrowser.runtime !== "camoufox") {
-      await applyBrowserStealth(page);
-    }
+    const { page, egress } = started.prepared;
 
     const bandwidth = trackBandwidth(page);
     let egressCountry = "AU";
@@ -222,12 +244,7 @@ export async function runWarmupSession(
     let egressCity = input.identity.city;
     let egressIpHash = hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`);
     let egressIp: string | undefined;
-    if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
-      const expectedCity = shouldSkipCityTargeting(input.identity.city)
-        ? undefined
-        : input.identity.city;
-      const egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
-      if (!isBrowse) await assertEgressPrefixClean(egress.ip);
+    if (egress) {
       egressIp = egress.ip;
       egressCountry = egress.country;
       egressRegion = egress.region ?? input.identity.region;

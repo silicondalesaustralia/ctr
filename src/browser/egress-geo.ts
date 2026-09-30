@@ -1,4 +1,5 @@
 import type { Page } from "./pw.js";
+import { isSameMetro } from "./metro-aliases.js";
 
 export interface EgressGeo {
   ip: string;
@@ -99,7 +100,7 @@ export function assertExpectedCity(
   assertExpectedCountry(egress, expectedCountry);
   const want = normalizeCityName(expectedCity);
   const got = egress.city ? normalizeCityName(egress.city) : "";
-  if (!got || got !== want) {
+  if (!got || !isSameMetro(want, got)) {
     throw new WrongEgressGeoError(
       egress,
       expectedCountry.toUpperCase(),
