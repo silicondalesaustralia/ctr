@@ -12,6 +12,7 @@ import {
 } from "../campaign/intensity-calculator.js";
 import type { CampaignIntensityResult } from "../campaign/types.js";
 import { generateCampaignSchedule } from "../scheduler/schedule-generator.js";
+import { pullFirstSessionForward } from "../scheduler/first-session.js";
 import { deriveScheduleDensity } from "../campaign/schedule-density.js";
 import {
   buildExperimentName,
@@ -667,6 +668,7 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
     },
   });
 
+  await pullFirstSessionForward(experimentId);
   await enableRunner();
 
   return prisma.experiment.findUniqueOrThrow({
