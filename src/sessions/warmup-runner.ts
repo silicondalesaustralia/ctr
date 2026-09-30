@@ -14,6 +14,7 @@ import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-
 import { getEnv, isDryRun } from "../config/env.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
+import { startBrowserWithLeaseRetry } from "./start-browser-with-lease.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
   appendSessionEvent,
@@ -180,26 +181,24 @@ export async function runWarmupSession(
       });
     }
 
-    const proxyLease = await proxyProvider.allocate({
-      country: "AU",
-      region: input.identity.region,
-      city: input.identity.city,
-      sessionKey: session.id,
-      deviceClass: input.identity.deviceClass,
-    });
-    proxyLeaseId = proxyLease.leaseId;
-
-    runningBrowser = await browserProvider.startProfile(profileId, {
-      host: proxyLease.host,
-      port: proxyLease.port,
-      username: proxyLease.username,
-      password: proxyLease.password,
-      country: proxyLease.country,
-      region: proxyLease.region,
-      city: proxyLease.city,
-      sessionKey: proxyLease.sessionKey,
+    const started = await startBrowserWithLeaseRetry({
+      proxyProvider,
+      browserProvider,
+      profileId,
+      allocation: {
+        country: "AU",
+        region: input.identity.region,
+        city: input.identity.city,
+        sessionKey: session.id,
+        deviceClass: input.identity.deviceClass,
+      },
       timezone: input.identity.timezone,
+      onLease: (leaseId) => {
+        proxyLeaseId = leaseId;
+      },
     });
+    const proxyLease = started.lease;
+    runningBrowser = started.running;
     cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
 
     let page: Page;

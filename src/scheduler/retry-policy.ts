@@ -41,6 +41,7 @@ export function isProxyTunnelError(message: string): boolean {
     /ERR_INVALID_AUTH_CREDENTIALS/i.test(message) ||
     /tunnel connection failed/i.test(message) ||
     /Proxy egress geo lookup failed/i.test(message) ||
+    /Failed to get a public proxy IP/i.test(message) ||
     /^fetch failed$/i.test(message.trim()) ||
     /ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up/i.test(message)
   );

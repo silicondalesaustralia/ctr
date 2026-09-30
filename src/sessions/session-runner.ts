@@ -19,6 +19,7 @@ import { runDirectFlow } from "../browser/google-search.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import { campaignGeoPoint } from "../providers/browser/camoufox-geo.js";
+import { startBrowserWithLeaseRetry } from "./start-browser-with-lease.js";
 import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
@@ -205,26 +206,25 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       });
     }
 
-    const proxyLease = await proxyProvider.allocate({
-      country: "AU",
-      region: input.identity.region,
-      city: input.identity.city,
-      sessionKey: session.id,
-      deviceClass: input.identity.deviceClass,
-    });
-    proxyLeaseId = proxyLease.leaseId;
-
-    runningBrowser = await browserProvider.startProfile(profileId, {
-      host: proxyLease.host,
-      port: proxyLease.port,
-      username: proxyLease.username,
-      password: proxyLease.password,
-      country: proxyLease.country,
-      region: proxyLease.region,
-      city: proxyLease.city,
-      sessionKey: proxyLease.sessionKey,
+    const started = await startBrowserWithLeaseRetry({
+      proxyProvider,
+      browserProvider,
+      profileId,
+      allocation: {
+        country: "AU",
+        region: input.identity.region,
+        city: input.identity.city,
+        sessionKey: session.id,
+        deviceClass: input.identity.deviceClass,
+      },
       timezone: input.identity.timezone,
-    }, { geoPoint: campaignGeoPoint(input.experiment, input.identity.externalId) });
+      options: { geoPoint: campaignGeoPoint(input.experiment, input.identity.externalId) },
+      onLease: (leaseId) => {
+        proxyLeaseId = leaseId;
+      },
+    });
+    const proxyLease = started.lease;
+    runningBrowser = started.running;
     // Only GoLogin *cloud* needs the remote /web stop path.
     cloudStarted = useGoLogin && runningBrowser.runtime === "cloud";
 
