@@ -122,45 +122,56 @@ export interface CampaignFormState {
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "12px 14px",
+  padding: "11px 13px",
   borderRadius: 8,
-  border: "1px solid #cbd5e1",
-  fontSize: 15,
+  border: "1px solid var(--line)",
+  background: "var(--surface)",
+  fontSize: 14,
   boxSizing: "border-box",
 };
 
 export const panelStyle: React.CSSProperties = {
-  background: "white",
-  borderRadius: 12,
+  background: "var(--surface)",
+  border: "1px solid var(--line)",
+  borderRadius: "var(--radius)",
   padding: 24,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+  boxShadow: "0 3px 8px #24294c03",
 };
 
 export const labelStyle: React.CSSProperties = {
   display: "block",
   marginBottom: 6,
   fontWeight: 600,
+  fontSize: 13,
 };
 
 export const cellStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderBottom: "1px solid #f1f5f9",
+  padding: "14px 14px",
+  borderBottom: "1px solid var(--line-soft)",
   verticalAlign: "top",
+  fontSize: 13,
 };
 
 export const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 12px",
-  borderBottom: "1px solid #e2e8f0",
+  padding: "12px 14px",
+  borderBlock: "1px solid var(--line)",
   whiteSpace: "nowrap",
 };
 
 export const secondaryButtonBase: React.CSSProperties = {
-  padding: "10px 18px",
-  borderRadius: 8,
-  border: "1px solid #cbd5e1",
-  background: "white",
+  padding: "9px 15px",
+  borderRadius: "var(--radius-control)",
+  border: "1px solid var(--line)",
+  background: "var(--surface)",
+  color: "var(--text)",
   fontWeight: 600,
+  fontSize: 13,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
 };
 
 export function secondaryButtonStyle(disabled = false): React.CSSProperties {
@@ -173,13 +184,20 @@ export function secondaryButtonStyle(disabled = false): React.CSSProperties {
 
 export function primaryButtonStyle(color: string, disabled = false): React.CSSProperties {
   return {
-    padding: "10px 22px",
-    borderRadius: 8,
-    border: "none",
+    padding: "10px 18px",
+    borderRadius: "var(--radius-control)",
+    border: `1px solid ${color}`,
     background: color,
     color: "white",
     cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 600,
+    fontSize: 13,
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    boxShadow: "0 3px 7px #6155dc18",
     opacity: disabled ? 0.55 : 1,
   };
 }

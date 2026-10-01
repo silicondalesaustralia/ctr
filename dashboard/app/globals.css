@@ -1,0 +1,80 @@
+:root {
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --text: #202535;
+  --muted: #767d8e;
+  --line: #e9ecf2;
+  --line-soft: #f0f1f5;
+  --accent: #6155dc;
+  --accent-hover: #5246c8;
+  --accent-soft: #efedfc;
+  --green: #198366;
+  --green-soft: #eaf7f1;
+  --amber: #b45309;
+  --amber-soft: #fffbeb;
+  --red: #bf4352;
+  --red-soft: #fdf2f3;
+  --radius: 16px;
+  --radius-control: 9px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.3px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid #aaa1f7;
+  outline-offset: 2px;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(0.97);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #838a98;
+  text-transform: uppercase;
+  background: #fafbfc;
+}
+
+tbody tr:hover {
+  background: #fcfcff;
+}
