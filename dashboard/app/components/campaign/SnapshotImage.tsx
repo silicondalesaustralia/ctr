@@ -2,17 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../../../lib/api";
+import { base64JpegToObjectUrl } from "./snapshot-image-url";
 import { positionLabel, statusColors, type RankSnapshotRow } from "./snapshot-types";
 
 interface Props {
   title: string;
   snapshot: RankSnapshotRow | null;
-}
-
-/** Browsers block opening data: URLs in a new tab; blob: URLs open and zoom natively. */
-function base64JpegToObjectUrl(base64: string): string {
-  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  return URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
 }
 
 export default function SnapshotImage({ title, snapshot }: Props) {

@@ -75,8 +75,8 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
         <div>
           <h2 style={{ margin: 0 }}>Ranking snapshots</h2>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Baseline when the campaign starts, a screenshot from every session that finds the target,
-            and one per query at the end of each day.
+            Baseline when the campaign starts, then one screenshot per query at the end of each day.
+            Each session&apos;s own screenshot is on the Sessions tab.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

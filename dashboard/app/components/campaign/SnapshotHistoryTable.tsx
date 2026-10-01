@@ -13,7 +13,6 @@ const kindLabels: Record<RankSnapshotRow["kind"], string> = {
   baseline: "Baseline",
   daily: "End of day",
   manual: "Manual",
-  session: "After session",
 };
 
 function whenLabel(row: RankSnapshotRow): string {

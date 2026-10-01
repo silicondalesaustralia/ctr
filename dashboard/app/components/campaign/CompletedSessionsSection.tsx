@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SessionSnapshotLink from "./SessionSnapshotLink";
 import { cellStyle, panelStyle, thStyle } from "./shared";
 import type { CampaignKind } from "./shared";
 import { formatInTimezone, timezoneLabel } from "../../../lib/format-timezone";
@@ -17,6 +18,7 @@ export interface SessionRow {
   searchAttempts: number;
   durationSeconds: number;
   personaId: string | null;
+  hasSnapshot?: boolean;
   identity: { externalId: string; region: string; deviceClass: string; personaId: string | null };
 }
 
@@ -61,6 +63,7 @@ export default function CompletedSessionsSection({
                   "Searches",
                   isGmb ? "Places rank" : "Position",
                   isGmb ? "Listing opened" : "Clicked",
+                  "Screenshot",
                   "Status",
                   "Persona",
                   "",
@@ -95,6 +98,9 @@ export default function CompletedSessionsSection({
                       : session.targetSkipped
                         ? "Skipped"
                         : "No"}
+                  </td>
+                  <td style={cellStyle}>
+                    {session.hasSnapshot ? <SessionSnapshotLink sessionId={session.id} /> : "—"}
                   </td>
                   <td style={cellStyle}>{session.status}</td>
                   <td style={cellStyle}>

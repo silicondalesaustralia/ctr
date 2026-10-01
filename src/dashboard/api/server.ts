@@ -1037,7 +1037,14 @@ export function createApiServer() {
         orderBy: { createdAt: "desc" },
         take: 200,
       });
-      res.json(jsonSafe(sessions));
+      const withSnapshot = await prisma.sessionSnapshot.findMany({
+        where: { sessionId: { in: sessions.map((session) => session.id) } },
+        select: { sessionId: true },
+      });
+      const snapshotIds = new Set(withSnapshot.map((row) => row.sessionId));
+      res.json(
+        jsonSafe(sessions.map((session) => ({ ...session, hasSnapshot: snapshotIds.has(session.id) }))),
+      );
     } catch (error) {
       res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to load sessions",
