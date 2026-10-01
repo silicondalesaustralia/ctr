@@ -1,6 +1,6 @@
 "use client";
 
-import { cellStyle, thStyle } from "./shared";
+import { cellStyle, placesSourceLabel, thStyle } from "./shared";
 import { positionLabel, statusColors, type RankSnapshotRow } from "./snapshot-types";
 
 interface Props {
@@ -49,7 +49,9 @@ export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Pro
                 {positionLabel(row)}
               </td>
               <td style={cellStyle}>
-                {row.source === "organic" && row.serpPage ? `Page ${row.serpPage}` : (row.source ?? "—")}
+                {row.source === "organic" && row.serpPage
+                  ? `Page ${row.serpPage}`
+                  : placesSourceLabel(row.source ?? undefined) || "—"}
               </td>
               <td style={cellStyle}>{row.egressCity ?? "—"}</td>
               <td style={{ ...cellStyle, color: "#64748b" }}>{row.errorMessage ?? row.resultTitle ?? ""}</td>

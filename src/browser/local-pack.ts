@@ -6,36 +6,14 @@ import {
   mapsSearchUrl,
   type LocalPackCandidate,
 } from "./local-pack-collect.js";
+import { matchCandidate, type LocalPackResult, type LocalPackTarget } from "./local-pack-match.js";
 import { trustedClickPicked } from "./serp-trusted-click.js";
 import { goToNextSerpPage } from "./serp-pagination.js";
 
-export type LocalPackSource = "local_pack" | "more_places";
 export type { LocalPackCandidate };
+export type { LocalPackResult, LocalPackSource } from "./local-pack-match.js";
+export { namesMatch } from "./local-pack-match.js";
 export { collectLocalPackCandidates, mapsSearchUrl };
-
-export interface LocalPackResult {
-  position: number;
-  title: string;
-  href: string;
-  placeId: string | null;
-  cid: string | null;
-  source: LocalPackSource;
-}
-
-function normalizeName(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function namesMatch(candidate: string, target: string): boolean {
-  const a = normalizeName(candidate);
-  const b = normalizeName(target);
-  if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
-}
 
 export function localFinderUrl(query: string): string {
   const q = encodeURIComponent(query.trim());
@@ -80,42 +58,6 @@ export async function openMapsSearch(page: Page, query: string): Promise<void> {
   await acceptConsentIfPresent(page);
   await page.waitForTimeout(2500);
   await scrollPlacesList(page, 6);
-}
-
-function matchCandidate(
-  candidates: LocalPackCandidate[],
-  input: { businessName: string; placeId?: string | null; cid?: string | null },
-  source: LocalPackSource,
-  offset = 0,
-): LocalPackResult | null {
-  const rawId = input.placeId?.trim() ?? "";
-  const cidFromId = rawId.toLowerCase().startsWith("cid:")
-    ? rawId.slice(4)
-    : /^\d{6,}$/.test(rawId)
-      ? rawId
-      : null;
-  const placeId =
-    rawId && !rawId.toLowerCase().startsWith("cid:") && !/^\d{6,}$/.test(rawId) ? rawId : null;
-  const cid = (input.cid ?? cidFromId)?.replace(/^cid:/i, "") ?? null;
-
-  let position = offset;
-  for (const candidate of candidates) {
-    position += 1;
-    const idMatch =
-      (placeId && candidate.placeId && candidate.placeId === placeId) ||
-      (cid && candidate.cid && candidate.cid === cid);
-    if (idMatch || namesMatch(candidate.title, input.businessName)) {
-      return {
-        position,
-        title: candidate.title,
-        href: candidate.href,
-        placeId: candidate.placeId,
-        cid: candidate.cid,
-        source,
-      };
-    }
-  }
-  return null;
 }
 
 async function scrollPlacesList(page: Page, iterations = 10): Promise<void> {
@@ -164,11 +106,10 @@ function realBusinessCount(candidates: LocalPackCandidate[]): number {
 
 export async function findGmbInLocalPack(
   page: Page,
-  input: {
-    businessName: string;
-    placeId?: string | null;
-    cid?: string | null;
+  input: LocalPackTarget & {
     query?: string;
+    /** Sessions only: reach the listing by name when it doesn't rank. Result source is `branded_search`. */
+    allowBrandedFallback?: boolean;
   },
 ): Promise<LocalPackResult | null> {
   await waitForLocalCandidates(page);
@@ -208,35 +149,36 @@ export async function findGmbInLocalPack(
     }
   }
 
-  // Mobile often serves empty udm=1 chrome ("Maps" only). Fall back to Maps search.
-  if (!found && realBusinessCount(candidates) < 2) {
-    const mapsQuery = `${input.businessName} ${input.query}`.trim();
+  // udm=1 sometimes serves empty chrome ("Maps" only). Rank from a keyword-only Maps search.
+  const placesListEmpty = !found && realBusinessCount(candidates) < 2;
+  if (placesListEmpty) {
     console.error(
       `[gmb] udm=1 weak (candidates=${candidates.length}: ${candidates
         .map((c) => c.title)
         .slice(0, 8)
-        .join(" | ")}); trying Maps search`,
+        .join(" | ")}); trying keyword Maps search`,
     );
-    await openMapsSearch(page, mapsQuery);
+    await openMapsSearch(page, input.query);
+    await waitForLocalCandidates(page);
+    // Maps feed lazy-loads ~20 at a time; keep scrolling until found or the list stops growing.
+    let stalls = 0;
+    for (let round = 0; round < 8 && !found && stalls < 2; round += 1) {
+      const before = candidates.length;
+      await scrollPlacesList(page, round === 0 ? 8 : 5);
+      candidates = await collectLocalPackCandidates(page);
+      found = matchCandidate(candidates, input, "maps_keyword");
+      stalls = candidates.length > before ? 0 : stalls + 1;
+      if (candidates.length >= 60) break;
+    }
+    console.error(`[gmb] Maps feed scanned ${candidates.length} businesses found=${found?.position ?? "no"}`);
+  }
+
+  if (!found && placesListEmpty && input.allowBrandedFallback) {
+    console.error("[gmb] Not ranked for keyword; opening listing via branded Maps search (not a rank)");
+    await openMapsSearch(page, `${input.businessName} ${input.query}`.trim());
     await waitForLocalCandidates(page);
     candidates = await collectLocalPackCandidates(page);
-    found = matchCandidate(candidates, input, "more_places");
-
-    if (!found) {
-      await openMapsSearch(page, input.query);
-      await waitForLocalCandidates(page);
-      // Maps feed lazy-loads ~20 at a time; keep scrolling until found or the list stops growing.
-      let stalls = 0;
-      for (let round = 0; round < 8 && !found && stalls < 2; round += 1) {
-        const before = candidates.length;
-        await scrollPlacesList(page, round === 0 ? 8 : 5);
-        candidates = await collectLocalPackCandidates(page);
-        found = matchCandidate(candidates, input, "more_places");
-        stalls = candidates.length > before ? 0 : stalls + 1;
-        if (candidates.length >= 60) break;
-      }
-      console.error(`[gmb] Maps feed scanned ${candidates.length} businesses found=${found?.position ?? "no"}`);
-    }
+    found = matchCandidate(candidates, input, "branded_search");
   }
 
   if (!found) {

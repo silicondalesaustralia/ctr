@@ -10,6 +10,7 @@ import {
   inputStyle,
   labelStyle,
   panelStyle,
+  placesSourceLabel,
   primaryButtonStyle,
   secondaryButtonStyle,
   thStyle,
@@ -719,7 +720,7 @@ export default function CampaignReviewStep({
                   const googleLabel =
                     row.preflightFound && row.preflightPosition != null
                       ? isGmb
-                        ? `#${row.preflightPosition}`
+                        ? `#${row.preflightPosition}${row.preflightSource ? ` (${placesSourceLabel(row.preflightSource)})` : ""}`
                         : row.preflightSerpPage != null
                           ? `p${row.preflightSerpPage} #${row.preflightPosition}`
                           : `#${row.preflightPosition}`

@@ -40,6 +40,7 @@ export interface QueryRow {
   preflightSerpPage?: number | null;
   preflightPosition?: number | null;
   preflightStatus?: string;
+  preflightSource?: string;
 }
 
 export interface PreflightSummary {
@@ -56,7 +57,18 @@ export interface PreflightSummary {
     globalPosition: number | null;
     status: string;
     errorMessage?: string;
+    source?: string;
   }>;
+}
+
+const placesSourceLabels: Record<string, string> = {
+  local_pack: "3-pack",
+  more_places: "Places list",
+  maps_keyword: "Maps",
+};
+
+export function placesSourceLabel(source: string | undefined): string {
+  return source ? (placesSourceLabels[source] ?? source) : "";
 }
 
 export interface SettingRationale {

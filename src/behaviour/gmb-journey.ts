@@ -114,6 +114,7 @@ export async function runGmbSearchJourney(
     businessName,
     placeId,
     query: query.query,
+    allowBrandedFallback: true,
   });
   if (!found) {
     await onEvent("target_not_found", { businessName });
@@ -130,9 +131,10 @@ export async function runGmbSearchJourney(
     };
   }
 
+  const rankedPosition = found.source === "branded_search" ? undefined : found.position;
   await onEvent("local_pack_found", {
     businessName: found.title,
-    position: found.position,
+    position: rankedPosition ?? null,
     placeId: found.placeId,
     cid: found.cid,
     source: found.source,
@@ -170,11 +172,11 @@ export async function runGmbSearchJourney(
             targetFound: true,
             clicked: true,
             serpPage: 1,
-            position: found.position,
+            position: rankedPosition,
           }),
         ],
         serpPage: 1,
-        observedPosition: found.position,
+        observedPosition: rankedPosition,
         resultTitle: found.title,
         resultUrl: found.href,
         landingUrl: site.finalUrl ?? sitePage.url(),
@@ -195,11 +197,11 @@ export async function runGmbSearchJourney(
         targetFound: true,
         clicked: true,
         serpPage: 1,
-        position: found.position,
+        position: rankedPosition,
       }),
     ],
     serpPage: 1,
-    observedPosition: found.position,
+    observedPosition: rankedPosition,
     resultTitle: found.title,
     resultUrl: found.href,
     landingUrl: page.url(),

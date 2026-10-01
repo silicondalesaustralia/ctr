@@ -200,6 +200,7 @@ function queriesFromPreview(
       preflightSerpPage: prev?.preflightSerpPage,
       preflightPosition: prev?.preflightPosition,
       preflightStatus: prev?.preflightStatus,
+      preflightSource: prev?.preflightSource,
     };
   });
 }
@@ -229,6 +230,7 @@ function mergeProposalQueries(
       preflightSerpPage: pf?.serpPage,
       preflightPosition: pf?.position,
       preflightStatus: pf?.status,
+      preflightSource: pf?.source,
     };
   });
 }

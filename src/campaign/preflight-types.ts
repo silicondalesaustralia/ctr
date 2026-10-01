@@ -1,3 +1,5 @@
+import type { LocalPackSource } from "../browser/local-pack-match.js";
+
 /** `limited`: Google ran out of results before the page limit, so absence is inconclusive. */
 export type PreflightQueryStatus = "found" | "not_found" | "limited" | "blocked" | "error";
 
@@ -10,7 +12,7 @@ export interface PreflightQueryResult {
   status: PreflightQueryStatus;
   errorMessage?: string;
   /** GMB only: where the listing was matched. */
-  source?: "local_pack" | "more_places";
+  source?: LocalPackSource;
 }
 
 export type PreflightSummaryStatus = "complete" | "none_found" | "blocked" | "error";
