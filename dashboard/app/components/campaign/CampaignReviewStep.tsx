@@ -172,7 +172,7 @@ export default function CampaignReviewStep({
                         ? ` Primary keyword updated to "${form.keyword}".`
                         : ""
                     }`
-                  : `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 3 pages.${
+                  : `Google preflight: ${preflightSummary.findableCount} of ${preflightSummary.testedCount} queries findable within 4 pages.${
                       limitedCount > 0
                         ? ` ${limitedCount} inconclusive (Google showed the preflight browser a truncated results list).`
                         : ""
@@ -680,7 +680,7 @@ export default function CampaignReviewStep({
             <p style={{ color: "#767d8e", fontSize: 14, margin: "0 0 12px" }}>
               {isGmb
                 ? `Not found in local pack / More places: ${notFoundQueries.join(", ")}`
-                : `Not found live on Google (3 pages): ${notFoundQueries.join(", ")}`}
+                : `Not found live on Google (4 pages): ${notFoundQueries.join(", ")}`}
             </p>
           )}
           <div style={{ overflowX: "auto" }}>

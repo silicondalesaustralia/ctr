@@ -163,7 +163,7 @@ model Experiment {
   baselineDays         Int              @default(28) @map("baseline_days")
   treatmentDays        Int              @default(28) @map("treatment_days")
   postTreatmentDays    Int              @default(21) @map("post_treatment_days")
-  maxSerpPages         Int              @default(3) @map("max_serp_pages")
+  maxSerpPages         Int              @default(4) @map("max_serp_pages")
   scheduleTimezone     String           @default("Australia/Adelaide") @map("schedule_timezone")
   scheduleStart        String           @default("06:30") @map("schedule_start")
   scheduleEnd          String           @default("23:00") @map("schedule_end")

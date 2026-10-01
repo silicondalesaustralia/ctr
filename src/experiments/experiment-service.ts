@@ -1,6 +1,7 @@
 import type { Experiment, ExperimentQuery, TreatmentGroup } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { loadExperimentConfig, slugify, type ExperimentConfig } from "../config/experiments.js";
+import { DEFAULT_MAX_SERP_PAGES } from "../config/serp-defaults.js";
 import {
   buildExperimentName,
   extractTargetDomain,
@@ -56,7 +57,7 @@ export async function createExperimentFromInput(
       gmbMapsUrl: input.gmbMapsUrl ?? null,
       gmbActionsJson: input.gmbActionsJson ?? null,
       scheduleTimezone: timezone,
-      maxSerpPages: 3,
+      maxSerpPages: DEFAULT_MAX_SERP_PAGES,
     },
   });
 
@@ -102,7 +103,7 @@ export async function createExperimentFromConfig(
       baselineDays: config.experiment.baseline_days,
       treatmentDays: config.experiment.treatment_days,
       postTreatmentDays: config.experiment.post_treatment_days,
-      maxSerpPages: config.search?.max_serp_pages ?? 3,
+      maxSerpPages: config.search?.max_serp_pages ?? DEFAULT_MAX_SERP_PAGES,
       scheduleTimezone: config.schedule?.timezone ?? "Australia/Adelaide",
       scheduleStart: config.schedule?.allowed_start ?? "06:30",
       scheduleEnd: config.schedule?.allowed_end ?? "23:00",
@@ -121,7 +122,7 @@ export async function createExperimentFromConfig(
       baselineDays: config.experiment.baseline_days,
       treatmentDays: config.experiment.treatment_days,
       postTreatmentDays: config.experiment.post_treatment_days,
-      maxSerpPages: config.search?.max_serp_pages ?? 3,
+      maxSerpPages: config.search?.max_serp_pages ?? DEFAULT_MAX_SERP_PAGES,
       scheduleTimezone: config.schedule?.timezone ?? "Australia/Adelaide",
       scheduleStart: config.schedule?.allowed_start ?? "06:30",
       scheduleEnd: config.schedule?.allowed_end ?? "23:00",

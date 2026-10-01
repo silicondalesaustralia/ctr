@@ -3,7 +3,7 @@ import { prisma } from "../db/client.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
 
 /**
- * Least-recently-used local identity that this campaign isn't using, so snapshot
+ * Least-recently-used warmed local identity that this campaign isn't using, so snapshot
  * searches never land in a campaign identity's history. Falls back to any local identity.
  */
 export async function pickSnapshotIdentity(experiment: Experiment): Promise<Identity | null> {
@@ -32,7 +32,10 @@ export async function pickSnapshotIdentity(experiment: Experiment): Promise<Iden
   const local = candidates.filter((identity) =>
     city ? identity.city === city : region ? identity.region === region : true,
   );
-  const outsideCampaign = local.filter((identity) => !inCampaign.has(identity.id));
+  // Cold profiles get a truncated SERP from Google, so a warmed one is preferred over LRU order.
+  const warmed = local.filter((identity) => identity.warmupStatus === "eligible");
+  const pool = warmed.length > 0 ? warmed : local;
+  const outsideCampaign = pool.filter((identity) => !inCampaign.has(identity.id));
 
-  return outsideCampaign[0] ?? local[0] ?? null;
+  return outsideCampaign[0] ?? pool[0] ?? null;
 }

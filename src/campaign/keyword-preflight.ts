@@ -1,6 +1,7 @@
 import type { TreatmentIntensity } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { extractTargetDomain } from "../experiments/query-generator.js";
+import { DEFAULT_MAX_SERP_PAGES } from "../config/serp-defaults.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
 import {
   calculateCampaignIntensity,
@@ -224,8 +225,8 @@ export async function rebuildProposalAfterPreflight(
       value: `${findableCount} of ${preflightResults.length} findable live`,
       reason:
         notFoundCount > 0
-          ? `${notFoundCount} queries were not found within 3 pages — disable them in the table if you do not want them scheduled. GSC data is unchanged.`
-          : "Every tested query showed your site within 3 SERP pages on live Google.",
+          ? `${notFoundCount} queries were not found within ${DEFAULT_MAX_SERP_PAGES} pages — disable them in the table if you do not want them scheduled. GSC data is unchanged.`
+          : `Every tested query showed your site within ${DEFAULT_MAX_SERP_PAGES} SERP pages on live Google.`,
     },
   ];
 
@@ -233,7 +234,7 @@ export async function rebuildProposalAfterPreflight(
     rationales.push({
       setting: "Limited Google results",
       value: `${limitedCount} queries`,
-      reason: "Google returned a truncated results list to the preflight browser, so 3 pages could not be checked. Not conclusive — GSC positions are still used for planning.",
+      reason: `Google returned a truncated results list to the preflight browser, so ${DEFAULT_MAX_SERP_PAGES} pages could not be checked. Not conclusive — GSC positions are still used for planning.`,
     });
   }
 
@@ -241,7 +242,7 @@ export async function rebuildProposalAfterPreflight(
     rationales.push({
       setting: "Primary keyword",
       value: keyword,
-      reason: `"${keyword}" was not found within 3 pages from the preflight location — kept as primary.`,
+      reason: `"${keyword}" was not found within ${DEFAULT_MAX_SERP_PAGES} pages from the preflight location — kept as primary.`,
     });
   }
 
@@ -344,7 +345,7 @@ export async function runKeywordPreflight(
   } else if (input.proposal.gmbPlaceId) {
     targetDomain = `gmb:${input.proposal.gmbPlaceId}`;
   }
-  const maxSerpPages = isGmb ? 1 : (input.maxSerpPages ?? 3);
+  const maxSerpPages = isGmb ? 1 : (input.maxSerpPages ?? DEFAULT_MAX_SERP_PAGES);
 
   const results = await runSerpChecks(queries, {
     targetUrl: input.proposal.targetUrl,

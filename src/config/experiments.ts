@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { DEFAULT_MAX_SERP_PAGES } from "./serp-defaults.js";
 
 const querySchema = z.object({
   text: z.string().min(1),
@@ -36,7 +37,7 @@ const experimentConfigSchema = z.object({
     .optional(),
   search: z
     .object({
-      max_serp_pages: z.number().int().positive().default(3),
+      max_serp_pages: z.number().int().positive().default(DEFAULT_MAX_SERP_PAGES),
     })
     .optional(),
   schedule: z

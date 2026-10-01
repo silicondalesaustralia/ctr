@@ -5,7 +5,7 @@ import { generateSessionTraits } from "../behaviour/session-traits.js";
 import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
 import { findGmbInLocalPack } from "../browser/local-pack.js";
-import { findTargetInSerp } from "../browser/serp-parser.js";
+import { collectSerpLinkCandidates, findTargetInSerp, isOrganicCandidate } from "../browser/serp-parser.js";
 
 export interface SnapshotCapture {
   outcome: "captured" | "not_found" | "blocked";
@@ -55,6 +55,11 @@ async function captureOrganic(page: Page, experiment: Experiment): Promise<Snaps
   // Page 1 is what a "not found" snapshot shows; reloading it later by URL draws CAPTCHAs.
   const pageOneUrl = page.url();
   const pageOneImage = await screenshot(page);
+  const organicOnPageOne = (await collectSerpLinkCandidates(page)).filter(isOrganicCandidate).length;
+  if (organicOnPageOne === 0) {
+    // Thrown, not "not_found": the runner records an error and retries on a fresh IP.
+    throw new Error("Google returned no organic results on page 1 (blank or broken results page)");
+  }
   let result: Awaited<ReturnType<typeof findTargetInSerp>>["result"];
   try {
     ({ result } = await findTargetInSerp(page, experiment.targetDomain, experiment.maxSerpPages));

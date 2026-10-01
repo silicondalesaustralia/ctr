@@ -550,7 +550,7 @@ export default function CampaignDashboard({
         if (start.proposal.preflight?.status === "blocked") {
           setMessage("Google blocked preflight — try again later");
         } else if (start.proposal.preflight?.findableCount === 0) {
-          setMessage("No queries were findable on Google within 3 pages");
+          setMessage("No queries were findable on Google within 4 pages");
         } else {
           setMessage(
             start.proposal.preflight?.keywordAdjusted
@@ -607,7 +607,7 @@ export default function CampaignDashboard({
         if (job.proposal.preflight?.status === "blocked") {
           setMessage("Google blocked preflight — try again later");
         } else if (job.proposal.preflight?.findableCount === 0) {
-          setMessage("No queries were findable on Google within 3 pages");
+          setMessage("No queries were findable on Google within 4 pages");
         } else {
           setMessage(
             job.proposal.preflight?.keywordAdjusted

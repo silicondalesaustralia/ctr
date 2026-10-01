@@ -8,6 +8,7 @@ import { buildGmbCampaignProposal } from "./gmb-proposal.js";
 import { runKeywordPreflight } from "./keyword-preflight.js";
 import { completePreflightJob, failPreflightJob } from "./preflight-jobs.js";
 import { runSerpPreflightChecks } from "./serp-preflight-runner.js";
+import { DEFAULT_MAX_SERP_PAGES } from "../config/serp-defaults.js";
 
 export type PreflightRequestBody = Partial<UpsertCampaignInput> & {
   maxSerpPages?: number;
@@ -86,7 +87,7 @@ export async function runPreflightJob(jobId: string, body: PreflightRequestBody)
     const proposal = await runKeywordPreflight(
       {
         proposal: baseProposal,
-        maxSerpPages: body.maxSerpPages ?? 3,
+        maxSerpPages: body.maxSerpPages ?? DEFAULT_MAX_SERP_PAGES,
         identityExternalId: body.identityExternalId,
       },
       (queries, context) =>
