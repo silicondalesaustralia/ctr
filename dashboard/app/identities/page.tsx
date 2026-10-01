@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import AuthGate from "../components/AuthGate";
 import AppLayout from "../components/AppLayout";
 import WarmPoolPanel from "../components/WarmPoolPanel";
+import CreateIdentitiesForm from "../components/CreateIdentitiesForm";
 import { apiGet, apiPost } from "../../lib/api";
-import { cellStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle, thStyle } from "../components/campaign/shared";
+import { cellStyle, panelStyle, secondaryButtonStyle, thStyle } from "../components/campaign/shared";
 import type { WarmupProgress } from "../components/campaign/CampaignIdentityPicker";
 
 interface IdentityRow {
@@ -77,12 +78,15 @@ function IdentitiesPage() {
     void load();
   }, [load]);
 
-  async function createIdentities() {
+  async function createIdentities(count: number, city: string | null) {
     setBusy("create");
     setMessage(null);
+    setError(null);
     try {
-      await apiPost("/identities/create", { count: 5 });
-      setMessage("Created 5 identities — warmup sessions scheduled automatically");
+      await apiPost("/identities/create", city ? { count, city } : { count });
+      setMessage(
+        `Created ${count} ${city ?? "mixed-location"} identit${count === 1 ? "y" : "ies"} — warmup sessions scheduled automatically`,
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create identities");
@@ -118,14 +122,10 @@ function IdentitiesPage() {
               or any identity (including unwarmed) in its review step.
             </p>
           </div>
-          <button
-            type="button"
-            style={primaryButtonStyle("#2563eb", busy === "create")}
-            disabled={busy === "create"}
-            onClick={() => void createIdentities()}
-          >
-            {busy === "create" ? "Creating..." : "Create 5 identities"}
-          </button>
+          <CreateIdentitiesForm
+            busy={busy === "create"}
+            onCreate={(count, city) => void createIdentities(count, city)}
+          />
         </div>
 
         <div style={{ display: "flex", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>

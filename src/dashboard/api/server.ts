@@ -1179,13 +1179,15 @@ export function createApiServer() {
   });
 
   app.post("/identities/create", async (req, res) => {
-    const body = req.body as { count?: number; desktopPercent?: number };
+    const body = req.body as { count?: number; desktopPercent?: number; city?: unknown };
     const count = body.count ?? 1;
+    const city = typeof body.city === "string" && body.city.trim() ? body.city.trim() : undefined;
 
     try {
       const result = await createAdditionalIdentities({
         count,
         desktopPercent: body.desktopPercent,
+        city,
       });
       res.json({
         createdCount: result.created.length,
