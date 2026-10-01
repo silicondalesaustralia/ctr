@@ -29,8 +29,8 @@ export async function failStrandedPreflightJobs(): Promise<void> {
 let busy = false;
 
 /**
- * Runs the oldest queued job inside the browser mutex, so it never opens a profile a
- * session or warmup is using. One job at a time; later polls wait for the next tick.
+ * Runs the oldest queued job inside the browser mutex (ahead of queued sessions and
+ * warmups), so it never opens a profile a session or warmup is using.
  */
 export async function pollPreflightJobs(): Promise<void> {
   if (busy) return;
@@ -50,7 +50,7 @@ export async function pollPreflightJobs(): Promise<void> {
       await persistJob(job, true);
       logger.info({ event: "preflight_job_started", jobId: job.id, queries: job.totalCount });
       await runPreflightJob(job.id, job.request);
-    });
+    }, { priority: true });
   } catch (error) {
     logger.error({ event: "preflight_poll_failed", error: String(error) });
   } finally {

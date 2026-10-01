@@ -582,7 +582,7 @@ export default function CampaignDashboard({
         }>(`/campaign/preflight/jobs/${start.jobId}`);
 
         if (job.status === "queued") {
-          setMessage("Waiting for the worker to finish its current session...");
+          setMessage("Queued — starts as soon as the worker's current session finishes (usually 1–3 min)...");
           continue;
         }
 

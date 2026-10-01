@@ -1,24 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { withBrowserJobExclusive } from "../../src/scheduler/browser-job-mutex.js";
 
-describe("browser-job-mutex", () => {
-  it("runs jobs strictly one at a time", async () => {
+describe("withBrowserJobExclusive", () => {
+  it("runs jobs one at a time and lets priority jobs jump queued ones", async () => {
     const order: string[] = [];
-    const slow = withBrowserJobExclusive(async () => {
-      order.push("a-start");
-      await new Promise((r) => setTimeout(r, 40));
-      order.push("a-end");
-      return 1;
-    });
-    const fast = withBrowserJobExclusive(async () => {
-      order.push("b-start");
-      order.push("b-end");
-      return 2;
-    });
+    let running = 0;
+    let releaseFirst!: () => void;
+    const job = (name: string, wait?: Promise<void>) => async () => {
+      running += 1;
+      expect(running).toBe(1);
+      order.push(name);
+      if (wait) await wait;
+      running -= 1;
+    };
 
-    const [a, b] = await Promise.all([slow, fast]);
-    expect(a).toBe(1);
-    expect(b).toBe(2);
-    expect(order).toEqual(["a-start", "a-end", "b-start", "b-end"]);
+    const first = withBrowserJobExclusive(job("session", new Promise((resolve) => (releaseFirst = resolve))));
+    const warmup = withBrowserJobExclusive(job("warmup"));
+    const preflight = withBrowserJobExclusive(job("preflight"), { priority: true });
+    releaseFirst();
+    await Promise.all([first, warmup, preflight]);
+
+    expect(order).toEqual(["session", "preflight", "warmup"]);
+  });
+
+  it("releases the lock when a job throws", async () => {
+    await expect(withBrowserJobExclusive(async () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    await expect(withBrowserJobExclusive(async () => "ok")).resolves.toBe("ok");
   });
 });
