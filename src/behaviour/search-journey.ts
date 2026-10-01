@@ -13,6 +13,7 @@ import {
   goToNextSerpPage,
 } from "../browser/serp-parser.js";
 import { expandOmittedResults } from "../browser/serp-omitted.js";
+import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { isProbabilisticBehaviourEnabled } from "./behaviour-config.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
 import {
@@ -56,15 +57,17 @@ async function findTargetWithInspection(
   pagesSearched: number;
 }> {
   let omittedExpanded = false;
+  const counted = new Set<string>();
   for (let serpPage = 1; serpPage <= maxSerpPages; serpPage += 1) {
     await inspectSerp(page, persona, traits, onEvent);
-    const result = await findTargetOnCurrentPage(page, targetDomain, serpPage);
+    const result = await findTargetOnCurrentPage(page, targetDomain, serpPage, counted);
     if (result) {
       return { result, pagesSearched: serpPage };
     }
 
     if (!omittedExpanded && (await expandOmittedResults(page))) {
       omittedExpanded = true;
+      counted.clear();
       await onEvent("serp_loaded", { omittedResultsIncluded: true });
       serpPage = 0;
       continue;
@@ -198,18 +201,28 @@ export async function runSearchJourney(
       };
     }
 
-    const { result, pagesSearched } = await findTargetWithInspection(
-      page,
-      targetDomain,
-      maxSerpPages,
-      persona,
-      traits,
-      onEvent,
-    );
+    let found: Awaited<ReturnType<typeof findTargetWithInspection>>;
+    try {
+      found = await findTargetWithInspection(page, targetDomain, maxSerpPages, persona, traits, onEvent);
+    } catch (error) {
+      if (!(error instanceof GoogleBlockedError)) throw error;
+      return {
+        status: "blocked",
+        googleLoaded,
+        searchSubmitted,
+        targetFound: false,
+        targetClicked: false,
+        targetSkipped: false,
+        searches: attempts,
+        blockReason: error.reason,
+      };
+    }
+    const { result, pagesSearched } = found;
 
     if (result) {
       await onEvent("target_found", {
         position: result.position,
+        rank: result.rank,
         serpPage: result.serpPage,
         attempt: searchIndex + 1,
         hrefKind: result.hrefKind,
@@ -259,7 +272,7 @@ export async function runSearchJourney(
           targetSkipped: true,
           searches: attempts,
           serpPage: result.serpPage,
-          observedPosition: result.position,
+          observedPosition: result.rank,
           resultTitle: result.title,
           resultUrl: result.url,
         };
@@ -293,7 +306,7 @@ export async function runSearchJourney(
         targetSkipped: false,
         searches: attempts,
         serpPage: result.serpPage,
-        observedPosition: result.position,
+        observedPosition: result.rank,
         resultTitle: result.title,
         resultUrl: result.url,
         landingUrl,

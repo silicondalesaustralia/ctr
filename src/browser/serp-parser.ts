@@ -15,7 +15,10 @@ import { expandOmittedResults } from "./serp-omitted.js";
 export const SERP_CLICK_STRATEGY = "v6-commit-wait";
 
 export interface SerpResult {
+  /** Organic position within the current results page. */
   position: number;
+  /** Organic position counting every result on earlier pages (pages rarely hold exactly 10). */
+  rank: number;
   title: string;
   url: string;
   displayedUrl: string;
@@ -166,10 +169,15 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
   }, ORGANIC_SELECTORS);
 }
 
+/**
+ * `counted` carries organic results already ranked on earlier pages. Continuous-scroll
+ * batches keep earlier results in the DOM, so those are skipped rather than re-counted.
+ */
 export async function findTargetOnCurrentPage(
   page: Page,
   targetDomain: string,
   serpPage: number,
+  counted: Set<string> = new Set(),
 ): Promise<SerpResult | null> {
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 
@@ -181,16 +189,19 @@ export async function findTargetOnCurrentPage(
   let position = 0;
 
   for (const candidate of candidates) {
-    if (!isOrganicCandidate(candidate)) {
+    const key = `${candidate.href}::${candidate.title.slice(0, 48)}`;
+    if (!isOrganicCandidate(candidate) || counted.has(key)) {
       continue;
     }
 
+    counted.add(key);
     position += 1;
     if (candidateMatchesTarget(candidate, targetDomain)) {
       const resolvedHref = resolveGoogleSerpHref(candidate.href);
       const hrefKind = classifyGoogleSerpHref(candidate.href);
       return {
         position,
+        rank: counted.size,
         title: candidate.title,
         url: candidate.href,
         displayedUrl: resolvedHref.startsWith("http") && !isGoogleRedirectHref(candidate.href)
@@ -214,18 +225,20 @@ export async function findTargetInSerp(
 ): Promise<{ result: SerpResult | null; pagesSearched: number }> {
   let pagesSearched = 0;
   let omittedExpanded = false;
+  const counted = new Set<string>();
 
   for (let serpPage = 1; serpPage <= maxPages; serpPage += 1) {
     pagesSearched = serpPage;
     await page.waitForTimeout(1000);
 
-    const result = await findTargetOnCurrentPage(page, targetDomain, serpPage);
+    const result = await findTargetOnCurrentPage(page, targetDomain, serpPage, counted);
     if (result) {
       return { result, pagesSearched };
     }
 
     if (!omittedExpanded && (await expandOmittedResults(page))) {
       omittedExpanded = true;
+      counted.clear();
       serpPage = 0;
       continue;
     }

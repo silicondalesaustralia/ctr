@@ -6,6 +6,7 @@ import {
   openGoogle,
   typeAndSubmitQuery,
 } from "../browser/google-search.js";
+import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { clickLocalPackResult, findGmbInLocalPack } from "../browser/local-pack.js";
 import type { GmbAction } from "../campaign/gmb-types.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
@@ -110,12 +111,28 @@ export async function runGmbSearchJourney(
     };
   }
 
-  const found = await findGmbInLocalPack(page, {
-    businessName,
-    placeId,
-    query: query.query,
-    allowBrandedFallback: true,
-  });
+  let found: Awaited<ReturnType<typeof findGmbInLocalPack>>;
+  try {
+    found = await findGmbInLocalPack(page, {
+      businessName,
+      placeId,
+      query: query.query,
+      allowBrandedFallback: true,
+    });
+  } catch (error) {
+    if (!(error instanceof GoogleBlockedError)) throw error;
+    return {
+      status: "blocked",
+      googleLoaded: true,
+      searchSubmitted: true,
+      targetFound: false,
+      targetClicked: false,
+      targetSkipped: false,
+      searches: [attempt(query)],
+      blockReason: error.reason,
+      actionResults: [],
+    };
+  }
   if (!found) {
     await onEvent("target_not_found", { businessName });
     return {

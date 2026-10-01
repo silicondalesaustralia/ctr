@@ -14,6 +14,19 @@ export interface BlockCheckResult {
   reason?: string;
 }
 
+/** Google answered a page change (next results page, Places list, Maps) with a CAPTCHA. */
+export class GoogleBlockedError extends Error {
+  constructor(readonly reason: string, message = `Google blocked the page: ${reason}`) {
+    super(message);
+    this.name = "GoogleBlockedError";
+  }
+}
+
+export async function assertNotBlocked(page: Page): Promise<void> {
+  const blocked = await detectBlockedPage(page);
+  if (blocked.blocked) throw new GoogleBlockedError(blocked.reason ?? "blocked");
+}
+
 export function checkBlockedSignals(url: string, bodyText: string): BlockCheckResult {
   if (/sorry\/index/i.test(url)) {
     return { blocked: true, reason: "google_sorry_page" };

@@ -7,7 +7,7 @@ import {
 } from "../behaviour/behaviour-config.js";
 import type { Persona, SessionTraits } from "../behaviour/types.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
-import { acceptConsentIfPresent, detectBlockedPage } from "./blocked-detection.js";
+import { acceptConsentIfPresent, detectBlockedPage, GoogleBlockedError } from "./blocked-detection.js";
 
 export async function openGoogle(page: Page): Promise<void> {
   await page.goto("https://www.google.com.au/?hl=en-AU&gl=au", {
@@ -103,7 +103,12 @@ export async function ensureFullGoogleSearch(page: Page, query: string): Promise
 
 export async function navigateGoogleLocalFinder(page: Page, query: string): Promise<void> {
   const { openLocalFinder } = await import("./local-pack.js");
-  await openLocalFinder(page, query);
+  try {
+    await openLocalFinder(page, query);
+  } catch (error) {
+    // Callers run checkBlocked() right after the search and report the block from there.
+    if (!(error instanceof GoogleBlockedError)) throw error;
+  }
 }
 
 export async function checkBlocked(page: Page): Promise<{

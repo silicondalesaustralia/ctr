@@ -1,11 +1,16 @@
 import type { Page } from "./pw.js";
-import { acceptConsentIfPresent } from "./blocked-detection.js";
 import {
   CARD_SELECTORS,
   collectLocalPackCandidates,
   mapsSearchUrl,
   type LocalPackCandidate,
 } from "./local-pack-collect.js";
+import {
+  isLocalFinderPage,
+  openLocalFinder,
+  openMapsSearch,
+  scrollPlacesList,
+} from "./local-finder-nav.js";
 import { matchCandidate, type LocalPackResult, type LocalPackTarget } from "./local-pack-match.js";
 import { trustedClickPicked } from "./serp-trusted-click.js";
 import { goToNextSerpPage } from "./serp-pagination.js";
@@ -13,73 +18,14 @@ import { goToNextSerpPage } from "./serp-pagination.js";
 export type { LocalPackCandidate };
 export type { LocalPackResult, LocalPackSource } from "./local-pack-match.js";
 export { namesMatch } from "./local-pack-match.js";
+export {
+  isLocalFinderPage,
+  isMapsSearchPage,
+  localFinderUrl,
+  openLocalFinder,
+  openMapsSearch,
+} from "./local-finder-nav.js";
 export { collectLocalPackCandidates, mapsSearchUrl };
-
-export function localFinderUrl(query: string): string {
-  const q = encodeURIComponent(query.trim());
-  return `https://www.google.com.au/search?q=${q}&udm=1&hl=en-AU&gl=au`;
-}
-
-export function isLocalFinderPage(url: string): boolean {
-  return /[?&]udm=1/i.test(url);
-}
-
-export function isMapsSearchPage(url: string): boolean {
-  return /google\.[^/]*\/maps\/search/i.test(url);
-}
-
-async function gotoSettled(page: Page, url: string): Promise<void> {
-  try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!/ERR_ABORTED|Navigation interrupted|interrupted by another navigation/i.test(message)) {
-      throw error;
-    }
-    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
-    await page.waitForTimeout(1000);
-  }
-}
-
-/** Open Google's local Places list (`udm=1`) — same view as "More places". */
-export async function openLocalFinder(page: Page, query: string): Promise<void> {
-  if (isLocalFinderPage(page.url())) return;
-  await gotoSettled(page, localFinderUrl(query));
-  await acceptConsentIfPresent(page);
-  await page.waitForTimeout(2000);
-  await scrollPlacesList(page);
-}
-
-/** Fallback when udm=1 serves empty/chrome-only DOM — Maps search sidebar. */
-export async function openMapsSearch(page: Page, query: string): Promise<void> {
-  const target = mapsSearchUrl(query);
-  if (page.url().startsWith(target.split("?")[0]!)) return;
-  await gotoSettled(page, target);
-  await acceptConsentIfPresent(page);
-  await page.waitForTimeout(2500);
-  await scrollPlacesList(page, 6);
-}
-
-async function scrollPlacesList(page: Page, iterations = 10): Promise<void> {
-  for (let i = 0; i < iterations; i += 1) {
-    const scrolled = await page
-      .evaluate(() => {
-        const feed =
-          document.querySelector("[role='feed']") ??
-          document.querySelector("#search") ??
-          document.scrollingElement;
-        if (feed) feed.scrollBy(0, 700);
-        else window.scrollBy(0, 700);
-      })
-      .then(() => true)
-      .catch((error: unknown) => {
-        console.error(`[gmb] places scroll interrupted: ${error instanceof Error ? error.message : String(error)}`);
-        return false;
-      });
-    if (!scrolled) await page.waitForLoadState("domcontentloaded").catch(() => undefined);
-    await page.waitForTimeout(450);
-  }
-}
 
 async function waitForLocalCandidates(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
@@ -149,11 +95,11 @@ export async function findGmbInLocalPack(
     }
   }
 
-  // udm=1 sometimes serves empty chrome ("Maps" only). Rank from a keyword-only Maps search.
+  // The Places list sometimes serves empty chrome ("Maps" only). Rank from a keyword-only Maps search.
   const placesListEmpty = !found && realBusinessCount(candidates) < 2;
   if (placesListEmpty) {
     console.error(
-      `[gmb] udm=1 weak (candidates=${candidates.length}: ${candidates
+      `[gmb] Places list empty (candidates=${candidates.length}: ${candidates
         .map((c) => c.title)
         .slice(0, 8)
         .join(" | ")}); trying keyword Maps search`,

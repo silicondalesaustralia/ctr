@@ -2,7 +2,7 @@ import type { Experiment } from "@prisma/client";
 import type { Page } from "../browser/pw.js";
 import { FAST_DRY_RUN_PERSONA } from "../behaviour/personas.js";
 import { generateSessionTraits } from "../behaviour/session-traits.js";
-import { acceptConsentIfPresent } from "../browser/blocked-detection.js";
+import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
 import { findGmbInLocalPack } from "../browser/local-pack.js";
 import { findTargetInSerp } from "../browser/serp-parser.js";
@@ -51,35 +51,49 @@ async function searchQuery(page: Page, query: string): Promise<string | null> {
   return afterSearch.blocked ? (afterSearch.reason ?? "blocked") : null;
 }
 
-async function captureOrganic(page: Page, experiment: Experiment, query: string): Promise<SnapshotCapture> {
-  const { result } = await findTargetInSerp(page, experiment.targetDomain, experiment.maxSerpPages);
+async function captureOrganic(page: Page, experiment: Experiment): Promise<SnapshotCapture> {
+  // Page 1 is what a "not found" snapshot shows; reloading it later by URL draws CAPTCHAs.
+  const pageOneUrl = page.url();
+  const pageOneImage = await screenshot(page);
+  let result: Awaited<ReturnType<typeof findTargetInSerp>>["result"];
+  try {
+    ({ result } = await findTargetInSerp(page, experiment.targetDomain, experiment.maxSerpPages));
+  } catch (error) {
+    if (error instanceof GoogleBlockedError) return blockedCapture(page, error.reason);
+    throw error;
+  }
   if (!result) {
-    // Not found: show page 1 rather than whichever deep page the scan stopped on.
-    const pageOne = `https://www.google.com.au/search?q=${encodeURIComponent(query)}&hl=en-AU&gl=au`;
-    await page.goto(pageOne, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await acceptConsentIfPresent(page);
-    const blocked = await checkBlocked(page);
-    if (blocked.blocked) return blockedCapture(page, blocked.reason);
+    return {
+      outcome: "not_found",
+      position: null,
+      serpPage: 1,
+      source: "organic",
+      resultTitle: null,
+      pageUrl: pageOneUrl,
+      imageJpeg: pageOneImage,
+    };
   }
   return {
-    outcome: result ? "captured" : "not_found",
-    position: result ? (result.serpPage - 1) * 10 + result.position : null,
-    serpPage: result?.serpPage ?? 1,
+    outcome: "captured",
+    position: result.rank,
+    serpPage: result.serpPage,
     source: "organic",
-    resultTitle: result?.title ?? null,
+    resultTitle: result.title,
     pageUrl: page.url(),
-    imageJpeg: await screenshot(page),
+    imageJpeg: result.serpPage === 1 ? pageOneImage : await screenshot(page),
   };
 }
 
 async function captureGmb(page: Page, experiment: Experiment, query: string): Promise<SnapshotCapture> {
   const businessName = experiment.gmbBusinessName?.trim();
   if (!businessName) throw new Error("GMB campaign has no business name");
-  const found = await findGmbInLocalPack(page, {
-    businessName,
-    placeId: experiment.gmbPlaceId,
-    query,
-  });
+  let found: Awaited<ReturnType<typeof findGmbInLocalPack>>;
+  try {
+    found = await findGmbInLocalPack(page, { businessName, placeId: experiment.gmbPlaceId, query });
+  } catch (error) {
+    if (error instanceof GoogleBlockedError) return blockedCapture(page, error.reason);
+    throw error;
+  }
   return {
     outcome: found ? "captured" : "not_found",
     position: found?.position ?? null,
@@ -100,5 +114,5 @@ export async function captureQuerySnapshot(
   if (blockReason) return blockedCapture(page, blockReason);
   return experiment.campaignKind === "gmb"
     ? captureGmb(page, experiment, query)
-    : captureOrganic(page, experiment, query);
+    : captureOrganic(page, experiment);
 }

@@ -34,6 +34,7 @@ export async function pickRandomOrganicResult(page: Page): Promise<SerpResult | 
 
   return {
     position,
+    rank: position,
     title: pick.title,
     url: pick.href,
     displayedUrl: pick.displayedUrl,

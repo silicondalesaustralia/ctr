@@ -22,6 +22,15 @@ describe("isLocalFinderPage", () => {
     ).toBe(true);
     expect(isLocalFinderPage("https://www.google.com/search?q=plumber&gbv=2")).toBe(false);
   });
+
+  it("detects the udm=local page reached from 'More businesses'", () => {
+    expect(
+      isLocalFinderPage(
+        "https://www.google.com/search?q=plumber+mount+barker&hl=en-AU&gl=au&udm=local&lsack=abc",
+      ),
+    ).toBe(true);
+    expect(isLocalFinderPage("https://www.google.com/search?q=udm%3Dlocalish")).toBe(false);
+  });
 });
 
 describe("namesMatch", () => {

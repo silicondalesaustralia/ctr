@@ -9,6 +9,7 @@ import {
   typeAndSubmitQuery,
 } from "../browser/google-search.js";
 import { findTargetInSerp, findTargetOnCurrentPage } from "../browser/serp-parser.js";
+import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -25,10 +26,6 @@ import {
 } from "../sessions/session-cleanup.js";
 import { hashValue, randomBetween, sleep } from "../utils/helpers.js";
 import type { PreflightQueryResult } from "./preflight-types.js";
-
-function globalPosition(serpPage: number, position: number): number {
-  return (serpPage - 1) * 10 + position;
-}
 
 async function connectBrowserWithRetry(wsEndpoint: string, maxAttempts = 4) {
   let lastError: unknown;
@@ -133,7 +130,7 @@ async function checkQueryOnPage(
         found: true,
         serpPage: result.serpPage,
         position: result.position,
-        globalPosition: globalPosition(result.serpPage, result.position),
+        globalPosition: result.rank,
         status: "found",
       };
     }
@@ -183,7 +180,7 @@ async function checkQueryOnPage(
       found: true,
       serpPage: result.serpPage,
       position: result.position,
-      globalPosition: globalPosition(result.serpPage, result.position),
+      globalPosition: result.rank,
       status: "found",
     };
   } catch (error) {
@@ -194,7 +191,7 @@ async function checkQueryOnPage(
       serpPage: null,
       position: null,
       globalPosition: null,
-      status: "error",
+      status: error instanceof GoogleBlockedError ? "blocked" : "error",
       errorMessage: message,
     };
   }

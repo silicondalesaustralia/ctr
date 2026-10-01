@@ -1,4 +1,5 @@
 import type { Page } from "../browser/pw.js";
+import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { findGmbInLocalPack } from "../browser/local-pack.js";
 import {
   checkBlocked,
@@ -88,7 +89,7 @@ export async function checkGmbQueryOnPage(
       serpPage: null,
       position: null,
       globalPosition: null,
-      status: "error",
+      status: error instanceof GoogleBlockedError ? "blocked" : "error",
       errorMessage: message,
     };
   }

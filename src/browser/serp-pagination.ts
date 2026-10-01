@@ -1,6 +1,7 @@
 import type { Page } from "./pw.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
 import { trustedClickPicked } from "./serp-trusted-click.js";
+import { assertNotBlocked } from "./blocked-detection.js";
 
 /** Result titles anywhere in the results column, including continuous-scroll batches. */
 export const RESULT_TITLE_SELECTOR = "#center_col a[href]:has(h3)";
@@ -128,8 +129,15 @@ async function loadNextByUrl(page: Page): Promise<boolean> {
 /**
  * Advance to the next batch of results: pager click when present, otherwise scroll-load.
  * `directUrl: false` for layouts whose page size is not 10 (e.g. Places list).
+ * Throws GoogleBlockedError when the new page is a CAPTCHA, so it isn't read as "no results".
  */
 export async function goToNextSerpPage(page: Page, directUrl = true): Promise<boolean> {
+  const moved = await advanceResults(page, directUrl);
+  if (moved) await assertNotBlocked(page);
+  return moved;
+}
+
+async function advanceResults(page: Page, directUrl: boolean): Promise<boolean> {
   const immediate = await clickPagerNext(page);
   if (immediate !== null) {
     if (immediate) await settleAfterPaging(page);

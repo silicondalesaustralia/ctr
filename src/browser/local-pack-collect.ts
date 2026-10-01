@@ -22,11 +22,14 @@ export function mapsSearchUrl(query: string): string {
   return `https://www.google.com.au/maps/search/${q}?hl=en-AU`;
 }
 
+/** Paid listings carry the ad-disclosure label in their title; they are not ranks. */
+const AD_TITLE = /\b(my ad cent(re|er)|sponsored)\b/i;
+
 /** Google often redirects just after a SERP/Places load; retry once the new document settles. */
 export async function collectLocalPackCandidates(page: Page): Promise<LocalPackCandidate[]> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await collectOnce(page);
+      return (await collectOnce(page)).filter((candidate) => !AD_TITLE.test(candidate.title));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (attempt >= 2 || !/context was destroyed|navigation/i.test(message)) throw error;
@@ -39,7 +42,7 @@ export async function collectLocalPackCandidates(page: Page): Promise<LocalPackC
 
 async function collectOnce(page: Page): Promise<LocalPackCandidate[]> {
   const url = page.url();
-  const isLocalFinder = /[?&]udm=1/i.test(url);
+  const isLocalFinder = /[?&](udm=(1|local)|tbm=lcl)(&|$)/i.test(url);
   const isMapsHost = /google\.[^/]*\/maps/i.test(url);
 
   if (isMapsHost) {
