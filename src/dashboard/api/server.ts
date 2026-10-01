@@ -37,17 +37,14 @@ import {
   upsertCampaign,
   type UpsertCampaignInput,
 } from "../../experiments/campaign-service.js";
-import { buildCampaignProposal, type CampaignProposal } from "../../campaign/campaign-proposal.js";
+import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
 import { buildGmbCampaignProposal } from "../../campaign/gmb-proposal.js";
 import { getGeoCapacity, listCityOptions } from "../../campaign/geo-capacity.js";
-import { runKeywordPreflight } from "../../campaign/keyword-preflight.js";
+import { createPreflightJob, getPreflightJob } from "../../campaign/preflight-jobs.js";
 import {
-  completePreflightJob,
-  createPreflightJob,
-  failPreflightJob,
-  getPreflightJob,
-} from "../../campaign/preflight-jobs.js";
-import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
+  buildBaseProposalForPreflight,
+  type PreflightRequestBody,
+} from "../../campaign/preflight-request.js";
 import { registerWarmPoolRoutes } from "./warm-pool-routes.js";
 import { registerRankSnapshotRoutes } from "./rank-snapshot-routes.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
@@ -81,100 +78,6 @@ function authMiddleware(req: Request, res: Response, next: NextFunction): void {
 async function isRunnerEnabledSetting(): Promise<boolean> {
   const setting = await prisma.appSetting.findUnique({ where: { key: "runner_enabled" } });
   return setting?.value !== "false" && isRunnerEnabled();
-}
-
-type PreflightRequestBody = Partial<UpsertCampaignInput> & {
-  maxSerpPages?: number;
-  identityExternalId?: string;
-};
-
-async function buildBaseProposalForPreflight(body: PreflightRequestBody): Promise<CampaignProposal> {
-  const current = await getCurrentCampaign();
-  const isGmb = body.campaignKind === "gmb";
-
-  let baseProposal: CampaignProposal = isGmb
-    ? await buildGmbCampaignProposal({
-        keyword: body.keyword!,
-        focusCity: body.focusCity ?? current?.focusCity ?? "",
-        gmbBusinessName: body.gmbBusinessName ?? current?.gmbBusinessName ?? "",
-        gmbMapsUrl: body.gmbMapsUrl ?? body.targetUrl ?? current?.gmbMapsUrl ?? "",
-        gmbActions: Array.isArray(body.gmbActions)
-          ? undefined
-          : (body.gmbActions ?? undefined),
-      })
-    : await buildCampaignProposal({
-        keyword: body.keyword!,
-        targetUrl: body.targetUrl!,
-        region: body.region!,
-        gscConnectionId: body.gscConnectionId ?? null,
-        gscSiteUrl: body.gscSiteUrl ?? null,
-      });
-
-  if (body.queries?.length) {
-    const intensity = await previewCampaignIntensity(body as UpsertCampaignInput, current?.id);
-    baseProposal = {
-      ...baseProposal,
-      keyword: body.keyword!.trim(),
-      targetUrl: (body.targetUrl ?? body.gmbMapsUrl ?? baseProposal.targetUrl).trim(),
-      region: (body.region ?? baseProposal.region).trim().toUpperCase(),
-      campaignKind: isGmb ? "gmb" : "url",
-      focusCity: body.focusCity ?? baseProposal.focusCity,
-      gmbBusinessName: body.gmbBusinessName ?? baseProposal.gmbBusinessName,
-      gmbPlaceId: body.gmbPlaceId ?? baseProposal.gmbPlaceId,
-      gmbMapsUrl: body.gmbMapsUrl ?? baseProposal.gmbMapsUrl,
-      campaignDurationDays: body.campaignDurationDays ?? baseProposal.campaignDurationDays,
-      treatmentIntensity: body.treatmentIntensity ?? baseProposal.treatmentIntensity,
-      adaptivePacing: body.adaptivePacing ?? baseProposal.adaptivePacing,
-      recalculateEveryDays: body.recalculateEveryDays ?? baseProposal.recalculateEveryDays,
-      maxShareOfSearchDemand: body.maxShareOfSearchDemand ?? baseProposal.maxShareOfSearchDemand,
-      maxShareOfGscImpressions:
-        body.maxShareOfGscImpressions ?? baseProposal.maxShareOfGscImpressions,
-      desktopPercent: body.desktopPercent ?? baseProposal.desktopPercent,
-      ctrSource: body.ctrSource ?? baseProposal.ctrSource,
-      queries: body.queries,
-      intensity,
-      plannedSessionCap: body.plannedSessionCap ?? null,
-      targetIdentityCount: body.targetIdentityCount ?? null,
-      organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
-    };
-  } else {
-    baseProposal = {
-      ...baseProposal,
-      campaignKind: isGmb ? "gmb" : baseProposal.campaignKind ?? "url",
-      focusCity: body.focusCity ?? baseProposal.focusCity,
-      gmbBusinessName: body.gmbBusinessName ?? baseProposal.gmbBusinessName,
-      gmbPlaceId: body.gmbPlaceId ?? baseProposal.gmbPlaceId,
-      gmbMapsUrl: body.gmbMapsUrl ?? baseProposal.gmbMapsUrl,
-      plannedSessionCap: body.plannedSessionCap ?? null,
-      targetIdentityCount: body.targetIdentityCount ?? null,
-      organicMaxSessionsPerIdentity: body.organicMaxSessionsPerIdentity,
-    };
-  }
-
-  return baseProposal;
-}
-
-async function runPreflightJob(jobId: string, body: PreflightRequestBody): Promise<void> {
-  try {
-    const baseProposal = await buildBaseProposalForPreflight(body);
-    const proposal = await runKeywordPreflight(
-      {
-        proposal: baseProposal,
-        maxSerpPages: body.maxSerpPages ?? 3,
-        identityExternalId: body.identityExternalId,
-      },
-      (queries, context) =>
-        runSerpPreflightChecks({
-          queries,
-          ...context,
-          jobId,
-        }),
-    );
-    await completePreflightJob(jobId, proposal);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await failPreflightJob(jobId, message);
-  }
 }
 
 export function createApiServer() {
@@ -823,8 +726,7 @@ export function createApiServer() {
         enabledQueryCount ??
         (await buildBaseProposalForPreflight(body)).queries.filter((q) => q.active !== false)
           .length;
-      const job = await createPreflightJob(queryCount);
-      void runPreflightJob(job.id, body);
+      const job = await createPreflightJob(queryCount, body);
       res.status(202).json({ jobId: job.id, totalCount: job.totalCount });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

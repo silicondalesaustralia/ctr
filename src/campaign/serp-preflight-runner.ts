@@ -17,6 +17,7 @@ import { createBrowserProvider, getMockBrowserProvider } from "../providers/brow
 import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
 import { updatePreflightJobProgress } from "./preflight-jobs.js";
+import { rankByWarmth } from "./preflight-identity-rank.js";
 import { checkGmbQueryOnPage } from "./gmb-preflight-check.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
@@ -96,8 +97,8 @@ export async function pickPreflightIdentity(
     ? identities.filter((identity) => identity.region === focusRegion)
     : identities;
   const pool = cityPool.length > 0 ? cityPool : regional.length > 0 ? regional : identities;
-  const desktop = pool.filter((identity) => identity.deviceClass === "desktop");
-  const pick = desktop[0] ?? pool[0] ?? identities[0];
+  const desktop = rankByWarmth(pool.filter((identity) => identity.deviceClass === "desktop"));
+  const pick = desktop[0] ?? rankByWarmth(pool)[0] ?? identities[0];
   if (!pick) {
     throw new Error("No active identities available for Google preflight.");
   }

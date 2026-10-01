@@ -2,72 +2,21 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../db/client.js";
 import { logger } from "../config/logger.js";
 import type { CampaignProposal } from "./campaign-proposal.js";
+import type { PreflightRequestBody } from "./preflight-request.js";
+import {
+  deserializeJob,
+  serializeJob,
+  storageKey,
+  type PreflightJob,
+  type StoredPreflightJob,
+} from "./preflight-job-serde.js";
 
-export type PreflightJobStatus = "running" | "complete" | "error";
-
-export interface PreflightJob {
-  id: string;
-  status: PreflightJobStatus;
-  testedCount: number;
-  totalCount: number;
-  proposal: CampaignProposal | null;
-  error: string | null;
-  startedAt: Date;
-  finishedAt: Date | null;
-}
-
-interface StoredPreflightJob {
-  id: string;
-  status: PreflightJobStatus;
-  testedCount: number;
-  totalCount: number;
-  proposal: CampaignProposal | null;
-  error: string | null;
-  startedAt: string;
-  finishedAt: string | null;
-  expiresAt: string;
-}
+export type { PreflightJob, PreflightJobStatus } from "./preflight-job-serde.js";
 
 const memoryJobs = new Map<string, PreflightJob>();
-const TTL_MS = 60 * 60 * 1000;
-const KEY_PREFIX = "preflight_job:";
 
-function storageKey(id: string): string {
-  return `${KEY_PREFIX}${id}`;
-}
-
-function serializeJob(job: PreflightJob): StoredPreflightJob {
-  return {
-    id: job.id,
-    status: job.status,
-    testedCount: job.testedCount,
-    totalCount: job.totalCount,
-    proposal: job.proposal,
-    error: job.error,
-    startedAt: job.startedAt.toISOString(),
-    finishedAt: job.finishedAt?.toISOString() ?? null,
-    expiresAt: new Date(Date.now() + TTL_MS).toISOString(),
-  };
-}
-
-function deserializeJob(stored: StoredPreflightJob): PreflightJob | null {
-  if (new Date(stored.expiresAt).getTime() < Date.now()) {
-    return null;
-  }
-
-  return {
-    id: stored.id,
-    status: stored.status,
-    testedCount: stored.testedCount,
-    totalCount: stored.totalCount,
-    proposal: stored.proposal,
-    error: stored.error,
-    startedAt: new Date(stored.startedAt),
-    finishedAt: stored.finishedAt ? new Date(stored.finishedAt) : null,
-  };
-}
-
-async function persistJob(job: PreflightJob): Promise<void> {
+/** strict: rethrow storage errors (a queued job only exists for the worker once stored). */
+export async function persistJob(job: PreflightJob, strict = false): Promise<void> {
   memoryJobs.set(job.id, job);
 
   try {
@@ -82,6 +31,7 @@ async function persistJob(job: PreflightJob): Promise<void> {
       },
     });
   } catch (error) {
+    if (strict) throw error;
     const message = error instanceof Error ? error.message : String(error);
     logger.warn({
       event: "preflight_job_persist_failed",
@@ -91,25 +41,27 @@ async function persistJob(job: PreflightJob): Promise<void> {
   }
 }
 
-export async function createPreflightJob(totalCount: number): Promise<PreflightJob> {
+export async function createPreflightJob(
+  totalCount: number,
+  request: PreflightRequestBody,
+): Promise<PreflightJob> {
   const job: PreflightJob = {
     id: randomUUID(),
-    status: "running",
+    status: "queued",
     testedCount: 0,
     totalCount,
     proposal: null,
     error: null,
+    request,
     startedAt: new Date(),
     finishedAt: null,
   };
-  await persistJob(job);
+  await persistJob(job, true);
   return job;
 }
 
+/** Reads storage first: the worker, not this process, advances the job. */
 export async function getPreflightJob(id: string): Promise<PreflightJob | null> {
-  const cached = memoryJobs.get(id);
-  if (cached) return cached;
-
   try {
     const row = await prisma.appSetting.findUnique({
       where: { key: storageKey(id) },

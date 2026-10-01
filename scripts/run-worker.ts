@@ -15,6 +15,7 @@ import { runWarmPoolTick } from "../src/warmup/warm-pool.js";
 import { SERP_CLICK_STRATEGY } from "../src/browser/serp-parser.js";
 import { createSnapshotWorker, pollAndEnqueueDueSnapshots } from "../src/rank-snapshots/snapshot-queue.js";
 import { resetStrandedSnapshots } from "../src/rank-snapshots/snapshot-runner.js";
+import { failStrandedPreflightJobs, pollPreflightJobs } from "../src/scheduler/preflight-worker.js";
 
 // OOM kills leave Orbita/Chrome behind; clear before accepting jobs.
 killOrphanBrowserProcesses("worker-boot");
@@ -119,6 +120,11 @@ backfillWarmupForExistingIdentities()
     }
   })
   .catch((error) => logger.error({ event: "warmup_backfill_failed", error: String(error) }));
+
+const PREFLIGHT_POLL_MS = 5_000;
+failStrandedPreflightJobs()
+  .catch((error) => logger.error({ event: "preflight_stranded_reset_failed", error: String(error) }))
+  .finally(() => setInterval(() => void pollPreflightJobs(), PREFLIGHT_POLL_MS));
 
 const WARM_POOL_TICK_MS = 60 * 60_000;
 setInterval(() => void runWarmPoolTick(), WARM_POOL_TICK_MS);

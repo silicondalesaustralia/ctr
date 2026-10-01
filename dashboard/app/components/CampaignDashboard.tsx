@@ -574,17 +574,22 @@ export default function CampaignDashboard({
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         const job = await apiGet<{
-          status: "running" | "complete" | "error";
+          status: "queued" | "running" | "complete" | "error";
           testedCount: number;
           totalCount: number;
           proposal: CampaignProposal | null;
           error: string | null;
         }>(`/campaign/preflight/jobs/${start.jobId}`);
 
+        if (job.status === "queued") {
+          setMessage("Waiting for the worker to finish its current session...");
+          continue;
+        }
+
         if (job.status === "running") {
           const progress =
             job.testedCount === 0
-              ? "Starting browser on Railway..."
+              ? "Starting a warmed browser on the worker..."
               : `Checking Google... ${job.testedCount}/${job.totalCount} queries`;
           setMessage(`${progress} (about 2 min per query)`);
           continue;
