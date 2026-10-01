@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { apiGet } from "../../../lib/api";
 import AppLayout from "../../components/AppLayout";
 import AuthGate from "../../components/AuthGate";
+import SessionScreenshotPanel from "../../components/campaign/SessionScreenshotPanel";
 
 interface SessionDetail {
   id: string;
@@ -28,6 +29,7 @@ interface SessionDetail {
   identity: { externalId: string; region: string; deviceClass: string; personaId: string | null };
   experiment: { id: string; name: string; targetUrl: string };
   events: Array<{ timestamp: string; eventType: string; metadataJson: string | null }>;
+  hasSnapshot: boolean;
 }
 
 export default function SessionDetailPage() {
@@ -99,6 +101,8 @@ export default function SessionDetailPage() {
               <p><strong>Final URL:</strong> <span style={urlStyle}>{session.finalUrl ?? "—"}</span></p>
               <p><strong>Duration:</strong> {session.durationSeconds}s · {session.pageviews} pages · {session.internalClicks} internal clicks · {session.scrollDepth.toFixed(0)}% scroll</p>
             </div>
+
+            <SessionScreenshotPanel sessionId={session.id} hasSnapshot={session.hasSnapshot} style={panelStyle} />
 
             <div style={panelStyle}>
               <h3 style={{ marginTop: 0 }}>Event timeline</h3>

@@ -1062,7 +1062,11 @@ export function createApiServer() {
         res.status(404).json({ error: "Not found" });
         return;
       }
-      res.json(jsonSafe(session));
+      const snapshot = await prisma.sessionSnapshot.findUnique({
+        where: { sessionId: session.id },
+        select: { sessionId: true },
+      });
+      res.json(jsonSafe({ ...session, hasSnapshot: snapshot !== null }));
     } catch (error) {
       res.status(500).json({
         error: error instanceof Error ? error.message : "Failed to load session",
