@@ -7,6 +7,8 @@ import {
   railwayFetch,
 } from "../../../../../lib/railway-proxy";
 
+export const maxDuration = 300;
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext): Promise<NextResponse> {

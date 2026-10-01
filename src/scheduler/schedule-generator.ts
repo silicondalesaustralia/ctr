@@ -11,7 +11,7 @@ import {
   randomTimeInTimezoneWindow,
   startOfMonth,
 } from "../utils/helpers.js";
-import { isIdentityEligible } from "../identities/identity-service.js";
+import { buildEligibilityCheck } from "./identity-eligibility.js";
 
 export interface ScheduleGeneratorInput {
   experiment: Experiment;
@@ -118,6 +118,14 @@ export async function generateCampaignSchedule(
 
   const querySlots = buildQuerySlots(input.queries, input.totalSessions);
   let slotIndex = 0;
+  const isEligible = await buildEligibilityCheck({
+    experimentId: input.experiment.id,
+    identityIds: identities.map((identity) => identity.id),
+    from: startDate,
+    to: endDate,
+    minGapDays: input.experiment.repeatIdentityMinGapDays,
+    maxPerDay: input.experiment.maxSessionsPerIdentityPerDay,
+  });
 
   const scheduled: Array<{
     experimentId: string;
@@ -181,15 +189,7 @@ export async function generateCampaignSchedule(
           }
         }
 
-        const ok = await isIdentityEligible(
-          identity.id,
-          input.experiment.id,
-          scheduledAt,
-          input.experiment.repeatIdentityMinGapDays,
-          input.experiment.maxSessionsPerIdentityPerDay,
-        );
-
-        if (ok) {
+        if (isEligible(identity, scheduledAt)) {
           eligible.push({ identity, scheduledAt });
         }
       }
