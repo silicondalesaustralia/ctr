@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "../../../lib/api";
+import CampaignSnapshotsTab from "./CampaignSnapshotsTab";
 import CompletedSessionsSection, {
   type SessionRow,
 } from "./CompletedSessionsSection";
@@ -98,6 +99,7 @@ export default function CampaignSessionsTab({
         sessions={sessions}
         loading={loading}
       />
+      <CampaignSnapshotsTab campaignId={campaignId} />
     </div>
   );
 }

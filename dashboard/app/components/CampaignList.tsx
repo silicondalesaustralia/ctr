@@ -8,8 +8,7 @@ import CampaignTable from "./campaigns/CampaignTable";
 import CampaignToolbar from "./campaigns/CampaignToolbar";
 import { matchesStatus, regionParts, type StatusFilter } from "./campaigns/campaign-list-types";
 import { useCampaigns } from "./campaigns/useCampaigns";
-import { primaryButtonStyle } from "./campaign/shared";
-import styles from "./campaigns/CampaignList.module.css";
+import styles from "./campaigns/CampaignPanel.module.css";
 
 const statuses: StatusFilter[] = ["all", "active", "stopped", "draft"];
 
@@ -44,8 +43,8 @@ export default function CampaignList() {
   }, [campaigns, status, search, region]);
 
   const newButton = (
-    <Link href="/campaign/new" style={{ ...primaryButtonStyle("var(--accent)"), whiteSpace: "nowrap" }}>
-      <span aria-hidden="true" style={{ fontSize: 19, fontWeight: 400, lineHeight: 1 }}>+</span>
+    <Link href="/campaign/new" className={styles.newCampaign}>
+      <span aria-hidden="true" className={styles.plus}>+</span>
       New campaign
     </Link>
   );
@@ -54,7 +53,7 @@ export default function CampaignList() {
     <AppLayout
       eyebrow="Overview"
       title="Campaigns"
-      subtitle="Every campaign, its session progress and latest rank, in one place."
+      subtitle="A clear view of every campaign, all in one place."
       actions={newButton}
     >
       <CampaignStats campaigns={campaigns} activeCount={data.activeCount} />
@@ -109,7 +108,7 @@ export default function CampaignList() {
       </section>
 
       <div className={styles.note}>
-        <span aria-hidden="true">ⓘ</span>
+        <span aria-hidden="true" className={styles.noteIcon}>i</span>
         <span>Campaigns run in parallel and share the same identity pool and worker queue.</span>
       </div>
     </AppLayout>

@@ -13,6 +13,8 @@ export interface CampaignSummary {
   queryCount: number;
   completedSessions: number;
   scheduledSessions: number;
+  /** Earliest still-scheduled session, if any. */
+  nextSessionAt?: string | null;
   /** Rank observed by each session on the main keyword, oldest first. */
   rankHistory?: number[];
   updatedAt: string;

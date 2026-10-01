@@ -1,0 +1,58 @@
+.cell {
+  display: grid;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 44px 56px 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.label {
+  font-size: 10px;
+  color: #8a91a1;
+}
+
+.track {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: #f0f1f5;
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #8176d8;
+}
+
+.value {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.days {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.days small,
+.next small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 400;
+  color: #949aa8;
+}
+
+.next {
+  font-weight: 500;
+}

@@ -2,16 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../../../lib/api";
+import SessionRankSnapshotLink from "./SessionRankSnapshotLink";
 import { base64JpegToObjectUrl } from "./snapshot-image-url";
 
 interface Props {
   sessionId: string;
   hasSnapshot: boolean;
+  campaignId: string;
+  query: string;
+  sessionAt: string;
   style: React.CSSProperties;
 }
 
-/** The SERP the session saw when it found the target, captured just before clicking. */
-export default function SessionScreenshotPanel({ sessionId, hasSnapshot, style }: Props) {
+/** The SERP the session saw before clicking, plus the closest ranking snapshot for its query. */
+export default function SessionScreenshotPanel({
+  sessionId,
+  hasSnapshot,
+  campaignId,
+  query,
+  sessionAt,
+  style,
+}: Props) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,12 +48,12 @@ export default function SessionScreenshotPanel({ sessionId, hasSnapshot, style }
   }, [sessionId, hasSnapshot]);
 
   return (
-    <div style={style}>
-      <div style={{ display: "flex", gap: 12, alignItems: "baseline", marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>Screenshot before click</h3>
+    <div style={{ ...style, display: "grid", gap: 12 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+        <h3 style={{ margin: 0 }}>Snapshots</h3>
         {src && (
-          <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#6155dc" }}>
-            Open full size ↗
+          <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
+            Open session screenshot ↗
           </a>
         )}
       </div>
@@ -55,17 +66,21 @@ export default function SessionScreenshotPanel({ sessionId, hasSnapshot, style }
               display: "block",
               maxWidth: "100%",
               maxHeight: 480,
-              border: "1px solid #e9ecf2",
+              border: "1px solid var(--line)",
               borderRadius: 8,
               cursor: "zoom-in",
             }}
           />
         </a>
       ) : (
-        <p style={{ margin: 0, color: error ? "#bf4352" : "#767d8e" }}>
-          {error ?? (hasSnapshot ? "Loading…" : "No screenshot — the session didn't find the target, or ran before screenshots were added.")}
+        <p style={{ margin: 0, fontSize: 13, color: error ? "var(--red)" : "var(--muted)" }}>
+          {error ??
+            (hasSnapshot
+              ? "Loading session screenshot…"
+              : "No session screenshot: the session didn't find the target, or ran before screenshots were added.")}
         </p>
       )}
+      <SessionRankSnapshotLink campaignId={campaignId} query={query} sessionAt={sessionAt} />
     </div>
   );
 }

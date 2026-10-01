@@ -1,5 +1,5 @@
 import type { StatusFilter } from "./campaign-list-types";
-import styles from "./CampaignList.module.css";
+import styles from "./CampaignToolbar.module.css";
 
 interface Props {
   status: StatusFilter;
@@ -24,12 +24,16 @@ export default function CampaignToolbar(props: Props) {
 
   return (
     <div className={styles.toolbar}>
-      <div className={styles.tabs} role="group" aria-label="Filter by status">
+      <div
+        className={visibleTabs.length > 3 ? `${styles.tabs} ${styles.tabsScroll}` : styles.tabs}
+        role="group"
+        aria-label="Filter by status"
+      >
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={props.status === tab.id ? styles.tabSelected : styles.tab}
+            className={props.status === tab.id ? `${styles.tab} ${styles.tabSelected}` : styles.tab}
             aria-pressed={props.status === tab.id}
             onClick={() => props.onStatusChange(tab.id)}
           >

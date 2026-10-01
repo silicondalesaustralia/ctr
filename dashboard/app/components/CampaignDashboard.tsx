@@ -11,7 +11,6 @@ import CampaignIdentityPicker from "./campaign/CampaignIdentityPicker";
 import CampaignModePicker from "./campaign/CampaignModePicker";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
-import CampaignSnapshotsTab from "./campaign/CampaignSnapshotsTab";
 import CampaignStartSummary from "./campaign/CampaignStartSummary";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
@@ -258,12 +257,13 @@ export default function CampaignDashboard({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const activeTab: CampaignTab =
-    searchParams.get("tab") === "sessions" ||
-    searchParams.get("tab") === "snapshots" ||
-    searchParams.get("tab") === "identities"
-      ? (searchParams.get("tab") as CampaignTab)
-      : "plan";
+    tabParam === "sessions" || tabParam === "snapshots"
+      ? "sessions"
+      : tabParam === "identities"
+        ? "identities"
+        : "plan";
 
   function setActiveTab(tab: CampaignTab) {
     if (!campaignId) return;
@@ -841,8 +841,6 @@ export default function CampaignDashboard({
           campaignKind={form.campaignKind}
           scheduleTimezone={form.scheduleTimezone}
         />
-      ) : activeTab === "snapshots" && campaignId ? (
-        <CampaignSnapshotsTab campaignId={campaignId} />
       ) : activeTab === "identities" && campaignId ? (
         <CampaignIdentitiesTab
           campaignId={campaignId}

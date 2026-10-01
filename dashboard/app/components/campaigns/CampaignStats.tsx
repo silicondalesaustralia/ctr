@@ -1,5 +1,5 @@
 import type { CampaignSummary } from "./campaign-list-types";
-import styles from "./CampaignList.module.css";
+import styles from "./CampaignStats.module.css";
 
 interface Props {
   campaigns: CampaignSummary[];
@@ -31,7 +31,7 @@ export default function CampaignStats({ campaigns, activeCount }: Props) {
       label: "Completed sessions",
       icon: "✓",
       value: sum(campaigns, (c) => c.completedSessions),
-      foot: "Finished sessions across campaigns",
+      foot: "Total shown across campaigns",
     },
     {
       label: "Queued sessions",

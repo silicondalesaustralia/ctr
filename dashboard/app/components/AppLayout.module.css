@@ -3,115 +3,19 @@
   background: var(--bg);
 }
 
-.topbar {
-  height: 76px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 0 48px;
-}
-
-.left {
-  display: flex;
-  align-items: center;
-  gap: 36px;
-  min-width: 0;
-}
-
-.brand {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-  color: var(--text);
-  text-decoration: none;
-}
-
-.brandmark {
-  background: var(--accent);
-  color: white;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-}
-
-.nav {
-  display: flex;
-  gap: 4px;
-}
-
-.navLink {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 550;
-  text-decoration: none;
-  padding: 7px 12px;
-  border-radius: 8px;
-}
-
-.navLink:hover {
-  background: #f5f6f9;
-  color: var(--text);
-}
-
-.navActive {
-  composes: navLink;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #f1f2f6;
-  color: var(--muted);
-}
-
-.pillOn {
-  composes: pill;
-  background: var(--green-soft);
-  color: var(--green);
-}
-
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.logout {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  border-radius: var(--radius-control);
-  padding: 7px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .main {
   max-width: 1536px;
   margin: 0 auto;
   padding: 42px 48px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.7px;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
 }
 
 .heading {
@@ -122,13 +26,8 @@
   margin-bottom: 30px;
 }
 
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 1.7px;
-  font-weight: 650;
-  color: var(--muted);
-  text-transform: uppercase;
-  margin-bottom: 10px;
+.heading > div {
+  min-width: 0;
 }
 
 .title {
@@ -142,35 +41,16 @@
 .subtitle {
   margin: 9px 0 0;
   color: var(--muted);
+  font-size: 14px;
 }
 
 @media (max-width: 1000px) {
-  .topbar {
-    padding-inline: 24px;
-  }
   .main {
     padding: 30px 24px;
   }
 }
 
-@media (max-width: 700px) {
-  .topbar {
-    height: auto;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    row-gap: 10px;
-  }
-  .left {
-    display: contents;
-  }
-  .nav {
-    order: 3;
-    width: 100%;
-  }
-  .pill {
-    font-size: 11px;
-    padding: 4px 8px;
-  }
+@media (max-width: 600px) {
   .main {
     padding: 28px 16px;
   }
@@ -182,5 +62,6 @@
   }
   .subtitle {
     font-size: 12px;
+    max-width: 230px;
   }
 }

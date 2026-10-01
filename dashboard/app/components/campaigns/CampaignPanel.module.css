@@ -1,0 +1,130 @@
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 3px 8px #24294c03;
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 23px 24px 0;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  font-weight: 650;
+}
+
+.count {
+  font-size: 11px;
+  background: #f1f2f6;
+  color: #777f90;
+  border-radius: 6px;
+  margin-left: 8px;
+  padding: 3px 7px;
+}
+
+.small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.panelFoot {
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 24px;
+  color: #8c93a2;
+  font-size: 11px;
+}
+
+.message {
+  text-align: center;
+  padding: 45px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.error {
+  margin: 0 24px 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 12px;
+}
+
+.note {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 11px;
+  color: #8c93a2;
+  margin: 20px 2px;
+}
+
+.noteIcon {
+  border: 1px solid #a1a6b2;
+  border-radius: 50%;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  text-align: center;
+  line-height: 12px;
+  font-size: 9px;
+}
+
+.newCampaign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: 0 3px 7px #6155dc18;
+}
+
+.newCampaign:hover {
+  background: var(--accent-hover);
+}
+
+.newCampaign:focus-visible {
+  outline: 3px solid #aaa1f7;
+  outline-offset: 3px;
+}
+
+.plus {
+  font-size: 19px;
+  font-weight: 400;
+}
+
+@media (max-width: 600px) {
+  .panelHead,
+  .panelFoot {
+    padding-inline: 16px;
+  }
+  .panelHead > .small {
+    display: none;
+  }
+  .panelFoot {
+    gap: 16px;
+  }
+  .note {
+    align-items: flex-start;
+  }
+  .newCampaign {
+    padding: 10px;
+    font-size: 11px;
+  }
+}

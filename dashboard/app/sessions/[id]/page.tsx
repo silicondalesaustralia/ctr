@@ -7,6 +7,7 @@ import { apiGet } from "../../../lib/api";
 import AppLayout from "../../components/AppLayout";
 import AuthGate from "../../components/AuthGate";
 import SessionScreenshotPanel from "../../components/campaign/SessionScreenshotPanel";
+import { metaStyle, panelStyle, urlStyle } from "./session-detail-styles";
 
 interface SessionDetail {
   id: string;
@@ -30,6 +31,7 @@ interface SessionDetail {
   experiment: { id: string; name: string; targetUrl: string };
   events: Array<{ timestamp: string; eventType: string; metadataJson: string | null }>;
   hasSnapshot: boolean;
+  createdAt: string;
 }
 
 export default function SessionDetailPage() {
@@ -102,7 +104,14 @@ export default function SessionDetailPage() {
               <p><strong>Duration:</strong> {session.durationSeconds}s · {session.pageviews} pages · {session.internalClicks} internal clicks · {session.scrollDepth.toFixed(0)}% scroll</p>
             </div>
 
-            <SessionScreenshotPanel sessionId={session.id} hasSnapshot={session.hasSnapshot} style={panelStyle} />
+            <SessionScreenshotPanel
+              sessionId={session.id}
+              hasSnapshot={session.hasSnapshot}
+              campaignId={session.experiment.id}
+              query={session.queryText}
+              sessionAt={session.createdAt}
+              style={panelStyle}
+            />
 
             <div style={panelStyle}>
               <h3 style={{ marginTop: 0 }}>Event timeline</h3>
@@ -125,30 +134,3 @@ export default function SessionDetailPage() {
     </AuthGate>
   );
 }
-
-const panelStyle: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--radius)",
-  padding: 24,
-  marginBottom: 16,
-  boxShadow: "0 3px 8px #24294c03",
-  overflow: "hidden",
-  maxWidth: "100%",
-};
-
-const urlStyle: React.CSSProperties = {
-  overflowWrap: "anywhere",
-  wordBreak: "break-word",
-};
-
-const metaStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#767d8e",
-  margin: "4px 0 0",
-  whiteSpace: "pre-wrap",
-  overflowWrap: "anywhere",
-  wordBreak: "break-word",
-  maxWidth: "100%",
-  overflowX: "hidden",
-};

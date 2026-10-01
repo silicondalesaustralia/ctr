@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearStoredPassword } from "../../lib/auth";
 import { apiGet } from "../../lib/api";
+import header from "./AppHeader.module.css";
 import styles from "./AppLayout.module.css";
 
 const nav = [
@@ -55,10 +56,10 @@ export default function AppLayout({
 
   return (
     <div className={styles.page}>
-      <header className={styles.topbar}>
-        <div className={styles.left}>
-          <Link href="/" className={styles.brand}>
-            <span className={styles.brandmark} aria-hidden="true">
+      <header className={header.topbar}>
+        <div className={header.left}>
+          <Link href="/" className={header.brand}>
+            <span className={header.brandmark} aria-hidden="true">
               <svg width="19" height="19" viewBox="0 0 20 20" fill="none">
                 <path
                   d="M3 14V9M10 14V4M17 14V7"
@@ -70,12 +71,12 @@ export default function AppLayout({
             </span>
             CTR
           </Link>
-          <nav className={styles.nav}>
+          <nav className={header.nav}>
             {nav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={isActive(pathname, item.href) ? styles.navActive : styles.navLink}
+                className={isActive(pathname, item.href) ? header.navActive : header.navLink}
               >
                 {item.label}
               </Link>
@@ -83,22 +84,22 @@ export default function AppLayout({
           </nav>
         </div>
 
-        <div className={styles.right}>
-          <span className={running ? styles.pillOn : styles.pill}>
-            <span className={styles.dot} />
+        <div className={header.right}>
+          <span className={running ? header.pillOn : header.pill}>
+            <span className={header.dot} />
             {running ? (activeCount > 1 ? `${activeCount} running` : "Running") : "Stopped"}
           </span>
-          <button type="button" onClick={logout} className={styles.logout}>
+          <button type="button" onClick={logout} className={header.logout}>
             Log out
           </button>
         </div>
       </header>
 
       <main className={styles.main}>
+        {title && eyebrow && <div className={styles.eyebrow}>{eyebrow}</div>}
         {title && (
           <div className={styles.heading}>
             <div>
-              {eyebrow && <div className={styles.eyebrow}>{eyebrow}</div>}
               <h1 className={styles.title}>{title}</h1>
               {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
             </div>

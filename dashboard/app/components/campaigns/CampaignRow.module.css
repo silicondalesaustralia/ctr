@@ -1,0 +1,72 @@
+.campaign {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  min-width: 265px;
+}
+
+.monogram {
+  flex-shrink: 0;
+  background: #f0eefb;
+  color: #7569bd;
+  border: 1px solid #e9e5f8;
+  border-radius: 11px;
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.text {
+  min-width: 0;
+}
+
+.title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.15px;
+  color: var(--text);
+  text-decoration: none;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title:hover {
+  color: var(--accent);
+}
+
+.title:focus-visible {
+  outline: 3px solid #aaa1f7;
+  outline-offset: 3px;
+}
+
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #8a91a1;
+  margin-top: 4px;
+  max-width: 225px;
+}
+
+.kind {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #8a84ac;
+  background: #f5f5fa;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.keyword {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

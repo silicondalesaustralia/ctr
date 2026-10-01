@@ -1,0 +1,100 @@
+.location {
+  font-weight: 500;
+}
+
+.location small {
+  display: block;
+  color: #949aa8;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: #f1f2f6;
+  color: var(--muted);
+}
+
+.badgeActive {
+  composes: badge;
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.badgePaused {
+  composes: badge;
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 5px;
+}
+
+.number {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.queued {
+  display: inline-block;
+  background: #f4f4f9;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #666d80;
+}
+
+.date {
+  color: #7e8695;
+  font-size: 11px;
+}
+
+.updated {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #949aa8;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border: 1px solid #e6e7ef;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.open:hover {
+  background: #f8f8fc;
+}
+
+.open:focus-visible {
+  outline: 3px solid #aaa1f7;
+  outline-offset: 3px;
+}

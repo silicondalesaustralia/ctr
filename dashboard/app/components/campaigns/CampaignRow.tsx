@@ -1,6 +1,9 @@
 import Link from "next/link";
 import RankSparkline from "../RankSparkline";
+import CampaignProgressCell from "./CampaignProgressCell";
 import CampaignRowMenu from "./CampaignRowMenu";
+import { campaignProgress, formatNextSession } from "./campaign-progress";
+import progressStyles from "./CampaignProgress.module.css";
 import {
   campaignInitials,
   campaignTitle,
@@ -9,7 +12,8 @@ import {
   type CampaignAction,
   type CampaignSummary,
 } from "./campaign-list-types";
-import styles from "./CampaignTable.module.css";
+import cells from "./CampaignCells.module.css";
+import styles from "./CampaignRow.module.css";
 
 interface Props {
   campaign: CampaignSummary;
@@ -26,9 +30,9 @@ const busyLabels: Record<CampaignAction, string> = {
 };
 
 function badgeClass(status: string): string {
-  if (status === "active") return styles.badgeActive;
-  if (status === "paused") return styles.badgePaused;
-  return styles.badge;
+  if (status === "active") return cells.badgeActive;
+  if (status === "paused") return cells.badgePaused;
+  return cells.badge;
 }
 
 export default function CampaignRow({ campaign, busyAction, onStart, onStop, onDelete }: Props) {
@@ -37,6 +41,8 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
   const isGmb = campaign.campaignKind === "gmb";
   const href = `/campaign/${campaign.id}`;
   const label = campaign.keyword || title;
+  const progress = campaignProgress(campaign);
+  const next = formatNextSession(campaign.nextSessionAt);
 
   return (
     <tr>
@@ -45,43 +51,54 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
           <div className={styles.monogram} aria-hidden="true">
             {campaignInitials(title)}
           </div>
-          <div>
+          <div className={styles.text}>
             <Link href={href} className={styles.title} title={isGmb ? title : campaign.targetUrl}>
               {title}
             </Link>
             <span className={styles.sub} title={campaign.keyword}>
               <span className={styles.kind}>{isGmb ? "GMB" : "URL"}</span>
-              {campaign.keyword || "No keyword"}
+              <span className={styles.keyword}>{campaign.keyword || "No keyword"}</span>
             </span>
           </div>
         </div>
       </td>
-      <td className={styles.location}>
+      <td className={cells.location}>
         {region.primary}
         <small>{region.secondary}</small>
       </td>
       <td>
         <span className={badgeClass(campaign.status)}>
-          <span className={styles.dot} />
+          <span className={cells.dot} />
           {campaign.status}
         </span>
+        <small className={cells.updated}>Updated {formatUpdated(campaign.updatedAt)}</small>
       </td>
-      <td className={styles.number}>{campaign.monthlySessionTarget}</td>
-      <td className={styles.number}>{campaign.completedSessions}</td>
-      <td className={styles.number}>
-        <span className={styles.queued}>{campaign.scheduledSessions}</span>
+      <td className={cells.number}>{campaign.monthlySessionTarget}</td>
+      <td className={cells.number}>{campaign.completedSessions}</td>
+      <td className={cells.number}>
+        <span className={cells.queued}>{campaign.scheduledSessions}</span>
+      </td>
+      <td className={progressStyles.next}>
+        {next ? next.when : "—"}
+        <small>{next ? next.hint : "Nothing queued"}</small>
+      </td>
+      <td className={progressStyles.days}>
+        {progress.day > 0 ? `Day ${progress.day} of ${progress.totalDays}` : `${progress.totalDays} days`}
+        <small>{progress.day > 0 ? `${progress.totalDays}-day campaign` : "Not started"}</small>
+      </td>
+      <td>
+        <CampaignProgressCell progress={progress} />
       </td>
       <td>
         <RankSparkline ranks={campaign.rankHistory ?? []} />
       </td>
-      <td className={styles.date}>{formatUpdated(campaign.updatedAt)}</td>
       <td>
-        <div className={styles.actions}>
-          <Link href={href} className={styles.open}>
+        <div className={cells.actions}>
+          <Link href={href} className={cells.open}>
             Open <span aria-hidden="true">↗</span>
           </Link>
           {busyAction ? (
-            <span className={styles.date} role="status">
+            <span className={cells.date} role="status">
               {busyLabels[busyAction]}
             </span>
           ) : (

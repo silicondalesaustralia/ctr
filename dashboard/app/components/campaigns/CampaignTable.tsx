@@ -10,7 +10,18 @@ interface Props {
   onDelete: (id: string, label: string) => void;
 }
 
-const headers = ["Campaign", "Region", "Status", "Planned", "Done", "Queued", "Rank by session", "Updated"];
+const headers = [
+  "Campaign",
+  "Region",
+  "Status",
+  "Planned",
+  "Done",
+  "Queued",
+  "Next session",
+  "Days",
+  "Progress",
+  "Rank by session",
+];
 
 export default function CampaignTable({ campaigns, busy, onStart, onStop, onDelete }: Props) {
   return (

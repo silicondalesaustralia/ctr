@@ -58,7 +58,7 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-button:not(:disabled):hover {
+:where(button:not(:disabled):hover) {
   filter: brightness(0.97);
 }
 

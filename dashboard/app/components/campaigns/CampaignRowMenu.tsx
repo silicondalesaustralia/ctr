@@ -11,7 +11,9 @@ interface Props {
   onDelete: () => void;
 }
 
-const MENU_WIDTH = 150;
+const MENU_WIDTH = 130;
+const MENU_HEIGHT = 86;
+const EDGE = 8;
 
 export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDelete }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -24,7 +26,13 @@ export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDe
       setPosition(null);
       return;
     }
-    setPosition({ top: rect.bottom + 6, left: Math.max(8, rect.right - MENU_WIDTH) });
+    const fitsBelow = rect.bottom + 4 + MENU_HEIGHT <= window.innerHeight - EDGE;
+    const top = fitsBelow ? rect.bottom + 4 : Math.max(EDGE, rect.top - 4 - MENU_HEIGHT);
+    const left = Math.min(
+      Math.max(EDGE, rect.right - MENU_WIDTH),
+      window.innerWidth - MENU_WIDTH - EDGE,
+    );
+    setPosition({ top, left });
   }
 
   useEffect(() => {

@@ -9,7 +9,6 @@ interface Props {
 const tabs: Array<{ id: CampaignTab; label: string }> = [
   { id: "plan", label: "Plan" },
   { id: "sessions", label: "Sessions" },
-  { id: "snapshots", label: "Snapshots" },
   { id: "identities", label: "Identities" },
 ];
 
