@@ -1,305 +1,117 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { apiDelete, apiGet, apiPost } from "../../lib/api";
+import { useMemo, useState } from "react";
 import AppLayout from "./AppLayout";
-import RankSparkline from "./RankSparkline";
-import {
-  cellStyle,
-  panelStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
-  thStyle,
-} from "./campaign/shared";
+import CampaignStats from "./campaigns/CampaignStats";
+import CampaignTable from "./campaigns/CampaignTable";
+import CampaignToolbar from "./campaigns/CampaignToolbar";
+import { matchesStatus, regionParts, type StatusFilter } from "./campaigns/campaign-list-types";
+import { useCampaigns } from "./campaigns/useCampaigns";
+import { primaryButtonStyle } from "./campaign/shared";
+import styles from "./campaigns/CampaignList.module.css";
 
-interface CampaignSummary {
-  id: string;
-  name: string;
-  status: string;
-  keyword: string;
-  targetUrl: string;
-  campaignKind?: string;
-  region: string;
-  focusCity?: string | null;
-  gmbBusinessName?: string | null;
-  campaignDurationDays: number;
-  monthlySessionTarget: number;
-  queryCount: number;
-  completedSessions: number;
-  scheduledSessions: number;
-  /** Rank observed by each session on the main keyword, oldest first. */
-  rankHistory?: number[];
-  updatedAt: string;
-  startDate: string | null;
-  endDate: string | null;
-}
-
-/** Picks up each finished session's rank without a manual reload. */
-const REFRESH_MS = 30_000;
-
-function statusColor(status: string): string {
-  if (status === "active") return "#16a34a";
-  if (status === "paused") return "#d97706";
-  if (status === "draft") return "#64748b";
-  return "#94a3b8";
-}
+const statuses: StatusFilter[] = ["all", "active", "stopped", "draft"];
 
 export default function CampaignList() {
-  const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
-  const [activeCount, setActiveCount] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busyAction, setBusyAction] = useState<{
-    id: string;
-    action: "start" | "stop" | "delete";
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const data = useCampaigns();
+  const { campaigns } = data;
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
+  const [region, setRegion] = useState("all");
 
-  const load = useCallback(async () => {
-    try {
-      const result = await apiGet<{
-        campaigns: CampaignSummary[];
-        activeCount: number;
-        running: boolean;
-      }>("/campaigns");
-      setCampaigns(result.campaigns);
-      setActiveCount(result.activeCount);
-      setRunning(result.running);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load campaigns");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        statuses.map((s) => [s, campaigns.filter((c) => matchesStatus(c.status, s)).length]),
+      ) as Record<StatusFilter, number>,
+    [campaigns],
+  );
+  const regions = useMemo(
+    () => [...new Set(campaigns.map((c) => regionParts(c).primary))].sort(),
+    [campaigns],
+  );
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return campaigns.filter((c) => {
+      const haystack = [c.name, c.keyword, c.targetUrl, c.gmbBusinessName ?? ""].join(" ").toLowerCase();
+      return (
+        matchesStatus(c.status, status) &&
+        haystack.includes(query) &&
+        (region === "all" || regionParts(c).primary === region)
+      );
+    });
+  }, [campaigns, status, search, region]);
 
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [load]);
-
-  async function startCampaign(id: string) {
-    setBusyAction({ id, action: "start" });
-    setError(null);
-    try {
-      await apiPost(`/campaigns/${id}/run`);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start campaign");
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function stopCampaign(id: string) {
-    setBusyAction({ id, action: "stop" });
-    setError(null);
-    try {
-      await apiPost(`/campaigns/${id}/stop`);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to stop campaign");
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function deleteCampaignHandler(id: string, keyword: string) {
-    const label = keyword.trim() || "this campaign";
-    if (
-      !window.confirm(
-        `Delete "${label}"? This removes the campaign, scheduled sessions, and session history. This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
-    setBusyAction({ id, action: "delete" });
-    setError(null);
-    try {
-      await apiDelete(`/campaigns/${id}`);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete campaign");
-    } finally {
-      setBusyAction(null);
-    }
-  }
+  const newButton = (
+    <Link href="/campaign/new" style={{ ...primaryButtonStyle("var(--accent)"), whiteSpace: "nowrap" }}>
+      <span aria-hidden="true" style={{ fontSize: 19, fontWeight: 400, lineHeight: 1 }}>+</span>
+      New campaign
+    </Link>
+  );
 
   return (
-    <AppLayout title="Campaigns">
-      <section style={panelStyle}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            marginBottom: 20,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <p style={{ color: "#64748b", margin: "0 0 4px", fontSize: 14 }}>
-              {running
-                ? `${activeCount} campaign${activeCount === 1 ? "" : "s"} running`
-                : "No campaigns running"}
-            </p>
-            <p style={{ color: "#64748b", margin: 0, fontSize: 14 }}>
-              Run multiple campaigns in parallel — they share the identity pool and worker queue.
-            </p>
-          </div>
-          <Link href="/campaign/new" style={primaryButtonStyle("#2563eb")}>
-            New campaign
-          </Link>
-        </div>
+    <AppLayout
+      eyebrow="Overview"
+      title="Campaigns"
+      subtitle="Every campaign, its session progress and latest rank, in one place."
+      actions={newButton}
+    >
+      <CampaignStats campaigns={campaigns} activeCount={data.activeCount} />
 
-        {loading ? (
-          <p style={{ color: "#64748b" }}>Loading campaigns...</p>
+      <section className={styles.panel}>
+        <div className={styles.panelHead}>
+          <div className={styles.sectionTitle}>
+            Your campaigns <span className={styles.count}>{campaigns.length}</span>
+          </div>
+          {data.lastLoaded && (
+            <span className={styles.small}>
+              Last updated {data.lastLoaded.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+        <CampaignToolbar
+          status={status}
+          counts={counts}
+          onStatusChange={setStatus}
+          search={search}
+          onSearchChange={setSearch}
+          region={region}
+          regions={regions}
+          onRegionChange={setRegion}
+        />
+        {data.error && <p className={styles.error} role="alert">{data.error}</p>}
+
+        {data.loading ? (
+          <p className={styles.message}>Loading campaigns…</p>
         ) : campaigns.length === 0 ? (
-          <p style={{ color: "#64748b" }}>
+          <p className={styles.message}>
             No campaigns yet. Create one to analyze keywords, run Google preflight, and schedule sessions.
           </p>
+        ) : visible.length === 0 ? (
+          <p className={styles.message}>No campaigns match these filters.</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-              <thead>
-                <tr style={{ background: "#f8fafc" }}>
-                  {[
-                    "Keyword",
-                    "URL",
-                    "Region",
-                    "Status",
-                    "Planned",
-                    "Done",
-                    "Queued",
-                    "Updated",
-                    "",
-                    "Rank by session",
-                  ].map((header) => (
-                    <th key={header} style={thStyle}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.map((campaign) => {
-                  const isBusy = busyAction?.id === campaign.id;
-                  const busyLabel =
-                    busyAction?.action === "start"
-                      ? "Starting..."
-                      : busyAction?.action === "stop"
-                        ? "Stopping..."
-                        : "Deleting...";
-
-                  return (
-                  <tr key={campaign.id}>
-                    <td style={cellStyle}>
-                      <strong>{campaign.keyword || campaign.name}</strong>
-                      {campaign.campaignKind === "gmb" && (
-                        <span
-                          style={{
-                            marginLeft: 8,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: "#0369a1",
-                            background: "#e0f2fe",
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                          }}
-                        >
-                          GMB
-                        </span>
-                      )}
-                    </td>
-                    <td style={cellStyle}>
-                      <a
-                        href={campaign.targetUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: "#2563eb" }}
-                      >
-                        {campaign.campaignKind === "gmb"
-                          ? (campaign.gmbBusinessName ?? "Maps listing")
-                          : campaign.targetUrl.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
-                      </a>
-                    </td>
-                    <td style={cellStyle}>
-                      {campaign.focusCity
-                        ? `${campaign.focusCity} (${campaign.region})`
-                        : campaign.region}
-                    </td>
-                    <td style={cellStyle}>
-                      <span
-                        style={{
-                          color: statusColor(campaign.status),
-                          fontWeight: 600,
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {campaign.status}
-                      </span>
-                    </td>
-                    <td style={cellStyle}>{campaign.monthlySessionTarget}</td>
-                    <td style={cellStyle}>{campaign.completedSessions}</td>
-                    <td style={cellStyle}>{campaign.scheduledSessions}</td>
-                    <td style={cellStyle}>
-                      {new Date(campaign.updatedAt).toLocaleDateString()}
-                    </td>
-                    <td style={cellStyle}>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Link href={`/campaign/${campaign.id}`} style={secondaryButtonStyle(isBusy)}>
-                          Open
-                        </Link>
-                        {campaign.status === "active" ? (
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void stopCampaign(campaign.id)}
-                            style={primaryButtonStyle("#dc2626", isBusy)}
-                          >
-                            {isBusy ? busyLabel : "Stop"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => void startCampaign(campaign.id)}
-                            style={primaryButtonStyle("#16a34a", isBusy)}
-                          >
-                            {isBusy ? busyLabel : "Start"}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() =>
-                            void deleteCampaignHandler(campaign.id, campaign.keyword || campaign.name)
-                          }
-                          style={{
-                            ...secondaryButtonStyle(isBusy),
-                            color: "#b91c1c",
-                            borderColor: "#fecaca",
-                          }}
-                        >
-                          {isBusy ? busyLabel : "Delete"}
-                        </button>
-                      </div>
-                    </td>
-                    <td style={cellStyle}>
-                      <RankSparkline ranks={campaign.rankHistory ?? []} />
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <CampaignTable
+            campaigns={visible}
+            busy={data.busy}
+            onStart={data.startCampaign}
+            onStop={data.stopCampaign}
+            onDelete={data.deleteCampaign}
+          />
         )}
 
-        {error && <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p>}
+        <div className={styles.panelFoot}>
+          <span>
+            Showing {visible.length} of {campaigns.length} campaigns
+          </span>
+          <span>Latest rank shown · lower is better</span>
+        </div>
       </section>
+
+      <div className={styles.note}>
+        <span aria-hidden="true">ⓘ</span>
+        <span>Campaigns run in parallel and share the same identity pool and worker queue.</span>
+      </div>
     </AppLayout>
   );
 }

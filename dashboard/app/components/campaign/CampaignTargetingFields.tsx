@@ -63,7 +63,7 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
   }
 
   return (
-    <fieldset style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, margin: 0 }}>
+    <fieldset style={{ border: "1px solid #e9ecf2", borderRadius: 8, padding: 14, margin: 0 }}>
       <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
         Identities &amp; GPS targeting
       </legend>
@@ -82,7 +82,7 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
           />
           <span>
             <strong>{option.title}</strong>
-            <div style={{ color: "#64748b", fontSize: 13 }}>{option.detail}</div>
+            <div style={{ color: "#767d8e", fontSize: 13 }}>{option.detail}</div>
           </span>
         </label>
       ))}
@@ -100,7 +100,7 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
             onChange={(e) => setPointText(e.target.value)}
             onBlur={commitPoint}
           />
-          {pointError && <div style={{ color: "#b91c1c", fontSize: 12 }}>{pointError}</div>}
+          {pointError && <div style={{ color: "#bf4352", fontSize: 12 }}>{pointError}</div>}
         </label>
         <label>
           <HintLabel label="Radius (km)" hint="Spread of identity GPS points around the centre. Default 3 km." />

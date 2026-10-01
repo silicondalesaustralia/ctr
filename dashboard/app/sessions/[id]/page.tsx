@@ -74,7 +74,7 @@ export default function SessionDetailPage() {
 
         {error && (
           <div style={panelStyle}>
-            <p style={{ color: "#b91c1c", margin: 0 }}>{error}</p>
+            <p style={{ color: "#bf4352", margin: 0 }}>{error}</p>
           </div>
         )}
 
@@ -127,11 +127,12 @@ export default function SessionDetailPage() {
 }
 
 const panelStyle: React.CSSProperties = {
-  background: "white",
-  borderRadius: 12,
+  background: "var(--surface)",
+  border: "1px solid var(--line)",
+  borderRadius: "var(--radius)",
   padding: 24,
   marginBottom: 16,
-  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+  boxShadow: "0 3px 8px #24294c03",
   overflow: "hidden",
   maxWidth: "100%",
 };
@@ -143,7 +144,7 @@ const urlStyle: React.CSSProperties = {
 
 const metaStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#64748b",
+  color: "#767d8e",
   margin: "4px 0 0",
   whiteSpace: "pre-wrap",
   overflowWrap: "anywhere",

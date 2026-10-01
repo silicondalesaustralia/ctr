@@ -56,9 +56,9 @@ export default function CampaignSetupStep({
 
   return (
     <section style={panelStyle}>
-      <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>Step 1 of 2</p>
+      <p style={{ color: "#767d8e", margin: "0 0 8px", fontSize: 14 }}>Step 1 of 2</p>
       <h2 style={{ margin: "0 0 8px" }}>Target page</h2>
-      <p style={{ color: "#64748b", margin: "0 0 24px", fontSize: 15 }}>
+      <p style={{ color: "#767d8e", margin: "0 0 24px", fontSize: 15 }}>
         Enter your keyword, URL, and region. Pick a GSC account and property to pull live search data,
         then analyze to get recommended campaign settings.
       </p>
@@ -140,7 +140,7 @@ export default function CampaignSetupStep({
         )}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <Link href="/gsc" style={{ color: "#2563eb", fontSize: 14 }}>
+          <Link href="/gsc" style={{ color: "#6155dc", fontSize: 14 }}>
             Manage GSC accounts
           </Link>
           {gscConnectionId && !gscSiteUrl && !sitesLoading && (
@@ -155,7 +155,7 @@ export default function CampaignSetupStep({
         type="button"
         onClick={onAnalyze}
         disabled={busy || !canAnalyze}
-        style={{ ...primaryButtonStyle("#2563eb"), marginTop: 24 }}
+        style={{ ...primaryButtonStyle("#6155dc"), marginTop: 24 }}
       >
         {busy ? "Fetching GSC & building plan..." : "Analyze & recommend settings"}
       </button>

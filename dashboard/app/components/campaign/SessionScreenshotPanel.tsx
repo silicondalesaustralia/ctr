@@ -41,7 +41,7 @@ export default function SessionScreenshotPanel({ sessionId, hasSnapshot, style }
       <div style={{ display: "flex", gap: 12, alignItems: "baseline", marginBottom: 12 }}>
         <h3 style={{ margin: 0 }}>Screenshot before click</h3>
         {src && (
-          <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
+          <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#6155dc" }}>
             Open full size ↗
           </a>
         )}
@@ -55,14 +55,14 @@ export default function SessionScreenshotPanel({ sessionId, hasSnapshot, style }
               display: "block",
               maxWidth: "100%",
               maxHeight: 480,
-              border: "1px solid #e2e8f0",
+              border: "1px solid #e9ecf2",
               borderRadius: 8,
               cursor: "zoom-in",
             }}
           />
         </a>
       ) : (
-        <p style={{ margin: 0, color: error ? "#b91c1c" : "#64748b" }}>
+        <p style={{ margin: 0, color: error ? "#bf4352" : "#767d8e" }}>
           {error ?? (hasSnapshot ? "Loading…" : "No screenshot — the session didn't find the target, or ran before screenshots were added.")}
         </p>
       )}

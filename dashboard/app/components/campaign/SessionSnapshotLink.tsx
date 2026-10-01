@@ -41,7 +41,7 @@ export default function SessionSnapshotLink({ sessionId }: Props) {
         background: "none",
         border: "none",
         padding: 0,
-        color: error ? "#b91c1c" : "#2563eb",
+        color: error ? "#bf4352" : "#6155dc",
         cursor: opening ? "wait" : "pointer",
         textDecoration: "underline",
         font: "inherit",

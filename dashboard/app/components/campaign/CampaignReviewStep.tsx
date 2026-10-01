@@ -70,8 +70,8 @@ interface Props {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: "#f8fafc", borderRadius: 8, padding: 12 }}>
-      <div style={{ fontSize: 12, color: "#64748b" }}>{label}</div>
+    <div style={{ background: "#fafbfc", borderRadius: 8, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#767d8e" }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
     </div>
   );
@@ -115,11 +115,11 @@ export default function CampaignReviewStep({
   return (
     <>
       <section style={panelStyle}>
-        <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>Step 2 of 2</p>
+        <p style={{ color: "#767d8e", margin: "0 0 8px", fontSize: 14 }}>Step 2 of 2</p>
         <h2 style={{ margin: "0 0 8px" }}>
           {isGmb ? "Review GMB / Places campaign" : "Review recommended plan"}
         </h2>
-        <p style={{ color: "#64748b", margin: "0 0 20px", fontSize: 15 }}>
+        <p style={{ color: "#767d8e", margin: "0 0 20px", fontSize: 15 }}>
           {isGmb
             ? "Settings are for Google Business Profile / Places rankings. Adjust below, save, then validate Places ranks before starting."
             : "Settings were chosen from GSC data and your keyword cluster. Adjust anything below, save your draft, then validate on Google before starting."}
@@ -131,10 +131,10 @@ export default function CampaignReviewStep({
               padding: "12px 16px",
               borderRadius: 8,
               marginBottom: 20,
-              background: error ? "#fef2f2" : "#eff6ff",
-              border: `1px solid ${error ? "#fecaca" : "#bfdbfe"}`,
+              background: error ? "#fdf2f3" : "#efedfc",
+              border: `1px solid ${error ? "#f3cdd2" : "#d6d1f7"}`,
               fontSize: 14,
-              color: error ? "#b91c1c" : "#1d4ed8",
+              color: error ? "#bf4352" : "#5246c8",
             }}
           >
             {error ?? message}
@@ -149,15 +149,15 @@ export default function CampaignReviewStep({
               marginBottom: 20,
               background:
                 preflightSummary.status === "blocked"
-                  ? "#fef2f2"
+                  ? "#fdf2f3"
                   : preflightSummary.findableCount > 0
-                    ? "#ecfdf5"
+                    ? "#eaf7f1"
                     : "#fffbeb",
               border: `1px solid ${
                 preflightSummary.status === "blocked"
-                  ? "#fecaca"
+                  ? "#f3cdd2"
                   : preflightSummary.findableCount > 0
-                    ? "#6ee7b7"
+                    ? "#a6dcc8"
                     : "#fcd34d"
               }`,
               fontSize: 14,
@@ -189,8 +189,8 @@ export default function CampaignReviewStep({
               padding: "12px 16px",
               borderRadius: 8,
               marginBottom: 20,
-              background: gscStatus === "live" ? "#ecfdf5" : "#f8fafc",
-              border: `1px solid ${gscStatus === "live" ? "#6ee7b7" : "#e2e8f0"}`,
+              background: gscStatus === "live" ? "#eaf7f1" : "#fafbfc",
+              border: `1px solid ${gscStatus === "live" ? "#a6dcc8" : "#e9ecf2"}`,
               fontSize: 14,
             }}
           >
@@ -206,8 +206,8 @@ export default function CampaignReviewStep({
               padding: "12px 16px",
               borderRadius: 8,
               marginBottom: 20,
-              background: "#f0f9ff",
-              border: "1px solid #bae6fd",
+              background: "#f5f4fd",
+              border: "1px solid #d6d1f7",
               fontSize: 14,
             }}
           >
@@ -225,21 +225,21 @@ export default function CampaignReviewStep({
                   style={{
                     padding: "12px 16px",
                     borderRadius: 8,
-                    background: "#f8fafc",
-                    border: "1px solid #e2e8f0",
+                    background: "#fafbfc",
+                    border: "1px solid #e9ecf2",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                     <strong>{item.setting}</strong>
-                    <span style={{ color: "#2563eb", fontWeight: 600 }}>{item.value}</span>
+                    <span style={{ color: "#6155dc", fontWeight: 600 }}>{item.value}</span>
                   </div>
-                  <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>{item.reason}</p>
+                  <p style={{ margin: "6px 0 0", color: "#767d8e", fontSize: 14 }}>{item.reason}</p>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <p style={{ color: "#64748b", fontSize: 14, marginBottom: 20 }}>
+          <p style={{ color: "#767d8e", fontSize: 14, marginBottom: 20 }}>
             No analysis notes saved. Use Re-analyze to fetch GSC and regenerate explanations.
           </p>
         )}
@@ -269,9 +269,9 @@ export default function CampaignReviewStep({
                         ...secondaryButtonStyle(false),
                         padding: "6px 10px",
                         fontSize: 13,
-                        background: selected ? "#1e293b" : "#fff",
-                        color: selected ? "#fff" : "#334155",
-                        borderColor: selected ? "#1e293b" : "#cbd5e1",
+                        background: selected ? "#202535" : "#fff",
+                        color: selected ? "#fff" : "#3a4152",
+                        borderColor: selected ? "#202535" : "#dfe2ea",
                       }}
                     >
                       {preset.label}
@@ -298,7 +298,7 @@ export default function CampaignReviewStep({
           {isGmb && (
             <fieldset
               style={{
-                border: "1px solid #e2e8f0",
+                border: "1px solid #e9ecf2",
                 borderRadius: 8,
                 padding: 14,
                 margin: 0,
@@ -307,7 +307,7 @@ export default function CampaignReviewStep({
               <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
                 Identity pool
               </legend>
-              <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+              <p style={{ margin: "0 0 10px", color: "#767d8e", fontSize: 13 }}>
                 Stop the campaign to change this, save, then start again to rebuild the schedule.
               </p>
               <label
@@ -329,7 +329,7 @@ export default function CampaignReviewStep({
                 />
                 <span>
                   <strong>Hyper-local (city)</strong>
-                  <div style={{ color: "#64748b", fontSize: 13 }}>
+                  <div style={{ color: "#767d8e", fontSize: 13 }}>
                     Only identities whose home city matches the geo city from Setup
                     {form.focusCity ? ` (${form.focusCity})` : ""}.
                   </div>
@@ -353,7 +353,7 @@ export default function CampaignReviewStep({
                 />
                 <span>
                   <strong>Country-wide (Australia)</strong>
-                  <div style={{ color: "#64748b", fontSize: 13 }}>
+                  <div style={{ color: "#767d8e", fontSize: 13 }}>
                     Any eligible AU identity. Proxies still use the focus city when available.
                   </div>
                 </span>
@@ -465,7 +465,7 @@ export default function CampaignReviewStep({
         </div>
 
         {running && (
-          <p style={{ color: "#64748b", fontSize: 14, marginTop: 16 }}>
+          <p style={{ color: "#767d8e", fontSize: 14, marginTop: 16 }}>
             Campaign is running. You can still change the schedule window and queries, then save to
             rebuild the upcoming queue; stop the campaign to edit other settings.
           </p>
@@ -519,7 +519,7 @@ export default function CampaignReviewStep({
               type="button"
               onClick={onSaveAndStart}
               disabled={startDisabled}
-              style={primaryButtonStyle("#16a34a", startDisabled)}
+              style={primaryButtonStyle("#198366", startDisabled)}
             >
               {busy === "run" ? "Starting..." : "Save & start campaign"}
             </button>
@@ -528,7 +528,7 @@ export default function CampaignReviewStep({
               type="button"
               onClick={onStop}
               disabled={Boolean(busy)}
-              style={primaryButtonStyle("#dc2626", Boolean(busy))}
+              style={primaryButtonStyle("#bf4352", Boolean(busy))}
             >
               {busy === "stop" ? "Stopping..." : "Stop campaign"}
             </button>
@@ -596,7 +596,7 @@ export default function CampaignReviewStep({
               />
             </label>
           </div>
-          <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 13 }}>
+          <p style={{ margin: "12px 0 0", color: "#767d8e", fontSize: 13 }}>
             Organic traffic is mostly unique visitors. Use 1 for all-unique sessions, or 2 if a few
             may return. Click Update preview after changing these.
           </p>
@@ -626,7 +626,7 @@ export default function CampaignReviewStep({
                       : ""}{" "}
                   identities
                 </strong>
-                <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
+                <p style={{ margin: "6px 0 0", color: "#767d8e", fontSize: 14 }}>
                   {form.campaignKind === "gmb" && form.identityGeoScope === "country" ? (
                     <>
                       You have {intensity.activeIdentityCount} eligible country-wide but this plan
@@ -653,7 +653,7 @@ export default function CampaignReviewStep({
                 type="button"
                 onClick={onCreateIdentities}
                 disabled={Boolean(busy) || running}
-                style={primaryButtonStyle("#2563eb", Boolean(busy) || running)}
+                style={primaryButtonStyle("#6155dc", Boolean(busy) || running)}
               >
                 {busy === "identities"
                   ? "Creating..."
@@ -671,13 +671,13 @@ export default function CampaignReviewStep({
       {form.queries.length > 0 && (
         <section style={{ ...panelStyle, marginBottom: 24 }}>
           <h2 style={{ margin: "0 0 16px" }}>Query cluster</h2>
-          <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
+          <p style={{ color: "#767d8e", fontSize: 14, margin: "0 0 12px" }}>
             {isGmb
               ? "GMB Place Ranking is from live local pack / More places validation. There is no GSC for Places — leave plan position blank until validated. Disable rows you do not want scheduled."
               : "GSC columns stay from analyze. Google column shows live preflight only. Disable rows you do not want scheduled."}
           </p>
           {notFoundQueries.length > 0 && (
-            <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 12px" }}>
+            <p style={{ color: "#767d8e", fontSize: 14, margin: "0 0 12px" }}>
               {isGmb
                 ? `Not found in local pack / More places: ${notFoundQueries.join(", ")}`
                 : `Not found live on Google (3 pages): ${notFoundQueries.join(", ")}`}
@@ -686,7 +686,7 @@ export default function CampaignReviewStep({
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
-                <tr style={{ background: "#f8fafc" }}>
+                <tr style={{ background: "#fafbfc" }}>
                   {(isGmb
                     ? [
                         "Use",

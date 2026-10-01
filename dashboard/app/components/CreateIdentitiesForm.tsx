@@ -29,7 +29,7 @@ export default function CreateIdentitiesForm({ busy, onCreate }: CreateIdentitie
 
   const fieldStyle = {
     padding: "8px 10px",
-    border: "1px solid #cbd5e1",
+    border: "1px solid #dfe2ea",
     borderRadius: 6,
     fontSize: 14,
   };
@@ -59,7 +59,7 @@ export default function CreateIdentitiesForm({ busy, onCreate }: CreateIdentitie
       </select>
       <button
         type="button"
-        style={primaryButtonStyle("#2563eb", busy || !valid)}
+        style={primaryButtonStyle("#6155dc", busy || !valid)}
         disabled={busy || !valid}
         onClick={() => onCreate(count, city || null)}
       >

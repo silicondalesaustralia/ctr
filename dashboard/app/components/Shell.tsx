@@ -20,7 +20,7 @@ export default function Shell({
     <div>
       <header
         style={{
-          background: "#0f172a",
+          background: "#202535",
           color: "white",
           padding: "16px 24px",
           display: "flex",
@@ -30,7 +30,7 @@ export default function Shell({
       >
         <strong>AU SERP Experiment Platform</strong>
         {nav.map((item) => (
-          <Link key={item.href} href={item.href} style={{ color: "#cbd5e1" }}>
+          <Link key={item.href} href={item.href} style={{ color: "#dfe2ea" }}>
             {item.label}
           </Link>
         ))}
@@ -67,7 +67,7 @@ export function Table({ headers, rows }: { headers: string[]; rows: string[][] }
           {headers.map((header) => (
             <th
               key={header}
-              style={{ textAlign: "left", borderBottom: "1px solid #e2e8f0", padding: 8 }}
+              style={{ textAlign: "left", borderBottom: "1px solid #e9ecf2", padding: 8 }}
             >
               {header}
             </th>
@@ -78,7 +78,7 @@ export function Table({ headers, rows }: { headers: string[]; rows: string[][] }
         {rows.map((row, index) => (
           <tr key={index}>
             {row.map((cell, cellIndex) => (
-              <td key={cellIndex} style={{ borderBottom: "1px solid #f1f5f9", padding: 8 }}>
+              <td key={cellIndex} style={{ borderBottom: "1px solid #f0f1f5", padding: 8 }}>
                 {cell}
               </td>
             ))}

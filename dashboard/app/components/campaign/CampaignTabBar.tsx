@@ -1,5 +1,4 @@
 import type { CampaignTab } from "./shared";
-import { secondaryButtonBase } from "./shared";
 
 interface Props {
   active: CampaignTab;
@@ -18,22 +17,43 @@ export default function CampaignTabBar({ active, onChange, showPlan }: Props) {
   const visible = showPlan ? tabs : tabs.filter((tab) => tab.id !== "plan");
 
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
-      {visible.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onChange(tab.id)}
-          style={{
-            ...secondaryButtonBase,
-            background: active === tab.id ? "#0f172a" : "white",
-            color: active === tab.id ? "white" : "#0f172a",
-            borderColor: active === tab.id ? "#0f172a" : "#cbd5e1",
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div
+      role="tablist"
+      style={{
+        display: "inline-flex",
+        gap: 4,
+        padding: 4,
+        marginBottom: 24,
+        borderRadius: 9,
+        background: "#eef0f4",
+        flexWrap: "wrap",
+      }}
+    >
+      {visible.map((tab) => {
+        const selected = active === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.id)}
+            style={{
+              border: 0,
+              borderRadius: 7,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 550,
+              cursor: "pointer",
+              background: selected ? "var(--surface)" : "transparent",
+              color: selected ? "var(--text)" : "var(--muted)",
+              boxShadow: selected ? "0 1px 4px #20253512" : "none",
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

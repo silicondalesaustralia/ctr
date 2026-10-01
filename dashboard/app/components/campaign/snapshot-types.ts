@@ -28,10 +28,10 @@ export function positionLabel(row: RankSnapshotRow): string {
 }
 
 export const statusColors: Record<SnapshotStatus, string> = {
-  captured: "#15803d",
+  captured: "#198366",
   not_found: "#b45309",
-  pending: "#64748b",
-  running: "#2563eb",
-  blocked: "#b91c1c",
-  error: "#b91c1c",
+  pending: "#767d8e",
+  running: "#6155dc",
+  blocked: "#bf4352",
+  error: "#bf4352",
 };

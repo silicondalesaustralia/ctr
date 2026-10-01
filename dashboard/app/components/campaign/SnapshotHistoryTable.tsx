@@ -23,7 +23,7 @@ function whenLabel(row: RankSnapshotRow): string {
 
 export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Props) {
   if (rows.length === 0) {
-    return <p style={{ color: "#64748b", margin: 0 }}>No snapshots for this query yet.</p>;
+    return <p style={{ color: "#767d8e", margin: 0 }}>No snapshots for this query yet.</p>;
   }
 
   return (
@@ -46,7 +46,7 @@ export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Pro
               onClick={() => onSelect(row)}
               style={{
                 cursor: row.hasImage ? "pointer" : "default",
-                background: row.id === selectedId ? "#f1f5f9" : undefined,
+                background: row.id === selectedId ? "#f0f1f5" : undefined,
               }}
             >
               <td style={cellStyle}>{whenLabel(row)}</td>
@@ -60,7 +60,7 @@ export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Pro
                   : placesSourceLabel(row.source ?? undefined) || "—"}
               </td>
               <td style={cellStyle}>{row.egressCity ?? "—"}</td>
-              <td style={{ ...cellStyle, color: "#64748b" }}>{row.errorMessage ?? row.resultTitle ?? ""}</td>
+              <td style={{ ...cellStyle, color: "#767d8e" }}>{row.errorMessage ?? row.resultTitle ?? ""}</td>
             </tr>
           ))}
         </tbody>

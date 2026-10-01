@@ -46,7 +46,7 @@ export default function LoginPage() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "#0f172a",
+        background: "var(--bg)",
         padding: 24,
       }}
     >
@@ -55,14 +55,17 @@ export default function LoginPage() {
         style={{
           width: "100%",
           maxWidth: 420,
-          background: "white",
-          borderRadius: 12,
+          background: "var(--surface)",
+          border: "1px solid var(--line)",
+          borderRadius: "var(--radius)",
           padding: 32,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
+          boxShadow: "0 20px 60px #2025350f",
         }}
       >
-        <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>CTR Campaign</h1>
-        <p style={{ margin: "0 0 24px", color: "#64748b" }}>
+        <h1 style={{ margin: "0 0 8px", fontSize: 26, fontWeight: 650, letterSpacing: -0.8 }}>
+          CTR Campaign
+        </h1>
+        <p style={{ margin: "0 0 24px", color: "#767d8e" }}>
           Sign in to manage search campaigns.
         </p>
 
@@ -79,15 +82,15 @@ export default function LoginPage() {
               width: "100%",
               padding: "12px 14px",
               borderRadius: 8,
-              border: "1px solid #cbd5e1",
+              border: "1px solid var(--line)",
               fontSize: 15,
               boxSizing: "border-box",
             }}
           />
         </label>
 
-        {error && <p style={{ color: "#b91c1c", marginBottom: 16 }}>{error}</p>}
-        {notice && <p style={{ color: "#16a34a", marginBottom: 16 }}>{notice}</p>}
+        {error && <p style={{ color: "#bf4352", marginBottom: 16 }}>{error}</p>}
+        {notice && <p style={{ color: "#198366", marginBottom: 16 }}>{notice}</p>}
 
         <button
           type="submit"
@@ -97,7 +100,7 @@ export default function LoginPage() {
             padding: "12px 16px",
             borderRadius: 8,
             border: "none",
-            background: "#0f172a",
+            background: "var(--accent)",
             color: "white",
             fontSize: 15,
             fontWeight: 600,

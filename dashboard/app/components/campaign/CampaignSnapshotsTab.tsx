@@ -74,7 +74,7 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0 }}>Ranking snapshots</h2>
-          <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+          <p style={{ margin: "6px 0 0", color: "#767d8e" }}>
             Baseline when the campaign starts, then one screenshot per query at the end of each day.
             Each session&apos;s own screenshot is on the Sessions tab.
           </p>
@@ -85,7 +85,7 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
           </button>
           <button
             type="button"
-            style={primaryButtonStyle("#0f172a", queueing)}
+            style={primaryButtonStyle("#202535", queueing)}
             disabled={queueing}
             onClick={() => void takeSnapshot()}
           >
@@ -94,8 +94,8 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
         </div>
       </div>
 
-      {message && <p style={{ margin: 0, color: "#15803d" }}>{message}</p>}
-      {error && <p style={{ margin: 0, color: "#b91c1c" }}>{error}</p>}
+      {message && <p style={{ margin: 0, color: "#198366" }}>{message}</p>}
+      {error && <p style={{ margin: 0, color: "#bf4352" }}>{error}</p>}
 
       {queries.length > 1 && (
         <select
@@ -104,7 +104,7 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
             setQuery(event.target.value);
             setSelectedId(null);
           }}
-          style={{ padding: 10, borderRadius: 8, border: "1px solid #cbd5e1", maxWidth: 420 }}
+          style={{ padding: 10, borderRadius: 8, border: "1px solid #dfe2ea", maxWidth: 420 }}
         >
           {queries.map((item) => (
             <option key={item} value={item}>
@@ -115,7 +115,7 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
       )}
 
       {!loading && queries.length === 0 ? (
-        <p style={{ margin: 0, color: "#64748b" }}>
+        <p style={{ margin: 0, color: "#767d8e" }}>
           No snapshots yet. A baseline is taken automatically when the campaign is running, or use
           “Take snapshot now”.
         </p>

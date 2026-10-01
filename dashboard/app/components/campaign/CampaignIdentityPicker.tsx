@@ -60,7 +60,7 @@ function isUsable(row: IdentityPickerRow, allowUnwarmed: boolean): boolean {
 }
 
 function warmupColor(warmup: WarmupProgress): string {
-  return warmup.eligible ? "#15803d" : "#b45309";
+  return warmup.eligible ? "#198366" : "#b45309";
 }
 
 export default function CampaignIdentityPicker({
@@ -172,7 +172,7 @@ export default function CampaignIdentityPicker({
   return (
     <section style={panelStyle}>
       <h2 style={{ margin: "0 0 8px" }}>Campaign identities</h2>
-      <p style={{ color: "#64748b", margin: "0 0 16px", fontSize: 14 }}>
+      <p style={{ color: "#767d8e", margin: "0 0 16px", fontSize: 14 }}>
         Select warmed-up browser profiles for this campaign. Identities start warming automatically
         when created — eligible after {identities[0]?.warmup.minDays ?? 4} days,{" "}
         {identities[0]?.warmup.minSiteClicks ?? 3} benign site opens, and a passing commercial
@@ -191,7 +191,7 @@ export default function CampaignIdentityPicker({
             {campaignId && (
               <button
                 type="button"
-                style={primaryButtonStyle("#2563eb", saving)}
+                style={primaryButtonStyle("#6155dc", saving)}
                 disabled={saving}
                 onClick={() => void saveSelection()}
               >
@@ -200,23 +200,23 @@ export default function CampaignIdentityPicker({
             )}
           </>
         )}
-        <span style={{ color: "#64748b", fontSize: 14, alignSelf: "center" }}>
+        <span style={{ color: "#767d8e", fontSize: 14, alignSelf: "center" }}>
           {selectedIds.length} selected ({selectedEligible} eligible)
         </span>
       </div>
 
-      {message && <p style={{ color: "#15803d", margin: "0 0 12px" }}>{message}</p>}
-      {error && <p style={{ color: "#b91c1c", margin: "0 0 12px" }}>{error}</p>}
+      {message && <p style={{ color: "#198366", margin: "0 0 12px" }}>{message}</p>}
+      {error && <p style={{ color: "#bf4352", margin: "0 0 12px" }}>{error}</p>}
 
       {loading ? (
-        <p style={{ color: "#64748b" }}>Loading identities...</p>
+        <p style={{ color: "#767d8e" }}>Loading identities...</p>
       ) : identities.length === 0 ? (
-        <p style={{ color: "#64748b" }}>No identities yet. Create identities to start warmup.</p>
+        <p style={{ color: "#767d8e" }}>No identities yet. Create identities to start warmup.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
+              <tr style={{ background: "#fafbfc" }}>
                 {!readonly && <th style={thStyle}>Use</th>}
                 {["ID", "Region", "Device", "Warmup", "Total sessions", "Blocked", "Created"].map(
                   (header) => (

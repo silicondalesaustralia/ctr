@@ -161,12 +161,15 @@
     row-gap: 10px;
   }
   .left {
-    gap: 14px;
-    flex-wrap: wrap;
+    display: contents;
   }
   .nav {
     order: 3;
     width: 100%;
+  }
+  .pill {
+    font-size: 11px;
+    padding: 4px 8px;
   }
   .main {
     padding: 28px 16px;

@@ -11,9 +11,9 @@ interface Props {
 export default function CampaignModePicker({ onChoose }: Props) {
   return (
     <section style={panelStyle}>
-      <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>New campaign</p>
+      <p style={{ color: "#767d8e", margin: "0 0 8px", fontSize: 14 }}>New campaign</p>
       <h2 style={{ margin: "0 0 8px" }}>How do you want to target?</h2>
-      <p style={{ color: "#64748b", margin: "0 0 24px", fontSize: 15 }}>
+      <p style={{ color: "#767d8e", margin: "0 0 24px", fontSize: 15 }}>
         URL campaigns click organic results into your website. GMB campaigns open the local pack /
         Maps listing and can tap Website, Directions, or Call.
       </p>
@@ -22,7 +22,7 @@ export default function CampaignModePicker({ onChoose }: Props) {
         <button
           type="button"
           onClick={() => onChoose("url")}
-          style={{ ...primaryButtonStyle("#2563eb"), padding: "20px 16px", textAlign: "left" }}
+          style={{ ...primaryButtonStyle("#6155dc"), padding: "20px 16px", textAlign: "left" }}
         >
           <div style={{ fontSize: 16, marginBottom: 6 }}>Create via URL</div>
           <div style={{ fontWeight: 400, fontSize: 13, opacity: 0.9 }}>
@@ -35,7 +35,7 @@ export default function CampaignModePicker({ onChoose }: Props) {
           style={{ ...secondaryButtonStyle(false), padding: "20px 16px", textAlign: "left" }}
         >
           <div style={{ fontSize: 16, marginBottom: 6 }}>Create for GMB</div>
-          <div style={{ fontWeight: 400, fontSize: 13, color: "#64748b" }}>
+          <div style={{ fontWeight: 400, fontSize: 13, color: "#767d8e" }}>
             Local pack / Maps · city-scoped proxies & identities
           </div>
         </button>

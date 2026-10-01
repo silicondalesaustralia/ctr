@@ -813,16 +813,18 @@ export default function CampaignDashboard({
 
   return (
     <AppLayout>
-      <p style={{ margin: "0 0 8px" }}>
-        <Link href="/" style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>
+      <p style={{ margin: "0 0 14px", fontSize: 12 }}>
+        <Link href="/" style={{ color: "var(--muted)", textDecoration: "none", fontWeight: 600 }}>
           ← All campaigns
         </Link>
       </p>
 
       {campaignId && !isNew && (
-        <div style={{ marginBottom: 16 }}>
-          <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>{form.keyword || "Campaign"}</h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ margin: "0 0 8px", fontSize: 28, fontWeight: 650, letterSpacing: -1 }}>
+            {form.keyword || "Campaign"}
+          </h1>
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>
             {form.targetUrl} · {form.region}
             {campaignActive ? " · Running" : ` · ${campaignStatus}`}
           </p>
@@ -951,8 +953,8 @@ export default function CampaignDashboard({
 
       {(message || error) && (
         <div style={{ marginTop: 16 }}>
-          {message && <p style={{ color: "#16a34a", margin: 0 }}>{message}</p>}
-          {error && <p style={{ color: "#b91c1c", margin: message ? "8px 0 0" : 0 }}>{error}</p>}
+          {message && <p style={{ color: "#198366", margin: 0 }}>{message}</p>}
+          {error && <p style={{ color: "#bf4352", margin: message ? "8px 0 0" : 0 }}>{error}</p>}
         </div>
       )}
     </AppLayout>

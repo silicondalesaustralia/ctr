@@ -33,7 +33,7 @@ function startingRank(row: QueryRow, baseline: RankSnapshotRow | undefined): Sta
   return { label: "—", source: "no data yet" };
 }
 
-const termStyle = { color: "#64748b", fontSize: 13, margin: 0 };
+const termStyle = { color: "#767d8e", fontSize: 13, margin: 0 };
 const valueStyle = { margin: "2px 0 0", fontWeight: 600, wordBreak: "break-all" as const };
 
 export default function CampaignStartSummary({ campaignId, form }: Props) {
@@ -74,7 +74,7 @@ export default function CampaignStartSummary({ campaignId, form }: Props) {
               href={isGmb ? form.gmbMapsUrl : form.targetUrl}
               target="_blank"
               rel="noreferrer"
-              style={{ ...valueStyle, display: "block", color: "#2563eb" }}
+              style={{ ...valueStyle, display: "block", color: "#6155dc" }}
             >
               {isGmb ? form.gmbMapsUrl : form.targetUrl}
             </a>
@@ -92,12 +92,12 @@ export default function CampaignStartSummary({ campaignId, form }: Props) {
             return (
               <li key={row.text}>
                 <strong>{rank.label}</strong> for “{row.text}”{" "}
-                <span style={{ color: "#64748b", fontSize: 13 }}>({rank.source})</span>
+                <span style={{ color: "#767d8e", fontSize: 13 }}>({rank.source})</span>
               </li>
             );
           })}
         </ul>
-        {error && <p style={{ color: "#b91c1c", margin: "6px 0 0", fontSize: 13 }}>{error}</p>}
+        {error && <p style={{ color: "#bf4352", margin: "6px 0 0", fontSize: 13 }}>{error}</p>}
       </div>
     </div>
   );

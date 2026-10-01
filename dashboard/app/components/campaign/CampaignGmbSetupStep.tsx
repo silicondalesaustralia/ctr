@@ -95,9 +95,9 @@ export default function CampaignGmbSetupStep({
 
   return (
     <section style={panelStyle}>
-      <p style={{ color: "#64748b", margin: "0 0 8px", fontSize: 14 }}>Step 1 of 2 · GMB</p>
+      <p style={{ color: "#767d8e", margin: "0 0 8px", fontSize: 14 }}>Step 1 of 2 · GMB</p>
       <h2 style={{ margin: "0 0 8px" }}>Google Business Profile</h2>
-      <p style={{ color: "#64748b", margin: "0 0 24px", fontSize: 15 }}>
+      <p style={{ color: "#767d8e", margin: "0 0 24px", fontSize: 15 }}>
         Target a Maps listing from the local pack. Choose whether sessions use identities from the
         focus city only, or anywhere in Australia.
       </p>
@@ -149,11 +149,11 @@ export default function CampaignGmbSetupStep({
           </select>
         </label>
 
-        <fieldset style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, margin: 0 }}>
+        <fieldset style={{ border: "1px solid #e9ecf2", borderRadius: 8, padding: 14, margin: 0 }}>
           <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
             Identity pool
           </legend>
-          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+          <p style={{ margin: "0 0 10px", color: "#767d8e", fontSize: 13 }}>
             Change anytime while the campaign is stopped, then start again to rebuild the schedule.
           </p>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10 }}>
@@ -166,7 +166,7 @@ export default function CampaignGmbSetupStep({
             />
             <span>
               <strong>Hyper-local (city)</strong>
-              <div style={{ color: "#64748b", fontSize: 13 }}>
+              <div style={{ color: "#767d8e", fontSize: 13 }}>
                 Only identities whose home city matches the geo location above.
               </div>
             </span>
@@ -181,7 +181,7 @@ export default function CampaignGmbSetupStep({
             />
             <span>
               <strong>Country-wide (Australia)</strong>
-              <div style={{ color: "#64748b", fontSize: 13 }}>
+              <div style={{ color: "#767d8e", fontSize: 13 }}>
                 Any eligible AU identity. Proxies still use the focus city when available.
               </div>
             </span>
@@ -191,8 +191,8 @@ export default function CampaignGmbSetupStep({
         {capacity && identityGeoScope === "city" && (
           <div
             style={{
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
+              background: "#fafbfc",
+              border: "1px solid #e9ecf2",
               borderRadius: 8,
               padding: 14,
               fontSize: 14,
@@ -200,7 +200,7 @@ export default function CampaignGmbSetupStep({
           >
             <strong>{capacity.city} capacity:</strong> {capacity.eligible} eligible ·{" "}
             {capacity.warming} warming · {capacity.active} active
-            <div style={{ color: "#64748b", marginTop: 4 }}>
+            <div style={{ color: "#767d8e", marginTop: 4 }}>
               Proxies will use city-{capacity.proxyCity}. Create more identities after analyze if
               the plan needs a larger pool.
             </div>
@@ -209,8 +209,8 @@ export default function CampaignGmbSetupStep({
         {identityGeoScope === "country" && (
           <div
             style={{
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
+              background: "#fafbfc",
+              border: "1px solid #e9ecf2",
               borderRadius: 8,
               padding: 14,
               fontSize: 14,
@@ -224,11 +224,11 @@ export default function CampaignGmbSetupStep({
           <p style={{ color: "#b45309", margin: 0, fontSize: 14 }}>{capacityError}</p>
         )}
 
-        <fieldset style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, margin: 0 }}>
+        <fieldset style={{ border: "1px solid #e9ecf2", borderRadius: 8, padding: 14, margin: 0 }}>
           <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
             Actions after opening listing
           </legend>
-          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: 13 }}>
+          <p style={{ margin: "0 0 10px", color: "#767d8e", fontSize: 13 }}>
             Open listing is always included.
           </p>
           {(
@@ -261,7 +261,7 @@ export default function CampaignGmbSetupStep({
           type="button"
           onClick={onAnalyze}
           disabled={busy || !canAnalyze}
-          style={primaryButtonStyle("#2563eb")}
+          style={primaryButtonStyle("#6155dc")}
         >
           {busy ? "Building GMB plan..." : "Analyze & recommend settings"}
         </button>

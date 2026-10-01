@@ -29,7 +29,7 @@ export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDe
 
   useEffect(() => {
     if (!position) return;
-    menuRef.current?.querySelector("button")?.focus();
+    menuRef.current?.querySelector("button")?.focus({ preventScroll: true });
     const close = () => setPosition(null);
     const onPointer = (event: MouseEvent) => {
       const target = event.target as Node;

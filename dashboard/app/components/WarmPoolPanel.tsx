@@ -67,7 +67,7 @@ export default function WarmPoolPanel() {
   return (
     <section style={{ ...panelStyle, marginBottom: 20 }}>
       <h2 style={{ margin: "0 0 8px" }}>Warm pool</h2>
-      <p style={{ color: "#64748b", margin: "0 0 12px", fontSize: 14 }}>
+      <p style={{ color: "#767d8e", margin: "0 0 12px", fontSize: 14 }}>
         How many Camoufox identities to keep per city (warming + warm). The worker tops up hourly and
         gives warm identities a browse session after 7 idle days. No seat limit.
         {pool && pool.provider !== "camoufox" && (
@@ -76,7 +76,7 @@ export default function WarmPoolPanel() {
       </p>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 12 }}>
         <thead>
-          <tr style={{ background: "#f8fafc" }}>
+          <tr style={{ background: "#fafbfc" }}>
             {["City", "Target", "Warming", "Warm"].map((header) => (
               <th key={header} style={thStyle}>
                 {header}
@@ -107,14 +107,14 @@ export default function WarmPoolPanel() {
       </table>
       <button
         type="button"
-        style={primaryButtonStyle("#2563eb", saving)}
+        style={primaryButtonStyle("#6155dc", saving)}
         disabled={saving}
         onClick={() => void save()}
       >
         {saving ? "Saving..." : "Save warm pool"}
       </button>
-      {message && <p style={{ color: "#15803d", margin: "12px 0 0" }}>{message}</p>}
-      {error && <p style={{ color: "#b91c1c", margin: "12px 0 0" }}>{error}</p>}
+      {message && <p style={{ color: "#198366", margin: "12px 0 0" }}>{message}</p>}
+      {error && <p style={{ color: "#bf4352", margin: "12px 0 0" }}>{error}</p>}
     </section>
   );
 }

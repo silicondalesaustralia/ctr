@@ -202,11 +202,6 @@
   margin: 20px 2px;
 }
 
-.newButton {
-  font-size: 14px;
-  padding: 11px 18px;
-}
-
 @media (max-width: 1000px) {
   .toolbar {
     align-items: flex-start;

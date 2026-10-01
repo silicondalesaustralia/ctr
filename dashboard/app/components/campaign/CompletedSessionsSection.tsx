@@ -42,18 +42,18 @@ export default function CompletedSessionsSection({
   return (
     <section style={panelStyle}>
       <h2 style={{ margin: "0 0 4px" }}>Completed sessions</h2>
-      <p style={{ margin: "0 0 16px", color: "#64748b" }}>
+      <p style={{ margin: "0 0 16px", color: "#767d8e" }}>
         Times shown in {timezoneLabel(scheduleTimezone)}.
       </p>
       {loading ? (
-        <p style={{ color: "#64748b" }}>Loading sessions...</p>
+        <p style={{ color: "#767d8e" }}>Loading sessions...</p>
       ) : sessions.length === 0 ? (
-        <p style={{ color: "#64748b" }}>No completed sessions for this campaign yet.</p>
+        <p style={{ color: "#767d8e" }}>No completed sessions for this campaign yet.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
+              <tr style={{ background: "#fafbfc" }}>
                 {[
                   "Time",
                   "Identity",

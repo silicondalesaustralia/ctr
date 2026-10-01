@@ -117,7 +117,7 @@ function IdentitiesPage() {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
           <div>
             <h1 style={{ margin: "0 0 8px" }}>Identities</h1>
-            <p style={{ color: "#64748b", margin: 0, fontSize: 15 }}>
+            <p style={{ color: "#767d8e", margin: 0, fontSize: 15 }}>
               Browser profiles warm up automatically after creation. Each campaign chooses warmed-only
               or any identity (including unwarmed) in its review step.
             </p>
@@ -129,37 +129,37 @@ function IdentitiesPage() {
         </div>
 
         <div style={{ display: "flex", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ background: "#f8fafc", borderRadius: 8, padding: "12px 16px" }}>
-            <div style={{ fontSize: 12, color: "#64748b" }}>Total</div>
+          <div style={{ background: "#fafbfc", borderRadius: 8, padding: "12px 16px" }}>
+            <div style={{ fontSize: 12, color: "#767d8e" }}>Total</div>
             <div style={{ fontSize: 24, fontWeight: 700 }}>{identities.length}</div>
           </div>
           <div style={{ background: "#fef3c7", borderRadius: 8, padding: "12px 16px" }}>
             <div style={{ fontSize: 12, color: "#92400e" }}>Warming</div>
             <div style={{ fontSize: 24, fontWeight: 700 }}>{warming}</div>
           </div>
-          <div style={{ background: "#dcfce7", borderRadius: 8, padding: "12px 16px" }}>
-            <div style={{ fontSize: 12, color: "#166534" }}>Eligible</div>
+          <div style={{ background: "#eaf7f1", borderRadius: 8, padding: "12px 16px" }}>
+            <div style={{ fontSize: 12, color: "#14634e" }}>Eligible</div>
             <div style={{ fontSize: 24, fontWeight: 700 }}>{eligible}</div>
           </div>
         </div>
 
-        {message && <p style={{ color: "#15803d", margin: "0 0 12px" }}>{message}</p>}
-        {error && <p style={{ color: "#b91c1c", margin: "0 0 12px" }}>{error}</p>}
+        {message && <p style={{ color: "#198366", margin: "0 0 12px" }}>{message}</p>}
+        {error && <p style={{ color: "#bf4352", margin: "0 0 12px" }}>{error}</p>}
 
         {loading ? (
-          <p style={{ color: "#64748b" }}>Loading...</p>
+          <p style={{ color: "#767d8e" }}>Loading...</p>
         ) : error ? (
-          <p style={{ color: "#64748b" }}>
+          <p style={{ color: "#767d8e" }}>
             Could not load identities. Check that you are logged in and the API is deployed with the
             latest schema (<code>npm run db:push</code>).
           </p>
         ) : identities.length === 0 ? (
-          <p style={{ color: "#64748b" }}>No identities yet.</p>
+          <p style={{ color: "#767d8e" }}>No identities yet.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
-                <tr style={{ background: "#f8fafc" }}>
+                <tr style={{ background: "#fafbfc" }}>
                   {[
                     "ID",
                     "Region",
@@ -189,7 +189,7 @@ function IdentitiesPage() {
                     <td
                       style={{
                         ...cellStyle,
-                        color: identity.warmup.eligible ? "#15803d" : "#b45309",
+                        color: identity.warmup.eligible ? "#198366" : "#b45309",
                         fontWeight: 600,
                       }}
                     >

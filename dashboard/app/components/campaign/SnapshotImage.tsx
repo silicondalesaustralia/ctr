@@ -42,7 +42,7 @@ export default function SnapshotImage({ title, snapshot }: Props) {
         <span style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
           <strong>{title}</strong>
           {src && (
-            <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
+            <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#6155dc" }}>
               Open full size ↗
             </a>
           )}
@@ -55,11 +55,11 @@ export default function SnapshotImage({ title, snapshot }: Props) {
       </figcaption>
       <div
         style={{
-          border: "1px solid #e2e8f0",
+          border: "1px solid #e9ecf2",
           borderRadius: 8,
           maxHeight: 640,
           overflow: "auto",
-          background: "#f8fafc",
+          background: "#fafbfc",
           minHeight: 120,
         }}
       >
@@ -72,7 +72,7 @@ export default function SnapshotImage({ title, snapshot }: Props) {
             />
           </a>
         ) : (
-          <p style={{ padding: 16, margin: 0, color: "#64748b" }}>
+          <p style={{ padding: 16, margin: 0, color: "#767d8e" }}>
             {error ?? (!snapshot ? "No snapshot yet" : snapshotId ? "Loading…" : snapshot.errorMessage ?? "No image")}
           </p>
         )}

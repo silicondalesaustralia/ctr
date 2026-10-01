@@ -53,7 +53,7 @@ export default function AddQueryForm({ existing, disabled, onAdd }: Props) {
           Add
         </button>
       </div>
-      {error && <p style={{ color: "#b91c1c", fontSize: 13, margin: "6px 0 0" }}>{error}</p>}
+      {error && <p style={{ color: "#bf4352", fontSize: 13, margin: "6px 0 0" }}>{error}</p>}
     </div>
   );
 }

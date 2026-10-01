@@ -111,7 +111,7 @@ export default function GscPageClient() {
   return (
     <AppLayout title="GSC accounts">
       <section style={panelStyle}>
-        <p style={{ color: "#64748b", marginTop: 0 }}>
+        <p style={{ color: "#767d8e", marginTop: 0 }}>
           Connect separate Google Search Console accounts for each client. When setting up a campaign,
           pick the account and property (domain) to pull live query and ranking data from.
         </p>
@@ -121,11 +121,11 @@ export default function GscPageClient() {
             type="button"
             onClick={() => void connectAccount()}
             disabled={Boolean(busy) || !oauthConfigured}
-            style={primaryButtonStyle("#2563eb")}
+            style={primaryButtonStyle("#6155dc")}
           >
             {busy === "connect" ? "Redirecting..." : "Connect GSC account"}
           </button>
-          <Link href="/" style={{ alignSelf: "center", color: "#2563eb" }}>
+          <Link href="/" style={{ alignSelf: "center", color: "#6155dc" }}>
             Back to campaign
           </Link>
         </div>
@@ -138,17 +138,17 @@ export default function GscPageClient() {
         )}
 
         {connections.length === 0 ? (
-          <p style={{ color: "#64748b" }}>No GSC accounts connected yet.</p>
+          <p style={{ color: "#767d8e" }}>No GSC accounts connected yet.</p>
         ) : (
           <div style={{ display: "grid", gap: 16 }}>
             {connections.map((connection) => (
               <div
                 key={connection.id}
                 style={{
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid #e9ecf2",
                   borderRadius: 8,
                   padding: 16,
-                  background: "#f8fafc",
+                  background: "#fafbfc",
                 }}
               >
                 <div
@@ -163,7 +163,7 @@ export default function GscPageClient() {
                   <div>
                     <strong>{connection.label}</strong>
                     {connection.googleEmail && (
-                      <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 14 }}>
+                      <p style={{ margin: "4px 0 0", color: "#767d8e", fontSize: 14 }}>
                         {connection.googleEmail}
                       </p>
                     )}
@@ -189,11 +189,11 @@ export default function GscPageClient() {
                 </div>
 
                 {sitesByConnection[connection.id] && (
-                  <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "#334155" }}>
+                  <ul style={{ margin: "12px 0 0", paddingLeft: 20, color: "#3a4152" }}>
                     {sitesByConnection[connection.id].map((site) => (
                       <li key={site.siteUrl} style={{ marginBottom: 4 }}>
                         {site.siteUrl}
-                        <span style={{ color: "#64748b", fontSize: 13 }}> ({site.permissionLevel})</span>
+                        <span style={{ color: "#767d8e", fontSize: 13 }}> ({site.permissionLevel})</span>
                       </li>
                     ))}
                   </ul>
@@ -203,8 +203,8 @@ export default function GscPageClient() {
           </div>
         )}
 
-        {message && <p style={{ color: "#16a34a", marginTop: 16 }}>{message}</p>}
-        {error && <p style={{ color: "#b91c1c", marginTop: 16 }}>{error}</p>}
+        {message && <p style={{ color: "#198366", marginTop: 16 }}>{message}</p>}
+        {error && <p style={{ color: "#bf4352", marginTop: 16 }}>{error}</p>}
       </section>
     </AppLayout>
   );

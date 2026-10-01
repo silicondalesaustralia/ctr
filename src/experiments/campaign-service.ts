@@ -910,7 +910,7 @@ async function getRankHistory(experimentId: string, keyword: string): Promise<nu
 export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
   const keyword = getCampaignKeyword(campaign);
   const [completedSessions, scheduledSessions, rankHistory] = await Promise.all([
-    prisma.session.count({ where: { experimentId: campaign.id } }),
+    prisma.session.count({ where: { experimentId: campaign.id, status: "completed" } }),
     prisma.scheduledSession.count({
       where: { experimentId: campaign.id, status: "scheduled" },
     }),

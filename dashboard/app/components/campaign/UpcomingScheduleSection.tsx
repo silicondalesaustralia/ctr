@@ -52,7 +52,7 @@ export default function UpcomingScheduleSection({
       >
         <div>
           <h2 style={{ margin: 0 }}>Upcoming schedule</h2>
-          <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 14 }}>
+          <p style={{ margin: "6px 0 0", color: "#767d8e", fontSize: 14 }}>
             {scheduleNote ??
               "Queued sessions for this campaign. Adaptive pacing may reshuffle times."}{" "}
             Times shown in {timezoneLabel(scheduleTimezone)}.
@@ -75,11 +75,11 @@ export default function UpcomingScheduleSection({
         </div>
       </div>
 
-      {error && <p style={{ color: "#b91c1c", margin: "0 0 12px" }}>{error}</p>}
+      {error && <p style={{ color: "#bf4352", margin: "0 0 12px" }}>{error}</p>}
       {loading ? (
-        <p style={{ color: "#64748b" }}>Loading schedule...</p>
+        <p style={{ color: "#767d8e" }}>Loading schedule...</p>
       ) : upcoming.length === 0 ? (
-        <p style={{ color: "#64748b" }}>
+        <p style={{ color: "#767d8e" }}>
           {activeEmpty
             ? "Campaign is active but the queue is empty. Rebuild the schedule to place upcoming sessions."
             : "No upcoming sessions scheduled. Start the campaign (or wait for pacing) to build a queue."}
@@ -88,7 +88,7 @@ export default function UpcomingScheduleSection({
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
+              <tr style={{ background: "#fafbfc" }}>
                 {["When", "Identity", "Geo", "Device", "Query", "Group", "Attempts"].map(
                   (header) => (
                     <th key={header} style={thStyle}>
