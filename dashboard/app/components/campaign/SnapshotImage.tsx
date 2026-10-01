@@ -9,6 +9,12 @@ interface Props {
   snapshot: RankSnapshotRow | null;
 }
 
+/** Browsers block opening data: URLs in a new tab; blob: URLs open and zoom natively. */
+function base64JpegToObjectUrl(base64: string): string {
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+}
+
 export default function SnapshotImage({ title, snapshot }: Props) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,22 +25,33 @@ export default function SnapshotImage({ title, snapshot }: Props) {
     setError(null);
     if (!snapshotId) return;
     let cancelled = false;
+    let objectUrl: string | null = null;
     apiGet<{ imageBase64: string }>(`/rank-snapshots/${snapshotId}/image`)
       .then((data) => {
-        if (!cancelled) setSrc(`data:image/jpeg;base64,${data.imageBase64}`);
+        if (cancelled) return;
+        objectUrl = base64JpegToObjectUrl(data.imageBase64);
+        setSrc(objectUrl);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load image");
       });
     return () => {
       cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [snapshotId]);
 
   return (
     <figure style={{ margin: 0, display: "grid", gap: 8, minWidth: 0 }}>
       <figcaption style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-        <strong>{title}</strong>
+        <span style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <strong>{title}</strong>
+          {src && (
+            <a href={src} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#2563eb" }}>
+              Open full size ↗
+            </a>
+          )}
+        </span>
         {snapshot && (
           <span style={{ color: statusColors[snapshot.status], fontWeight: 600 }}>
             {positionLabel(snapshot)} · {snapshot.localDate}
@@ -52,8 +69,12 @@ export default function SnapshotImage({ title, snapshot }: Props) {
         }}
       >
         {src ? (
-          <a href={src} target="_blank" rel="noreferrer">
-            <img src={src} alt={`${title} screenshot`} style={{ width: "100%", display: "block" }} />
+          <a href={src} target="_blank" rel="noreferrer" title="Open full size in a new tab">
+            <img
+              src={src}
+              alt={`${title} screenshot`}
+              style={{ width: "100%", display: "block", cursor: "zoom-in" }}
+            />
           </a>
         ) : (
           <p style={{ padding: 16, margin: 0, color: "#64748b" }}>
