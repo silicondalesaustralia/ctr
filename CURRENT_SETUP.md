@@ -45,10 +45,16 @@ The API service deploys via `railway up --service ctr`; the worker deploys from 
 
 ## Session flow
 
-1. Allocate Premium Ports lease; launch Camoufox with the identity's pinned fingerprint and profile dir
-2. Timezone/locale/WebRTC from the egress IP; optional campaign GPS point (see below)
-3. Egress gate: country AU + city must match identity, and the IP's /24 must not be recently
-   flagged (`blocked_ip_prefixes`, 14 days) — otherwise `proxy_error` → retry on a fresh lease
+1. Allocate Premium Ports lease and test it before any browser starts (`lease-check.ts`): ip-api.com
+   and ipinfo.io must both say AU, at least one must place it in the identity's metro, both must see
+   the same IP (sticky actually holds), and its /24 must not be in `blocked_ip_prefixes` (Google
+   blocks, 14 days) or `bad_geo_ip_prefixes` (wrong country/city or rotating, 30 days; `*` scope =
+   every city). Rejected leases record their /24 and a fresh lease is drawn, up to 8. If all 8 fail
+   the work is deferred 30 min (`proxy_pool_exhausted`, session status `cancelled`) instead of
+   counting as a failure. Preflight checks use the same gate (`allocateCleanLease`).
+2. Launch Camoufox with the identity's pinned fingerprint and profile dir; timezone/locale/WebRTC
+   from the egress IP; optional campaign GPS point (see below)
+3. In-browser egress gate repeats the country/city and /24 checks as a second line
 4. Google search → pick result → **real mouse click** at a verified, uncovered point on the title
    (native link click fallback); a click that doesn't navigate is an error, not a success
 5. Site journey
@@ -109,7 +115,9 @@ npx tsx scripts/inspect-session.ts --id=<sessionId>
 
 - `src/providers/browser/CamoufoxProvider.ts` — launch, profile dir, GPS grant
 - `src/providers/browser/camoufox-fingerprint.ts` / `camoufox-geo.ts` — pinned fingerprint, geo config
-- `src/providers/proxy/ip-reputation.ts` — /24 screen
+- `src/providers/proxy/ip-reputation.ts` — /24 screen for Google-blocked ranges
+- `src/providers/proxy/lease-check.ts` / `bad-geo-prefixes.ts` / `proxy-http.ts` — pre-launch lease
+  test and wrong-geo /24 memory; `src/sessions/clean-lease.ts` — draw-until-clean and exhaustion
 - `src/identities/block-policy.ts` / `provider-compat.ts` — retry-once, Camoufox-only identities
 - `src/browser/serp-parser.ts` / `serp-trusted-click.ts` — result collection, trusted clicks
 - `src/warmup/warm-pool.ts` / `warm-pool-settings.ts` — warm-pool targets and top-up

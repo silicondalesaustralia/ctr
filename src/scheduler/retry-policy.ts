@@ -8,8 +8,12 @@ export interface RetryPolicy {
 /** Keep retrying infra failures every 5 minutes until the session succeeds. */
 const UNTIL_SUCCESS: RetryPolicy = { maxAttempts: 10_000, delayMinutes: 5 };
 
+/** Delay before retrying work whose proxy pool had no clean IP; not counted as a failure. */
+export const PROXY_POOL_DEFER_MINUTES = 30;
+
 export const RETRY_POLICIES: Record<string, RetryPolicy> = {
   proxy_error: UNTIL_SUCCESS,
+  proxy_pool_exhausted: { maxAttempts: 10_000, delayMinutes: PROXY_POOL_DEFER_MINUTES },
   browser_error: UNTIL_SUCCESS,
   gologin_parallel_limit: UNTIL_SUCCESS,
   target_error: UNTIL_SUCCESS,
@@ -51,7 +55,14 @@ export function isWrongEgressGeoError(message: string): boolean {
   return /Proxy egress geo mismatch|Proxy egress IP prefix flagged/i.test(message);
 }
 
+export function isProxyPoolExhaustedError(message: string): boolean {
+  return /Proxy pool exhausted/i.test(message);
+}
+
 export function classifyBrowserErrorCode(message: string): string {
+  if (isProxyPoolExhaustedError(message)) {
+    return "proxy_pool_exhausted";
+  }
   if (isGoLoginParallelLimitError(message)) {
     return "gologin_parallel_limit";
   }
@@ -72,6 +83,9 @@ export function getRetryDelayMinutes(statusOrCode: string): number {
 }
 
 export function mapErrorStatus(errorCode: string): SessionStatus {
+  if (errorCode === "proxy_pool_exhausted") {
+    return "cancelled";
+  }
   if (errorCode === "proxy_error" || errorCode === "target_error" || errorCode === "browser_error") {
     return errorCode;
   }

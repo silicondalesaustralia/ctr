@@ -10,6 +10,7 @@ import {
 } from "../browser/google-search.js";
 import { findTargetInSerp, findTargetOnCurrentPage } from "../browser/serp-parser.js";
 import { GoogleBlockedError } from "../browser/blocked-detection.js";
+import { allocateCleanLease } from "../sessions/clean-lease.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -268,7 +269,7 @@ export async function runSerpPreflightChecks(input: {
       });
     }
 
-    const proxyLease = await proxyProvider.allocate({
+    const proxyLease = await allocateCleanLease(proxyProvider, {
       country: "AU",
       region: identity.region,
       city: identity.city,

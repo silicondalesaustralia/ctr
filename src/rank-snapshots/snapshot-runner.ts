@@ -7,6 +7,8 @@ import {
   registerGoogleBlock,
   registerGoogleClean,
 } from "../identities/block-policy.js";
+import { PROXY_POOL_DEFER_MINUTES } from "../scheduler/retry-policy.js";
+import { ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
 import { addMinutes, randomBetween, sleep } from "../utils/helpers.js";
 import { withSnapshotBrowser } from "./snapshot-browser.js";
 import { captureQuerySnapshot } from "./snapshot-capture.js";
@@ -109,6 +111,19 @@ export async function runExperimentSnapshots(experimentId: string): Promise<void
   try {
     await captureRows(rows, experiment, identity, geoPoint);
   } catch (error) {
+    if (error instanceof ProxyPoolExhaustedError) {
+      await prisma.rankSnapshot.updateMany({
+        where: { id: { in: ids }, status: "running" },
+        data: {
+          status: "pending",
+          attemptCount: { decrement: 1 },
+          scheduledAt: addMinutes(new Date(), PROXY_POOL_DEFER_MINUTES),
+          errorMessage: errorMessage(error),
+        },
+      });
+      logger.warn({ event: "rank_snapshot_deferred_proxy_pool", experimentId, identity: identity.externalId });
+      return;
+    }
     await settleFailed(ids, "error", errorMessage(error));
     logger.error({ event: "rank_snapshot_session_failed", experimentId, error: errorMessage(error) });
   }

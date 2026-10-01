@@ -4,29 +4,15 @@ import type {
   StartProfileOptions,
 } from "../providers/browser/BrowserProfileProvider.js";
 import type { ProxyAllocationRequest, ProxyLease, ProxyProvider } from "../providers/proxy/ProxyProvider.js";
-import { WrongEgressGeoError } from "../browser/egress-geo.js";
-import { FlaggedIpPrefixError } from "../providers/proxy/ip-reputation.js";
-
-const MAX_LEASE_ATTEMPTS = 3;
-
-/** Camoufox resolves the proxy's public IP before launch; this means the lease is dead. */
-export function isProxyUnreachableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /Failed to get a public proxy IP/i.test(message);
-}
-
-/** Lease-specific failures: a different sticky IP is likely to succeed. */
-function isBadLeaseError(error: unknown): boolean {
-  return (
-    isProxyUnreachableError(error) ||
-    error instanceof WrongEgressGeoError ||
-    error instanceof FlaggedIpPrefixError
-  );
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+import { checkLeaseBeforeLaunch } from "../providers/proxy/lease-check.js";
+import {
+  errorMessage,
+  isBadLeaseError,
+  leaseTarget,
+  MAX_LEASE_ATTEMPTS,
+  ProxyPoolExhaustedError,
+  rejectLease,
+} from "./clean-lease.js";
 
 export interface StartWithLeaseInput<T> {
   proxyProvider: ProxyProvider;
@@ -52,6 +38,7 @@ export interface StartWithLeaseInput<T> {
 export async function startBrowserWithLeaseRetry<T>(
   input: StartWithLeaseInput<T>,
 ): Promise<{ lease: ProxyLease; running: RunningBrowser; prepared: T }> {
+  const { expectedCity, checkLeases } = leaseTarget(input.allocation.city);
   for (let attempt = 1; ; attempt += 1) {
     const sessionKey =
       attempt === 1 ? input.allocation.sessionKey : `${input.allocation.sessionKey}r${attempt}`;
@@ -59,6 +46,7 @@ export async function startBrowserWithLeaseRetry<T>(
     input.onLease(lease.leaseId);
     let running: RunningBrowser | null = null;
     try {
+      if (checkLeases) await checkLeaseBeforeLaunch(lease, expectedCity);
       running = await input.browserProvider.startProfile(
         input.profileId,
         {
@@ -78,20 +66,29 @@ export async function startBrowserWithLeaseRetry<T>(
       const prepared = await input.prepare(running, lease);
       return { lease, running, prepared };
     } catch (error) {
-      if (attempt >= MAX_LEASE_ATTEMPTS || !isBadLeaseError(error)) throw error;
-      console.error(
-        `[proxy] lease ${attempt}/${MAX_LEASE_ATTEMPTS} rejected (${errorMessage(error).slice(0, 120)}); drawing a fresh lease`,
-      );
-      if (running) {
-        await input.discard(running).catch((discardError: unknown) => {
-          console.error(`[proxy] browser discard failed: ${errorMessage(discardError)}`);
-        });
-        input.onRunning(null);
+      if (!isBadLeaseError(error)) throw error;
+      await rejectLease(error, attempt, expectedCity);
+      await releaseRejected(input, lease, running);
+      if (attempt >= MAX_LEASE_ATTEMPTS) {
+        throw new ProxyPoolExhaustedError(expectedCity ?? "AU", errorMessage(error));
       }
-      await input.proxyProvider.release(lease.leaseId).catch((releaseError: unknown) => {
-        console.error(`[proxy] release failed: ${errorMessage(releaseError)}`);
-      });
-      input.onLease(null);
     }
   }
+}
+
+async function releaseRejected<T>(
+  input: StartWithLeaseInput<T>,
+  lease: ProxyLease,
+  running: RunningBrowser | null,
+): Promise<void> {
+  if (running) {
+    await input.discard(running).catch((discardError: unknown) => {
+      console.error(`[proxy] browser discard failed: ${errorMessage(discardError)}`);
+    });
+    input.onRunning(null);
+  }
+  await input.proxyProvider.release(lease.leaseId).catch((releaseError: unknown) => {
+    console.error(`[proxy] release failed: ${errorMessage(releaseError)}`);
+  });
+  input.onLease(null);
 }

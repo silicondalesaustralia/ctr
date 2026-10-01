@@ -9,6 +9,7 @@ import {
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
 import { warmupInfraRetryDelayMs } from "../warmup/warmup-config.js";
+import { PROXY_POOL_DEFER_MINUTES } from "./retry-policy.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
 
 const QUEUE_NAME = "warmup-jobs";
@@ -78,18 +79,24 @@ export async function processWarmupSession(warmupSessionId: string): Promise<voi
       kind: warmup.kind,
     });
 
+    // "cancelled" here only comes from a proxy pool with no clean IP.
+    const poolExhausted = result.status === "cancelled";
     const infraFailure =
+      poolExhausted ||
       result.status === "proxy_error" ||
       result.status === "browser_error" ||
       result.status === "gologin_parallel_limit";
 
     if (infraFailure) {
+      const delayMs = poolExhausted
+        ? PROXY_POOL_DEFER_MINUTES * 60_000
+        : warmupInfraRetryDelayMs(warmup.attemptCount);
       await prisma.warmupSession.update({
         where: { id: warmupSessionId },
         data: {
           status: "scheduled",
           sessionId: result.sessionId,
-          scheduledAt: new Date(Date.now() + warmupInfraRetryDelayMs(warmup.attemptCount)),
+          scheduledAt: new Date(Date.now() + delayMs),
         },
       });
       logger.info({

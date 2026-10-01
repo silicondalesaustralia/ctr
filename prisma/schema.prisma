@@ -469,6 +469,20 @@ model BlockedIpPrefix {
   @@map("blocked_ip_prefixes")
 }
 
+/** Proxy /24s that egressed outside the requested area or rotated mid-lease; skipped on allocation. */
+model BadGeoIpPrefix {
+  prefix       String
+  /** "*" when the range left the country (bad for every city), else the city slug it missed. */
+  scope        String
+  reason       String
+  failCount    Int      @default(1) @map("fail_count")
+  lastGeo      String?  @map("last_geo")
+  lastFailedAt DateTime @default(now()) @map("last_failed_at")
+
+  @@id([prefix, scope])
+  @@map("bad_geo_ip_prefixes")
+}
+
 /** Screenshot of the live SERP/local pack for one query — baseline, end-of-day or on demand. */
 model RankSnapshot {
   id           String             @id @default(cuid())

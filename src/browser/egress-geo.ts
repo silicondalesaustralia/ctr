@@ -32,7 +32,7 @@ export class WrongEgressGeoError extends Error {
   }
 }
 
-interface IpLookupPayload {
+export interface IpLookupPayload {
   ip?: unknown;
   query?: unknown;
   country?: unknown;
