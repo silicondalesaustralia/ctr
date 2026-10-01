@@ -65,7 +65,7 @@ export async function queueDueSnapshots(now = new Date()): Promise<number> {
   return queued;
 }
 
-/** "Take snapshot now": today's manual row per active query, due immediately unless already running. */
+/** "Take snapshot now": today's manual row per active query (plus any failed baseline), due immediately. */
 export async function queueManualSnapshots(experimentId: string): Promise<number> {
   const experiment = await prisma.experiment.findUniqueOrThrow({
     where: { id: experimentId },
@@ -85,6 +85,10 @@ export async function queueManualSnapshots(experimentId: string): Promise<number
     },
     data: { status: "pending", attemptCount: 0, scheduledAt: new Date(), errorMessage: null },
   });
+  const retriedBaselines = await prisma.rankSnapshot.updateMany({
+    where: { experimentId, kind: "baseline", query: { in: queries }, status: { in: ["error", "blocked"] } },
+    data: { status: "pending", attemptCount: 0, scheduledAt: new Date(), errorMessage: null },
+  });
   const inserted = await insertPending(experimentId, queries, "manual", localDate);
-  return requeued.count + inserted;
+  return requeued.count + retriedBaselines.count + inserted;
 }
