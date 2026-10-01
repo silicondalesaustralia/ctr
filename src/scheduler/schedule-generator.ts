@@ -8,10 +8,10 @@ import {
   endOfMonth,
   getCalendarDateInTimezone,
   randomBetween,
-  randomTimeInTimezoneWindow,
   startOfMonth,
 } from "../utils/helpers.js";
 import { buildEligibilityCheck } from "./identity-eligibility.js";
+import { randomDayTimes } from "./day-slots.js";
 
 export interface ScheduleGeneratorInput {
   experiment: Experiment;
@@ -135,7 +135,6 @@ export async function generateCampaignSchedule(
     scheduledAt: Date;
   }> = [];
 
-  let lastGlobalTime: Date | null = null;
   const identityLastScheduled = new Map<string, Date>();
   const scheduleTimezone = input.experiment.scheduleTimezone;
   const startCalendar = getCalendarDateInTimezone(startDate, scheduleTimezone);
@@ -146,8 +145,18 @@ export async function generateCampaignSchedule(
     const dayCalendar = addCalendarDays(startCalendar, day);
     const countForDay = dailyTotals[day] ?? 0;
 
-    for (let i = 0; i < countForDay; i += 1) {
+    const dayTimes = randomDayTimes(
+      dayCalendar,
+      countForDay,
+      input.experiment.scheduleStart,
+      input.experiment.scheduleEnd,
+      scheduleTimezone,
+      input.experiment.minMinutesBetweenGlobalSessions,
+    );
+
+    for (const scheduledAt of dayTimes) {
       if (slotIndex >= querySlots.length) break;
+      if (scheduledAt < earliest || scheduledAt > endDate) continue;
 
       const query = querySlots[slotIndex]!;
       const group = groups[Math.floor(Math.random() * groups.length)]!;
@@ -163,23 +172,6 @@ export async function generateCampaignSchedule(
 
       const eligible = [];
       for (const identity of pool.length > 0 ? pool : identities) {
-        let scheduledAt = randomTimeInTimezoneWindow(
-          dayCalendar,
-          input.experiment.scheduleStart,
-          input.experiment.scheduleEnd,
-          scheduleTimezone,
-        );
-
-        if (lastGlobalTime) {
-          const minGap = input.experiment.minMinutesBetweenGlobalSessions;
-          const minTime = addMinutes(lastGlobalTime, minGap);
-          if (scheduledAt < minTime) {
-            scheduledAt = minTime;
-          }
-        }
-
-        if (scheduledAt < earliest || scheduledAt > endDate) continue;
-
         const lastForIdentity = identityLastScheduled.get(identity.id);
         if (lastForIdentity) {
           const gapDays =
@@ -194,8 +186,8 @@ export async function generateCampaignSchedule(
         }
       }
 
-      // Do not burn the query slot — retry it on a later day.
-      if (eligible.length === 0) break;
+      // Do not burn the query slot — retry it at the next time.
+      if (eligible.length === 0) continue;
 
       slotIndex += 1;
       const pick = eligible[Math.floor(Math.random() * eligible.length)]!;
@@ -206,7 +198,6 @@ export async function generateCampaignSchedule(
         group,
         scheduledAt: pick.scheduledAt,
       });
-      lastGlobalTime = pick.scheduledAt;
       identityLastScheduled.set(pick.identity.id, pick.scheduledAt);
     }
   }
