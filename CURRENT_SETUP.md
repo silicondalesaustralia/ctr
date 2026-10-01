@@ -65,6 +65,19 @@ Any clean Google load resets the streak. Applies to campaign and warmup sessions
 - **GPS centre + radius:** paste `lat, lng` from Google Maps. Each identity gets a stable point
   within the radius (default 3 km), granted to google.com.au. Leave blank to skip GPS.
 
+## Ranking snapshots (campaign → Snapshots tab)
+
+One screenshot per active query, stored as JPEG in `rank_snapshots` with the position found:
+
+- **Baseline:** queued for any active query without one as soon as the campaign is active
+- **End of day:** `scheduleEnd` + 30 min in the campaign timezone (23:30 by default)
+- **Manual:** "Take snapshot now" button (works on any campaign status, runner on or off)
+
+Worker runs all of a campaign's due rows in one Camoufox session (`rank-snapshot-jobs` queue, shares
+the browser lock), GPS pinned to the campaign centre, using the least-recently-used local identity
+not in the campaign. Blocks follow the retry-once policy. GMB → local pack / Places list;
+URL → the SERP page the site is on (page 1 if not found).
+
 ## Warm pool (Identities page)
 
 Per-city target of Camoufox identities (warming + warm). Worker tops up hourly (max 3 new per
@@ -101,3 +114,5 @@ npx tsx scripts/inspect-session.ts --id=<sessionId>
 - `src/browser/serp-parser.ts` / `serp-trusted-click.ts` — result collection, trusted clicks
 - `src/warmup/warm-pool.ts` / `warm-pool-settings.ts` — warm-pool targets and top-up
 - `dashboard/app/components/campaign/CampaignTargetingFields.tsx`, `WarmPoolPanel.tsx`
+- `src/rank-snapshots/*` — snapshot triggers, queue, runner, capture;
+  `dashboard/app/components/campaign/CampaignSnapshotsTab.tsx`

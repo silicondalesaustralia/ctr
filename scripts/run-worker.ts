@@ -12,6 +12,8 @@ import { maybeRecalculateAdaptivePacing } from "../src/campaign/adaptive-pacing.
 import { backfillWarmupForExistingIdentities } from "../src/warmup/warmup-service.js";
 import { runWarmPoolTick } from "../src/warmup/warm-pool.js";
 import { SERP_CLICK_STRATEGY } from "../src/browser/serp-parser.js";
+import { createSnapshotWorker, pollAndEnqueueDueSnapshots } from "../src/rank-snapshots/snapshot-queue.js";
+import { resetStrandedSnapshots } from "../src/rank-snapshots/snapshot-runner.js";
 
 // OOM kills leave Orbita/Chrome behind; clear before accepting jobs.
 killOrphanBrowserProcesses("worker-boot");
@@ -19,6 +21,11 @@ logWorkerMemory("worker-boot");
 
 const worker = createSessionWorker();
 const warmupWorker = createWarmupWorker();
+const snapshotWorker = createSnapshotWorker();
+
+snapshotWorker.on("failed", (job, err) => {
+  logger.error({ event: "rank_snapshot_job_failed", jobId: job?.id, error: err.message });
+});
 
 worker.on("completed", (job) => {
   logger.info({ event: "worker_job_completed", jobId: job.id });
@@ -45,6 +52,15 @@ async function pollLoop(): Promise<void> {
   const warmupCount = await pollAndEnqueueDueWarmupSessions();
   if (warmupCount > 0) {
     logger.info({ event: "due_warmup_sessions_enqueued", count: warmupCount });
+  }
+
+  try {
+    const snapshotCampaigns = await pollAndEnqueueDueSnapshots();
+    if (snapshotCampaigns > 0) {
+      logger.info({ event: "rank_snapshot_jobs_enqueued", campaigns: snapshotCampaigns });
+    }
+  } catch (error) {
+    logger.error({ event: "rank_snapshot_poll_failed", error: String(error) });
   }
 
   const activeExperiments = await prisma.experiment.findMany({
@@ -82,7 +98,11 @@ setInterval(() => {
     .catch((error) => logger.error({ event: "stale_session_cleanup_failed", error: String(error) }));
 }, STALE_CLEANUP_MS);
 
-pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));
+resetStrandedSnapshots()
+  .catch((error) => logger.error({ event: "rank_snapshot_reset_failed", error: String(error) }))
+  .finally(() => {
+    pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));
+  });
 
 backfillWarmupForExistingIdentities()
   .then((count) => {

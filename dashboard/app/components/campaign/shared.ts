@@ -1,6 +1,6 @@
 import type React from "react";
 
-export type CampaignTab = "plan" | "sessions" | "identities";
+export type CampaignTab = "plan" | "sessions" | "snapshots" | "identities";
 
 export interface RegionOption {
   code: string;

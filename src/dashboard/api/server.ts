@@ -49,6 +49,7 @@ import {
 } from "../../campaign/preflight-jobs.js";
 import { runSerpPreflightChecks } from "../../campaign/serp-preflight-runner.js";
 import { registerWarmPoolRoutes } from "./warm-pool-routes.js";
+import { registerRankSnapshotRoutes } from "./rank-snapshot-routes.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { createAdditionalIdentities } from "../../identities/identity-service.js";
 import { computeWarmupProgress, setCampaignIdentities, backfillWarmupForExistingIdentities } from "../../warmup/warmup-service.js";
@@ -248,6 +249,7 @@ export function createApiServer() {
   });
 
   registerWarmPoolRoutes(app);
+  registerRankSnapshotRoutes(app);
 
   app.get("/experiments", async (_req, res) => {
     const experiments = await prisma.experiment.findMany({

@@ -132,6 +132,21 @@ enum WarmupSessionKind {
   graduation
 }
 
+enum RankSnapshotKind {
+  baseline
+  daily
+  manual
+}
+
+enum RankSnapshotStatus {
+  pending
+  running
+  captured
+  not_found
+  blocked
+  error
+}
+
 model Experiment {
   id                   String           @id @default(cuid())
   name                 String
@@ -191,6 +206,7 @@ model Experiment {
   scheduledSessions ScheduledSession[]
   sessions         Session[]
   rankingSnapshots RankingSnapshot[]
+  rankSnapshots    RankSnapshot[]
   notes            ExperimentNote[]
   gscConnection    GscConnection?   @relation(fields: [gscConnectionId], references: [id], onDelete: SetNull)
   selectedIdentities ExperimentIdentity[]
@@ -451,6 +467,36 @@ model BlockedIpPrefix {
   lastBlockedAt DateTime @default(now()) @map("last_blocked_at")
 
   @@map("blocked_ip_prefixes")
+}
+
+/** Screenshot of the live SERP/local pack for one query — baseline, end-of-day or on demand. */
+model RankSnapshot {
+  id           String             @id @default(cuid())
+  experimentId String             @map("experiment_id")
+  query        String
+  kind         RankSnapshotKind
+  /** YYYY-MM-DD in the campaign's schedule timezone. */
+  localDate    String             @map("local_date")
+  scheduledAt  DateTime           @default(now()) @map("scheduled_at")
+  status       RankSnapshotStatus @default(pending)
+  attemptCount Int                @default(0) @map("attempt_count")
+  position     Int?
+  serpPage     Int?               @map("serp_page")
+  source       String?
+  resultTitle  String?            @map("result_title")
+  pageUrl      String?            @map("page_url")
+  egressCity   String?            @map("egress_city")
+  identityExternalId String?      @map("identity_external_id")
+  imageJpeg    Bytes?             @map("image_jpeg")
+  errorMessage String?            @map("error_message")
+  capturedAt   DateTime?          @map("captured_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, query, localDate, kind])
+  @@index([status, scheduledAt])
+  @@map("rank_snapshots")
 }
 
 model AppSetting {

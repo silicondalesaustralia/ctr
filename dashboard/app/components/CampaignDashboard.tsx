@@ -11,6 +11,8 @@ import CampaignIdentityPicker from "./campaign/CampaignIdentityPicker";
 import CampaignModePicker from "./campaign/CampaignModePicker";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
+import CampaignSnapshotsTab from "./campaign/CampaignSnapshotsTab";
+import CampaignStartSummary from "./campaign/CampaignStartSummary";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
@@ -255,7 +257,9 @@ export default function CampaignDashboard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab: CampaignTab =
-    searchParams.get("tab") === "sessions" || searchParams.get("tab") === "identities"
+    searchParams.get("tab") === "sessions" ||
+    searchParams.get("tab") === "snapshots" ||
+    searchParams.get("tab") === "identities"
       ? (searchParams.get("tab") as CampaignTab)
       : "plan";
 
@@ -833,6 +837,8 @@ export default function CampaignDashboard({
           campaignKind={form.campaignKind}
           scheduleTimezone={form.scheduleTimezone}
         />
+      ) : activeTab === "snapshots" && campaignId ? (
+        <CampaignSnapshotsTab campaignId={campaignId} />
       ) : activeTab === "identities" && campaignId ? (
         <CampaignIdentitiesTab
           campaignId={campaignId}
@@ -901,6 +907,9 @@ export default function CampaignDashboard({
         />
       ) : (
         <>
+          {campaignId && (campaignActive || campaignStatus !== "draft") && (
+            <CampaignStartSummary campaignId={campaignId} form={form} />
+          )}
           <CampaignReviewStep
             form={form}
             intensity={intensity}
