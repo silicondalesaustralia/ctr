@@ -14,6 +14,7 @@ import {
 } from "../browser/serp-parser.js";
 import { expandOmittedResults } from "../browser/serp-omitted.js";
 import { GoogleBlockedError } from "../browser/blocked-detection.js";
+import { captureRankView } from "../browser/rank-view.js";
 import { isProbabilisticBehaviourEnabled } from "./behaviour-config.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
 import {
@@ -228,6 +229,7 @@ export async function runSearchJourney(
         hrefKind: result.hrefKind,
         displayedUrl: result.displayedUrl,
       });
+      const rankView = (await captureRankView(page, result.title, "organic")) ?? undefined;
 
       const clickTarget = !probabilistic || shouldClickTarget(persona, traits, allowTargetSkip);
       if (!clickTarget) {
@@ -275,6 +277,7 @@ export async function runSearchJourney(
           observedPosition: result.rank,
           resultTitle: result.title,
           resultUrl: result.url,
+          rankView,
         };
       }
 
@@ -310,6 +313,7 @@ export async function runSearchJourney(
         resultTitle: result.title,
         resultUrl: result.url,
         landingUrl,
+        rankView,
       };
     }
 

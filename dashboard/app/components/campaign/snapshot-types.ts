@@ -1,4 +1,4 @@
-export type SnapshotKind = "baseline" | "daily" | "manual";
+export type SnapshotKind = "baseline" | "daily" | "manual" | "session";
 export type SnapshotStatus = "pending" | "running" | "captured" | "not_found" | "blocked" | "error";
 
 export interface RankSnapshotRow {

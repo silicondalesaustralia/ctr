@@ -207,6 +207,7 @@ model Experiment {
   sessions         Session[]
   rankingSnapshots RankingSnapshot[]
   rankSnapshots    RankSnapshot[]
+  sessionSnapshots SessionSnapshot[]
   notes            ExperimentNote[]
   gscConnection    GscConnection?   @relation(fields: [gscConnectionId], references: [id], onDelete: SetNull)
   selectedIdentities ExperimentIdentity[]
@@ -511,6 +512,27 @@ model RankSnapshot {
   @@unique([experimentId, query, localDate, kind])
   @@index([status, scheduledAt])
   @@map("rank_snapshots")
+}
+
+/** What the session saw when it found the target, captured just before clicking. */
+model SessionSnapshot {
+  sessionId          String   @id @map("session_id")
+  experimentId       String   @map("experiment_id")
+  query              String
+  position           Int?
+  serpPage           Int?     @map("serp_page")
+  source             String?
+  resultTitle        String?  @map("result_title")
+  pageUrl            String?  @map("page_url")
+  egressCity         String?  @map("egress_city")
+  identityExternalId String?  @map("identity_external_id")
+  imageJpeg          Bytes    @map("image_jpeg")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId, createdAt])
+  @@map("session_snapshots")
 }
 
 model AppSetting {

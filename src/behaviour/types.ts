@@ -1,4 +1,5 @@
 import type { QueryType, SessionEventType } from "@prisma/client";
+import type { RankView } from "../browser/rank-view.js";
 
 export type TypingSpeed = "fast" | "medium" | "normal" | "slow";
 export type PageDepth = "shallow" | "medium" | "deep";
@@ -79,6 +80,7 @@ export interface SearchJourneyResult {
   resultUrl?: string;
   landingUrl?: string;
   blockReason?: string;
+  rankView?: RankView;
 }
 
 export interface SiteJourneyResult {

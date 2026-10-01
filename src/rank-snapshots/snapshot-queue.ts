@@ -64,11 +64,16 @@ export async function pollAndEnqueueDueSnapshots(): Promise<number> {
   });
 
   for (const { experimentId } of due) {
-    await getSnapshotQueue().add(
-      "run-rank-snapshots",
-      { experimentId },
-      { jobId: `rank-snapshot-${experimentId}`, removeOnComplete: true, removeOnFail: true },
-    );
+    await enqueueSnapshotJob(experimentId);
   }
   return due.length;
+}
+
+/** No-op while a job for this campaign is already waiting or running. */
+export async function enqueueSnapshotJob(experimentId: string): Promise<void> {
+  await getSnapshotQueue().add(
+    "run-rank-snapshots",
+    { experimentId },
+    { jobId: `rank-snapshot-${experimentId}`, removeOnComplete: true, removeOnFail: true },
+  );
 }

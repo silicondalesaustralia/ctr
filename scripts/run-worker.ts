@@ -6,6 +6,7 @@ import {
 } from "../src/scheduler/warmup-worker.js";
 import { cleanupStaleSessions } from "../src/sessions/session-cleanup.js";
 import { killOrphanBrowserProcesses, logWorkerMemory } from "../src/providers/browser/orphan-browsers.js";
+import { sweepProfileDisk } from "../src/providers/browser/profile-disk.js";
 import { logger } from "../src/config/logger.js";
 import { prisma } from "../src/db/client.js";
 import { maybeRecalculateAdaptivePacing } from "../src/campaign/adaptive-pacing.js";
@@ -18,6 +19,13 @@ import { resetStrandedSnapshots } from "../src/rank-snapshots/snapshot-runner.js
 // OOM kills leave Orbita/Chrome behind; clear before accepting jobs.
 killOrphanBrowserProcesses("worker-boot");
 logWorkerMemory("worker-boot");
+
+// Before any job starts: no browser may hold a profile while its caches are removed.
+try {
+  await sweepProfileDisk();
+} catch (error) {
+  logger.error({ event: "profile_disk_sweep_failed", error: String(error) });
+}
 
 const worker = createSessionWorker();
 const warmupWorker = createWarmupWorker();

@@ -7,6 +7,8 @@ import SnapshotImage from "./SnapshotImage";
 import { panelStyle, primaryButtonStyle, secondaryButtonStyle } from "./shared";
 import type { RankSnapshotRow } from "./snapshot-types";
 
+const POLL_WHILE_QUEUED_MS = 15_000;
+
 interface Props {
   campaignId: string;
 }
@@ -36,14 +38,21 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
     void load();
   }, [load]);
 
+  const hasQueued = rows.some((row) => row.status === "pending" || row.status === "running");
+  useEffect(() => {
+    if (!hasQueued) return;
+    const timer = setInterval(() => void load(), POLL_WHILE_QUEUED_MS);
+    return () => clearInterval(timer);
+  }, [hasQueued, load]);
+
   const takeSnapshot = useCallback(async () => {
     setQueueing(true);
     try {
       const result = await apiPost<{ queued: number }>(`/campaigns/${campaignId}/rank-snapshots`);
       setMessage(
         result.queued > 0
-          ? `Queued ${result.queued} snapshot(s). The worker picks them up within a minute, after any running session.`
-          : "Today's manual snapshots are already queued.",
+          ? `Started ${result.queued} snapshot(s). If a session is running, they run straight after it.`
+          : "Today's manual snapshot is already running.",
       );
       await load();
     } catch (err) {
@@ -66,7 +75,8 @@ export default function CampaignSnapshotsTab({ campaignId }: Props) {
         <div>
           <h2 style={{ margin: 0 }}>Ranking snapshots</h2>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Baseline when the campaign starts, then one screenshot per query at the end of each day.
+            Baseline when the campaign starts, a screenshot from every session that finds the target,
+            and one per query at the end of each day.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

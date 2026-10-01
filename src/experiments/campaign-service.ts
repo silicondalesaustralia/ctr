@@ -892,19 +892,36 @@ export async function getCampaignIdentities(experimentId: string): Promise<Campa
   });
 }
 
+/** Rank observed by each session on the main keyword, oldest first (last 50). */
+async function getRankHistory(experimentId: string, keyword: string): Promise<number[]> {
+  if (!keyword) return [];
+  const sessions = await prisma.session.findMany({
+    where: { experimentId, queryText: keyword, observedPosition: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: { observedPosition: true },
+  });
+  return sessions
+    .map((session) => session.observedPosition)
+    .filter((position): position is number => position !== null)
+    .reverse();
+}
+
 export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
-  const [completedSessions, scheduledSessions] = await Promise.all([
+  const keyword = getCampaignKeyword(campaign);
+  const [completedSessions, scheduledSessions, rankHistory] = await Promise.all([
     prisma.session.count({ where: { experimentId: campaign.id } }),
     prisma.scheduledSession.count({
       where: { experimentId: campaign.id, status: "scheduled" },
     }),
+    getRankHistory(campaign.id, keyword),
   ]);
 
   return {
     id: campaign.id,
     name: campaign.name,
     status: campaign.status,
-    keyword: getCampaignKeyword(campaign),
+    keyword,
     targetUrl: campaign.targetUrl,
     campaignKind: campaign.campaignKind,
     region: campaign.focusRegion ?? "ALL",
@@ -916,6 +933,7 @@ export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
     queryCount: campaign.queries.length,
     completedSessions,
     scheduledSessions,
+    rankHistory,
     updatedAt: campaign.updatedAt.toISOString(),
     startDate: campaign.startDate?.toISOString() ?? null,
     endDate: campaign.endDate?.toISOString() ?? null,

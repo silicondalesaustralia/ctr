@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { apiDelete, apiGet, apiPost } from "../../lib/api";
 import AppLayout from "./AppLayout";
+import RankSparkline from "./RankSparkline";
 import {
   cellStyle,
   panelStyle,
@@ -27,10 +28,15 @@ interface CampaignSummary {
   queryCount: number;
   completedSessions: number;
   scheduledSessions: number;
+  /** Rank observed by each session on the main keyword, oldest first. */
+  rankHistory?: number[];
   updatedAt: string;
   startDate: string | null;
   endDate: string | null;
 }
+
+/** Picks up each finished session's rank without a manual reload. */
+const REFRESH_MS = 30_000;
 
 function statusColor(status: string): string {
   if (status === "active") return "#16a34a";
@@ -70,6 +76,8 @@ export default function CampaignList() {
 
   useEffect(() => {
     void load();
+    const timer = window.setInterval(() => void load(), REFRESH_MS);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   async function startCampaign(id: string) {
@@ -169,6 +177,7 @@ export default function CampaignList() {
                     "Queued",
                     "Updated",
                     "",
+                    "Rank by session",
                   ].map((header) => (
                     <th key={header} style={thStyle}>{header}</th>
                   ))}
@@ -277,6 +286,9 @@ export default function CampaignList() {
                           {isBusy ? busyLabel : "Delete"}
                         </button>
                       </div>
+                    </td>
+                    <td style={cellStyle}>
+                      <RankSparkline ranks={campaign.rankHistory ?? []} />
                     </td>
                   </tr>
                   );

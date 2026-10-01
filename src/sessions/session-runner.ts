@@ -20,6 +20,7 @@ import { createBrowserProvider, getMockBrowserProvider } from "../providers/brow
 import { createProxyProvider } from "../providers/proxy/index.js";
 import { campaignGeoPoint } from "../providers/browser/camoufox-geo.js";
 import { startBrowserWithLeaseRetry } from "./start-browser-with-lease.js";
+import { saveSessionSnapshot } from "./save-session-snapshot.js";
 import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
@@ -359,6 +360,14 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
             behaviourOverrides,
             onEvent,
           });
+
+    await saveSessionSnapshot(search, {
+      sessionId: session.id,
+      experimentId: input.experiment.id,
+      fallbackQuery: input.queryText,
+      egressCity: egress?.city,
+      identityExternalId: input.identity.externalId,
+    });
 
     const queriesUsed = search.searches.map((attempt) => attempt.queryText);
     const commonFields = {

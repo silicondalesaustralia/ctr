@@ -13,7 +13,14 @@ const kindLabels: Record<RankSnapshotRow["kind"], string> = {
   baseline: "Baseline",
   daily: "End of day",
   manual: "Manual",
+  session: "After session",
 };
+
+function whenLabel(row: RankSnapshotRow): string {
+  if (!row.capturedAt) return row.localDate;
+  const time = new Date(row.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${row.localDate} ${time}`;
+}
 
 export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Props) {
   if (rows.length === 0) {
@@ -43,7 +50,7 @@ export default function SnapshotHistoryTable({ rows, selectedId, onSelect }: Pro
                 background: row.id === selectedId ? "#f1f5f9" : undefined,
               }}
             >
-              <td style={cellStyle}>{row.localDate}</td>
+              <td style={cellStyle}>{whenLabel(row)}</td>
               <td style={cellStyle}>{kindLabels[row.kind]}</td>
               <td style={{ ...cellStyle, color: statusColors[row.status], fontWeight: 600 }}>
                 {positionLabel(row)}

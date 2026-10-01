@@ -8,6 +8,7 @@ import {
 } from "../browser/google-search.js";
 import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { clickLocalPackResult, findGmbInLocalPack } from "../browser/local-pack.js";
+import { captureRankView } from "../browser/rank-view.js";
 import type { GmbAction } from "../campaign/gmb-types.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
 import {
@@ -156,6 +157,7 @@ export async function runGmbSearchJourney(
     cid: found.cid,
     source: found.source,
   });
+  const rankView = (await captureRankView(page, found.title, found.source)) ?? undefined;
 
   await clickLocalPackResult(page, found);
   await onEvent("gmb_opened", { title: found.title, href: found.href });
@@ -198,6 +200,7 @@ export async function runGmbSearchJourney(
         resultUrl: found.href,
         landingUrl: site.finalUrl ?? sitePage.url(),
         actionResults,
+        rankView,
       };
     }
   }
@@ -223,5 +226,6 @@ export async function runGmbSearchJourney(
     resultUrl: found.href,
     landingUrl: page.url(),
     actionResults,
+    rankView,
   };
 }

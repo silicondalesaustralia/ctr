@@ -19,6 +19,7 @@ import {
   loadPinnedFingerprint,
 } from "./camoufox-fingerprint.js";
 import { buildCamoufoxGeo } from "./camoufox-geo.js";
+import { DISK_CACHE_PREFS, pruneProfileCaches } from "./profile-disk.js";
 
 const GOOGLE_ORIGINS = ["https://www.google.com.au", "https://www.google.com"];
 
@@ -73,7 +74,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       fingerprint: pinned.fingerprint,
       webgl_config: pinned.webgl,
       config: { ...pinned.seeds, ...geo.config },
-      firefox_user_prefs: geo.firefoxPrefs,
+      firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs },
       locale: "en-AU",
       humanize: true,
       i_know_what_im_doing: true,
@@ -103,6 +104,10 @@ export class CamoufoxProvider implements BrowserProfileProvider {
     await running.context.close().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[camoufox] Close failed for ${profileId}: ${message}`);
+    });
+    await pruneProfileCaches(profileId).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[camoufox] Cache prune failed for ${profileId}: ${message}`);
     });
   }
 
