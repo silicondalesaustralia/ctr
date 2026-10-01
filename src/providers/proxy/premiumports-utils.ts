@@ -1,4 +1,17 @@
+import { createHash } from "node:crypto";
 import type { ProxyAllocationRequest } from "./ProxyProvider.js";
+
+const MAX_SESSION_KEY_LENGTH = 24;
+
+/**
+ * Long keys are hashed, not truncated: retries append "r2".."r8" to a 25-char session id,
+ * and cutting that suffix off would request the same sticky IP on every retry.
+ */
+function premiumPortsSessionKey(raw: string): string {
+  const key = raw.replace(/[^a-zA-Z0-9]/g, "");
+  if (key.length <= MAX_SESSION_KEY_LENGTH) return key;
+  return createHash("sha256").update(key).digest("hex").slice(0, MAX_SESSION_KEY_LENGTH);
+}
 
 export interface PremiumPortsEndpoint {
   host: string;
@@ -30,9 +43,7 @@ export function buildPremiumPortsUsername(
   sessionTtlMinutes = 30,
 ): string {
   const country = (input.country || "AU").toLowerCase();
-  const sessionKey = (input.sessionKey ?? "session")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 24);
+  const sessionKey = premiumPortsSessionKey(input.sessionKey ?? "session");
   const parts = [baseUsername, `country-${country}`];
 
   if (!shouldSkipCityTargeting(input.city) && input.city) {

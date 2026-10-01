@@ -40,4 +40,14 @@ describe("premiumports-utils", () => {
       "u_mirfyuibzz-country-au-city-adelaide-session-abcdef001-ttl-30",
     );
   });
+
+  it("gives each lease retry of a long session id its own sticky session", () => {
+    const sessionId = "cmuph3pef0002pk0si9xr74qp";
+    const keys = ["", "r2", "r3"].map((suffix) =>
+      buildPremiumPortsUsername("u", { country: "AU", city: "Brisbane", sessionKey: `${sessionId}${suffix}` }),
+    );
+
+    expect(new Set(keys).size).toBe(3);
+    for (const key of keys) expect(key).toMatch(/-session-[a-z0-9]{24}-ttl-30$/);
+  });
 });
