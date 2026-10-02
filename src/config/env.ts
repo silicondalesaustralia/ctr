@@ -78,6 +78,11 @@ const envSchema = z.object({
   /** Persistent Camoufox user-data dirs (Railway volume in prod). Headful follows GOLOGIN_HEADLESS. */
   CAMOUFOX_PROFILE_DIR: z.string().default("./tmp/camoufox-profiles"),
   PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports"]).default("mock"),
+  /** Send Google an x-geo device location (identity's city / campaign point). Kill switch: "false". */
+  GOOGLE_XGEO_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== "false" && v !== "0"),
   DRY_RUN: z
     .string()
     .optional()

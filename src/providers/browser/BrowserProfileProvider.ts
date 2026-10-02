@@ -43,6 +43,8 @@ export interface GeoPoint {
 export interface StartProfileOptions {
   /** Browser GPS location (Camoufox only); otherwise derived from the proxy IP. */
   geoPoint?: GeoPoint;
+  /** Location sent to Google as x-geo; defaults to geoPoint, then the proxy city (Camoufox only). */
+  googleGeoPoint?: GeoPoint;
 }
 
 export interface BrowserProfileProvider {

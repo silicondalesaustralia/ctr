@@ -18,6 +18,7 @@ import { isValidGoLoginProfileId } from "../providers/browser/gologin-utils.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
 import { updatePreflightJobProgress } from "./preflight-jobs.js";
 import { rankByWarmth } from "./preflight-identity-rank.js";
+import { preflightGeoPoint } from "../browser/google-geo-header.js";
 import { checkGmbQueryOnPage } from "./gmb-preflight-check.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
@@ -289,7 +290,7 @@ export async function runSerpPreflightChecks(input: {
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
       timezone: identity.timezone,
-    });
+    }, { googleGeoPoint: preflightGeoPoint(input.region, input.focusCity) });
     cloudStarted = useGoLogin;
 
     let page: Page;

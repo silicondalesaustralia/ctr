@@ -20,6 +20,7 @@ import {
 } from "./camoufox-fingerprint.js";
 import { buildCamoufoxGeo } from "./camoufox-geo.js";
 import { DISK_CACHE_PREFS, pruneProfileCaches } from "./profile-disk.js";
+import { applyGoogleGeoHeader, cityGeoPoint } from "../../browser/google-geo-header.js";
 
 const GOOGLE_ORIGINS = ["https://www.google.com.au", "https://www.google.com"];
 
@@ -61,10 +62,14 @@ export class CamoufoxProvider implements BrowserProfileProvider {
     const geo = await buildCamoufoxGeo(proxy, options.geoPoint);
     const dir = profileDir(profileId);
     await mkdir(dir, { recursive: true });
+    const googleGeo = getEnv().GOOGLE_XGEO_ENABLED
+      ? (options.googleGeoPoint ?? options.geoPoint ?? cityGeoPoint(proxy?.city, profileId))
+      : undefined;
 
     console.error(
       `[camoufox] Starting ${profileId} os=${pinned.os} egress=${geo.egressIp}` +
-        ` tz=${String(geo.config.timezone ?? "?")}${options.geoPoint ? " gps=campaign" : ""}`,
+        ` tz=${String(geo.config.timezone ?? "?")}${options.geoPoint ? " gps=campaign" : ""}` +
+        (googleGeo ? ` xgeo=${googleGeo.latitude.toFixed(3)},${googleGeo.longitude.toFixed(3)}` : " xgeo=off"),
     );
 
     const context = await Camoufox({
@@ -95,6 +100,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
         await context.grantPermissions(["geolocation"], { origin });
       }
     }
+    if (googleGeo) await applyGoogleGeoHeader(context, googleGeo);
 
     return { profileId, context, runtime: "camoufox" };
   }
