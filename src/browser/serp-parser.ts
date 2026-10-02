@@ -10,9 +10,10 @@ import {
 import { SERP_ANCHOR_SELECTOR, trustedClickPicked } from "./serp-trusted-click.js";
 import { goToNextSerpPage, RESULT_TITLE_SELECTOR } from "./serp-pagination.js";
 import { expandOmittedResults } from "./serp-omitted.js";
+import { NON_ORGANIC_CONTAINER_SELECTOR, NON_ORGANIC_HEADING_PATTERN } from "./serp-exclusions.js";
 
 /** Bump when click strategy changes — visible in worker logs to confirm deploy. */
-export const SERP_CLICK_STRATEGY = "v6-commit-wait";
+export const SERP_CLICK_STRATEGY = "v7-organic-only";
 
 export interface SerpResult {
   /** Organic position within the current results page. */
@@ -76,12 +77,23 @@ const ORGANIC_SELECTORS = [
 
 /** Single page.evaluate round-trip — avoids ~11 min Playwright-per-link scans over cloud CDP. */
 export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCandidate[]> {
-  return page.evaluate((selectors) => {
+  return page.evaluate(({ selectors, excluded, headingPattern }) => {
     const links: Array<{ href: string; title: string; displayedUrl: string }> = [];
     const seen = new Set<string>();
+    const nonOrganicHeading = new RegExp(headingPattern, "i");
+    const headingSelector =
+      ":scope > h2, :scope > div[role='heading'], :scope > * > h2, :scope > * > div[role='heading'][aria-level='2']";
 
     for (const selector of selectors) {
       for (const anchor of Array.from(document.querySelectorAll(selector))) {
+        let inFeature = anchor.closest(excluded) !== null;
+        for (let el = anchor.parentElement; !inFeature && el && !["rso", "search", "center_col", "botstuff"].includes(el.id) && el !== document.body; el = el.parentElement) {
+          const heading = el.querySelector(headingSelector);
+          inFeature = Boolean(heading && nonOrganicHeading.test((heading.textContent ?? "").replace(/\s+/g, " ").trim()));
+        }
+        if (inFeature) {
+          continue;
+        }
         const href = anchor.getAttribute("href");
         if (!href || href.startsWith("#") || href.startsWith("/search") || /google\.[a-z.]+\/search/i.test(href)) {
           continue;
@@ -132,6 +144,14 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
     }
 
     for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
+      let inFeature = anchor.closest(excluded) !== null;
+      for (let el = anchor.parentElement; !inFeature && el && !["rso", "search", "center_col", "botstuff"].includes(el.id) && el !== document.body; el = el.parentElement) {
+        const heading = el.querySelector(headingSelector);
+        inFeature = Boolean(heading && nonOrganicHeading.test((heading.textContent ?? "").replace(/\s+/g, " ").trim()));
+      }
+      if (inFeature) {
+        continue;
+      }
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("/search") || /google\.[a-z.]+\/search/i.test(href)) {
         continue;
@@ -166,7 +186,11 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
       links.push({ href, title, displayedUrl });
     }
     return links;
-  }, ORGANIC_SELECTORS);
+  }, {
+    selectors: ORGANIC_SELECTORS,
+    excluded: NON_ORGANIC_CONTAINER_SELECTOR,
+    headingPattern: NON_ORGANIC_HEADING_PATTERN,
+  });
 }
 
 /**
