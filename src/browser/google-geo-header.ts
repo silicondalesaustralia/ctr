@@ -21,8 +21,11 @@ const REGION_CAPITALS: Record<string, string> = {
 /** Suburbs around the CBD, not the CBD itself: each identity keeps one "home" point. */
 const CITY_SPREAD_KM = 8;
 
-/** Only Google search hosts; the target site and everything else never see the header. */
-const GOOGLE_HOSTS = /^https:\/\/www\.google\.com(\.au)?\//;
+/**
+ * Only www.google.com: google.com.au redirects there, and intercepting a redirected
+ * navigation makes Firefox fail with NS_ERROR_REDIRECT_LOOP.
+ */
+const GOOGLE_HOSTS = /^https:\/\/www\.google\.com\//;
 
 export function cityGeoPoint(city: string | null | undefined, seed: string): GeoPoint | undefined {
   const centre = city ? CITY_CENTRES[city.trim().toLowerCase()] : undefined;
