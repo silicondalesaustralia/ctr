@@ -651,6 +651,20 @@ export async function runCampaign(experimentId: string): Promise<CampaignWithQue
             (existing.focusRegion && existing.focusRegion !== "ALL"
               ? existing.focusRegion
               : null);
+      if (existing.requireWarmupIdentities) {
+        const unwarmed = await getCampaignIdentityPool(
+          experimentId,
+          existing.focusRegion,
+          existing.focusCity,
+          { ignoreWarmup: true },
+        );
+        if (unwarmed.length > 0) {
+          throw new Error(
+            `Cannot start: ${unwarmed.length} identities match ${where ?? "this campaign"} but none have finished warmup. ` +
+              "Wait for warmup to complete, or set the identity pool to include unwarmed identities in the review step.",
+          );
+        }
+      }
       throw new Error(
         where
           ? `Cannot start: no identities match ${where} (${scope}-wide pool). Pick matching identities on the Identities tab, or clear the selection to use the full ${scope} pool.`

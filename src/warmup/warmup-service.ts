@@ -554,6 +554,7 @@ export async function getCampaignIdentityPool(
   experimentId: string,
   focusRegion?: string | null,
   focusCity?: string | null,
+  opts: { ignoreWarmup?: boolean } = {},
 ): Promise<Identity[]> {
   const experiment = await prisma.experiment.findUniqueOrThrow({
     where: { id: experimentId },
@@ -565,7 +566,7 @@ export async function getCampaignIdentityPool(
       country: true,
     },
   });
-  const requireWarmup = experiment.requireWarmupIdentities;
+  const requireWarmup = opts.ignoreWarmup ? false : experiment.requireWarmupIdentities;
   const scope = experiment.identityGeoScope === "country" ? "country" : "city";
   const city = focusCity ?? experiment.focusCity;
   const region = focusRegion ?? experiment.focusRegion;
@@ -597,10 +598,9 @@ export async function getCampaignIdentityPool(
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
+      ...(experiment.country ? { country: experiment.country } : {}),
       ...(scope === "country"
-        ? experiment.country
-          ? { country: experiment.country }
-          : {}
+        ? {}
         : city?.trim()
           ? { city: city.trim() }
           : !city?.trim() && region && region !== "ALL"
