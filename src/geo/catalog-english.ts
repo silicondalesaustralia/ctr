@@ -65,6 +65,7 @@ export const ENGLISH_COUNTRIES: readonly CountryConfig[] = [
       { region: "MAN", city: "Manchester", timezone: "Europe/London", weight: 12, latitude: 53.4808, longitude: -2.2426 },
       { region: "BIR", city: "Birmingham", timezone: "Europe/London", weight: 12, latitude: 52.4862, longitude: -1.8904 },
       { region: "LDS", city: "Leeds", timezone: "Europe/London", weight: 8, latitude: 53.8008, longitude: -1.5491 },
+      { region: "WYK", city: "Bradford", timezone: "Europe/London", weight: 4, latitude: 53.796, longitude: -1.7594 },
       { region: "GLA", city: "Glasgow", timezone: "Europe/London", weight: 8, latitude: 55.8642, longitude: -4.2518 },
       { region: "LIV", city: "Liverpool", timezone: "Europe/London", weight: 7, latitude: 53.4084, longitude: -2.9916 },
       { region: "EDI", city: "Edinburgh", timezone: "Europe/London", weight: 7, latitude: 55.9533, longitude: -3.1883 },

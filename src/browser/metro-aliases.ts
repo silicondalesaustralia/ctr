@@ -17,6 +17,8 @@ const METRO_ALIASES: Record<string, readonly string[]> = {
   london: ["cityoflondon", "westminster", "croydon", "camden", "islington", "hackney", "southwark", "lambeth", "ealing", "enfield"],
   manchester: ["salford", "stockport", "oldham", "bolton", "trafford"],
   birmingham: ["solihull", "wolverhampton", "walsall", "dudley", "westbromwich"],
+  bradford: ["leeds", "wakefield", "huddersfield", "halifax", "keighley", "shipley", "bingley", "dewsbury", "batley", "pudsey"],
+  leeds: ["bradford", "wakefield", "huddersfield", "halifax", "shipley", "pudsey", "morley", "dewsbury", "batley"],
   dublin: ["dunlaoghaire", "swords", "tallaght", "blanchardstown"],
   paris: ["boulognebillancourt", "saintdenis", "montreuil", "nanterre", "versailles"],
   amsterdam: ["amstelveen", "zaandam", "haarlem"],
