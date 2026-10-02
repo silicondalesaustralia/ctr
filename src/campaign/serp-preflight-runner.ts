@@ -19,6 +19,7 @@ import { isIdentityRunnable } from "../identities/provider-compat.js";
 import { updatePreflightJobProgress } from "./preflight-jobs.js";
 import { rankByWarmth } from "./preflight-identity-rank.js";
 import { preflightGeoPoint } from "../browser/google-geo-header.js";
+import { googleTargetFor, type GoogleTarget } from "../geo/google-target.js";
 import { checkGmbQueryOnPage } from "./gmb-preflight-check.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import {
@@ -49,6 +50,7 @@ export async function pickPreflightIdentity(
   region: string,
   identityExternalId?: string,
   city?: string | null,
+  country?: string | null,
 ): Promise<Identity> {
   const requireGoLogin = getEnv().BROWSER_PROFILE_PROVIDER === "gologin";
 
@@ -85,9 +87,12 @@ export async function pickPreflightIdentity(
     return assertGoLoginProfile(identity);
   }
 
-  const identities = filterPool(await prisma.identity.findMany({ where: { active: true } }));
+  const countryCode = country?.trim().toUpperCase();
+  const identities = filterPool(
+    await prisma.identity.findMany({ where: { active: true, ...(countryCode && { country: countryCode }) } }),
+  );
   if (identities.length === 0) {
-    throw new Error("No active identities available for Google preflight.");
+    throw new Error(`No active identities available for Google preflight${countryCode ? ` in ${countryCode}` : ""}.`);
   }
 
   const cityPool = city?.trim()
@@ -113,6 +118,7 @@ async function checkQueryOnPage(
   maxSerpPages: number,
   persona: typeof FAST_DRY_RUN_PERSONA,
   traits: ReturnType<typeof generateSessionTraits>,
+  google: GoogleTarget,
 ): Promise<PreflightQueryResult> {
   try {
     if (isDryRun()) {
@@ -138,7 +144,7 @@ async function checkQueryOnPage(
       };
     }
 
-    await openGoogle(page);
+    await openGoogle(page, google);
     const blockedAfterOpen = await checkBlocked(page);
     if (blockedAfterOpen.blocked) {
       return {
@@ -210,6 +216,7 @@ export async function runSerpPreflightChecks(input: {
   jobId?: string;
   campaignKind?: "url" | "gmb";
   focusCity?: string | null;
+  country?: string | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
 }): Promise<PreflightQueryResult[]> {
@@ -218,6 +225,7 @@ export async function runSerpPreflightChecks(input: {
     input.region,
     input.identityExternalId,
     input.focusCity,
+    input.country,
   );
   const persona = FAST_DRY_RUN_PERSONA;
   const traits = generateSessionTraits(persona, `preflight-${Date.now()}`, identity.externalId);
@@ -272,7 +280,7 @@ export async function runSerpPreflightChecks(input: {
     }
 
     const proxyLease = await allocateCleanLease(proxyProvider, {
-      country: "AU",
+      country: identity.country,
       region: identity.region,
       city: identity.city,
       sessionKey: `preflight-${hashValue(input.targetUrl)}`,
@@ -290,7 +298,8 @@ export async function runSerpPreflightChecks(input: {
       city: proxyLease.city,
       sessionKey: proxyLease.sessionKey,
       timezone: identity.timezone,
-    }, { googleGeoPoint: preflightGeoPoint(input.region, input.focusCity) });
+      locale: identity.locale,
+    }, { googleGeoPoint: preflightGeoPoint(identity.country, input.region, input.focusCity) });
     cloudStarted = useGoLogin;
 
     let page: Page;
@@ -310,9 +319,10 @@ export async function runSerpPreflightChecks(input: {
       throw new Error("gmbBusinessName is required for GMB preflight");
     }
 
+    const google = googleTargetFor(identity.country, identity.locale);
     for (const query of input.queries) {
       const result = isGmb
-        ? await checkGmbQueryOnPage(page, query, businessName, input.gmbPlaceId)
+        ? await checkGmbQueryOnPage(page, query, businessName, google, input.gmbPlaceId)
         : await checkQueryOnPage(
             page,
             query,
@@ -320,6 +330,7 @@ export async function runSerpPreflightChecks(input: {
             input.maxSerpPages,
             persona,
             traits,
+            google,
           );
       results.push(result);
       if (input.jobId) {

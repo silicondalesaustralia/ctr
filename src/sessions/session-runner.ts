@@ -16,6 +16,7 @@ import { assertEgressPrefixClean } from "../providers/proxy/ip-reputation.js";
 import { isWarmupEligible } from "../warmup/warmup-service.js";
 import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
+import { googleTargetFor } from "../geo/google-target.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
 import { campaignGeoPoint } from "../providers/browser/camoufox-geo.js";
@@ -93,7 +94,7 @@ function proxyFields(
 ) {
   return {
     proxyProvider: env.PROXY_PROVIDER,
-    proxyCountry: egress?.country ?? "AU",
+    proxyCountry: egress?.country ?? identity.country,
     proxyRegion: egress?.region ?? identity.region,
     proxyCity: egress?.city ?? identity.city,
     proxyIpHash: hashValue(
@@ -212,13 +213,14 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
       browserProvider,
       profileId,
       allocation: {
-        country: "AU",
+        country: input.identity.country,
         region: input.identity.region,
         city: input.identity.city,
         sessionKey: session.id,
         deviceClass: input.identity.deviceClass,
       },
       timezone: input.identity.timezone,
+      locale: input.identity.locale,
       options: { geoPoint: campaignGeoPoint(input.experiment, input.identity.externalId) },
       onLease: (leaseId) => {
         proxyLeaseId = leaseId;
@@ -244,7 +246,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
           const expectedCity = shouldSkipCityTargeting(input.identity.city)
             ? undefined
             : input.identity.city;
-          verified = await verifyBrowserEgressGeo(openedPage, "AU", expectedCity);
+          verified = await verifyBrowserEgressGeo(openedPage, input.identity.country, expectedCity);
           await assertEgressPrefixClean(verified.ip);
         }
         return { page: openedPage, egress: verified };
@@ -335,6 +337,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
 
     const cluster = await getExperimentQueries(input.experiment.id);
     const initialQuery = resolveInitialQuery(input.queryText, cluster);
+    const google = googleTargetFor(input.identity.country, input.identity.locale);
 
     const search =
       input.experiment.campaignKind === "gmb"
@@ -347,6 +350,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
             placeId: input.experiment.gmbPlaceId,
             actions: parseActionsJson(input.experiment.gmbActionsJson),
             onEvent,
+            google,
           })
         : await runSearchJourney({
             page,
@@ -359,6 +363,7 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
             maxSerpPages: input.experiment.maxSerpPages,
             behaviourOverrides,
             onEvent,
+            google,
           });
 
     await saveSessionSnapshot(search, {

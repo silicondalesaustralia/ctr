@@ -9,6 +9,8 @@ export interface ProxyConfig {
   sessionKey?: string;
   /** Profile timezone. Avoids a GoLogin GET that has been timing out. */
   timezone?: string;
+  /** Identity locale (e.g. en-GB) for the browser's language settings. */
+  locale?: string;
 }
 
 export interface ProxyLease {
@@ -17,7 +19,8 @@ export interface ProxyLease {
   port: number;
   username: string;
   password: string;
-  country: "AU";
+  /** ISO country code, upper case. */
+  country: string;
   region?: string;
   city?: string;
   sessionKey?: string;

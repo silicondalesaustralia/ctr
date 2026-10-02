@@ -4,7 +4,8 @@ import { logger } from "../config/logger.js";
 import { createAdditionalIdentities } from "../identities/identity-service.js";
 import { activeProfileProvider } from "../identities/provider-compat.js";
 import { addMinutes, randomBetween } from "../utils/helpers.js";
-import { countPoolIdentities, getWarmPoolTargets } from "./warm-pool-settings.js";
+import { countPoolIdentities, getWarmPoolTargets, parseWarmPoolKey } from "./warm-pool-settings.js";
+import { campaignIdentityLocation } from "../campaign/geo-capacity.js";
 
 /** Cap identity creation per tick so a big target ramps up gradually. */
 const MAX_CREATED_PER_TICK = 3;
@@ -17,17 +18,20 @@ export async function topUpWarmPools(): Promise<number> {
   const targets = await getWarmPoolTargets();
   let budget = MAX_CREATED_PER_TICK;
 
-  for (const [city, target] of Object.entries(targets)) {
+  for (const [key, target] of Object.entries(targets)) {
     if (budget <= 0) break;
-    const { warming, eligible } = await countPoolIdentities(city);
+    const { country, city } = parseWarmPoolKey(key);
+    const { warming, eligible } = await countPoolIdentities(city, country);
     const deficit = target - warming - eligible;
     if (deficit <= 0) continue;
 
     const count = Math.min(deficit, budget);
-    const result = await createAdditionalIdentities({ count, city, desktopPercent: 100 });
+    const location = await campaignIdentityLocation(country, city);
+    const result = await createAdditionalIdentities({ count, desktopPercent: 100, ...location });
     budget -= result.created.length;
     logger.info({
       event: "warm_pool_topped_up",
+      country,
       city,
       created: result.created.length,
       range: `${result.fromExternalId}..${result.toExternalId}`,

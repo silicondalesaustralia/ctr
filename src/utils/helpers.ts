@@ -56,15 +56,17 @@ export async function loadMockSerpInPage(
 
 export type GoogleHrefKind = "direct" | "url_redirect" | "goto_redirect" | "other_google";
 
+/** google.com and every ccTLD (google.co.uk, google.com.au, google.de, ...), with subdomains. */
+const GOOGLE_HOST = /(^|\.)google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$/;
+
+export function isGoogleHost(hostname: string): boolean {
+  return GOOGLE_HOST.test(hostname.toLowerCase());
+}
+
 export function classifyGoogleSerpHref(href: string): GoogleHrefKind {
   try {
     const url = new URL(href, "https://www.google.com");
-    const host = url.hostname.replace(/^www\./, "").toLowerCase();
-    const isGoogle =
-      host === "google.com" ||
-      host.endsWith(".google.com") ||
-      host === "google.com.au" ||
-      host.endsWith(".google.com.au");
+    const isGoogle = isGoogleHost(url.hostname);
     if (!isGoogle && !href.startsWith("/")) {
       return "direct";
     }
@@ -141,13 +143,7 @@ export function domainMatches(url: string, targetDomain: string): boolean {
 export function isGoogleRedirectPage(url: string): boolean {
   try {
     const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
-    const isGoogle =
-      host === "google.com" ||
-      host.endsWith(".google.com") ||
-      host === "google.com.au" ||
-      host.endsWith(".google.com.au");
-    if (!isGoogle) return false;
+    if (!isGoogleHost(parsed.hostname)) return false;
     return (
       parsed.pathname === "/goto" ||
       parsed.pathname.startsWith("/goto") ||

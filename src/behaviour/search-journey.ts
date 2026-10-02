@@ -24,6 +24,7 @@ import {
   shouldReformulate,
 } from "./query-evolution.js";
 import { inspectSerp } from "./serp-inspection.js";
+import type { GoogleTarget } from "../geo/google-target.js";
 import type {
   BehaviourEventCallback,
   BehaviourOverrides,
@@ -44,6 +45,8 @@ export interface SearchJourneyInput {
   maxSerpPages: number;
   behaviourOverrides?: BehaviourOverrides;
   onEvent: BehaviourEventCallback;
+  /** Identity's Google country/language. */
+  google: GoogleTarget;
 }
 
 async function findTargetWithInspection(
@@ -139,7 +142,7 @@ export async function runSearchJourney(
       await onEvent("serp_loaded");
     } else {
       if (!openedGoogle) {
-        await openGoogle(page);
+        await openGoogle(page, input.google);
         googleLoaded = true;
         openedGoogle = true;
         await onEvent("google_loaded");

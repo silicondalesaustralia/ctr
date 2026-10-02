@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { RegionOption } from "./shared";
 import { inputStyle, labelStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle } from "./shared";
 
@@ -22,6 +23,7 @@ interface Props {
   gscConnectionId: string | null;
   gscSiteUrl: string | null;
   regions: RegionOption[];
+  countryField?: ReactNode;
   connections: GscConnectionOption[];
   sites: GscSiteOption[];
   sitesLoading: boolean;
@@ -41,6 +43,7 @@ export default function CampaignSetupStep({
   gscConnectionId,
   gscSiteUrl,
   regions,
+  countryField,
   connections,
   sites,
   sitesLoading,
@@ -84,6 +87,8 @@ export default function CampaignSetupStep({
             placeholder="https://www.example.com.au/page"
           />
         </label>
+
+        {countryField}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <label>

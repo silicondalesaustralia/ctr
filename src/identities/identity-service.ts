@@ -3,14 +3,23 @@ import { prisma } from "../db/client.js";
 import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { activeProfileProvider } from "./provider-compat.js";
-import { AU_REGIONS, findRegionConfigByCity, isRegionCoherent, pickWeightedRegion } from "./regions.js";
+import { findRegionConfigByCode, isRegionCoherent } from "./regions.js";
 import { isWarmupEligible, scheduleWarmupForIdentity } from "../warmup/warmup-service.js";
+import { DEFAULT_COUNTRY, resolveIdentityLocation } from "../geo/locations.js";
+import type { CustomLocationInput } from "../geo/types.js";
 
-export interface CreateIdentitiesOptions {
+export interface IdentityLocationOptions {
+  /** ISO country code from the built-in list (default AU). */
+  country?: string;
+  /** Force all new identities into this catalog city (e.g. Adelaide for GMB). */
+  city?: string;
+  /** Location outside the built-in list; overrides country/city. */
+  custom?: CustomLocationInput;
+}
+
+export interface CreateIdentitiesOptions extends IdentityLocationOptions {
   count: number;
   desktopPercent?: number;
-  /** Force all new identities into this city (e.g. Adelaide for GMB). */
-  city?: string;
 }
 
 /** Camoufox is desktop Firefox only — mobile identities cannot be created under it. */
@@ -18,12 +27,13 @@ function effectiveDesktopPercent(desktopPercent: number): number {
   return activeProfileProvider() === ProfileProvider.camoufox ? 100 : desktopPercent;
 }
 
-function externalIdForIndex(index: number): string {
-  return `au_${String(index).padStart(3, "0")}`;
+/** Numbers are global across countries, so au_005 and gb_005 never both exist. */
+function externalIdForIndex(index: number, country = DEFAULT_COUNTRY): string {
+  return `${country.toLowerCase()}_${String(index).padStart(3, "0")}`;
 }
 
 export function parseExternalIdNumber(externalId: string): number | null {
-  const match = /^au_(\d+)$/.exec(externalId);
+  const match = /^[a-z]{2}_(\d+)$/.exec(externalId);
   if (!match) return null;
   return Number.parseInt(match[1]!, 10);
 }
@@ -70,23 +80,21 @@ async function createIdentityBatch(
   startIndex: number,
   count: number,
   desktopPercent: number,
-  city?: string,
+  location: IdentityLocationOptions,
 ): Promise<Identity[]> {
   const browserProvider = createBrowserProvider();
   const provider = activeProfileProvider();
 
-  const forcedRegion = city ? findRegionConfigByCity(city) : undefined;
-  if (city && !forcedRegion) {
-    throw new Error(`Unknown city for identity creation: ${city}`);
-  }
+  // Validate before creating any browser profile.
+  resolveIdentityLocation(location, 0, count);
 
   const desktopCount = Math.round((count * effectiveDesktopPercent(desktopPercent)) / 100);
   const created: Identity[] = [];
 
   for (let offset = 0; offset < count; offset += 1) {
     const index = startIndex + offset;
-    const externalId = externalIdForIndex(index);
-    const regionConfig = forcedRegion ?? pickWeightedRegion(offset, count);
+    const regionConfig = resolveIdentityLocation(location, offset, count);
+    const externalId = externalIdForIndex(index, regionConfig.country);
     const deviceClass = offset < desktopCount ? DeviceClass.desktop : DeviceClass.mobile;
     const osFamily =
       deviceClass === DeviceClass.mobile
@@ -99,7 +107,7 @@ async function createIdentityBatch(
       name: externalId,
       deviceClass,
       osFamily,
-      locale: "en-AU",
+      locale: regionConfig.locale,
       timezone: regionConfig.timezone,
       region: regionConfig.region,
       city: regionConfig.city,
@@ -118,9 +126,9 @@ async function createIdentityBatch(
         profileProvider: provider,
         deviceClass,
         osFamily,
-        locale: "en-AU",
+        locale: regionConfig.locale,
         timezone: regionConfig.timezone,
-        country: "AU",
+        country: regionConfig.country,
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
@@ -142,13 +150,14 @@ export async function createIdentities(
   const { count, desktopPercent = 65 } = options;
   const browserProvider = createBrowserProvider();
   const provider = activeProfileProvider();
+  resolveIdentityLocation(options, 0, count);
 
   const desktopCount = Math.round((count * effectiveDesktopPercent(desktopPercent)) / 100);
   const created: Identity[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const externalId = externalIdForIndex(i + 1);
-    const regionConfig = pickWeightedRegion(i, count);
+    const regionConfig = resolveIdentityLocation(options, i, count);
+    const externalId = externalIdForIndex(i + 1, regionConfig.country);
     const deviceClass = i < desktopCount ? DeviceClass.desktop : DeviceClass.mobile;
     const osFamily =
       deviceClass === DeviceClass.mobile
@@ -161,7 +170,7 @@ export async function createIdentities(
       name: externalId,
       deviceClass,
       osFamily,
-      locale: "en-AU",
+      locale: regionConfig.locale,
       timezone: regionConfig.timezone,
       region: regionConfig.region,
       city: regionConfig.city,
@@ -180,9 +189,9 @@ export async function createIdentities(
         profileProvider: provider,
         deviceClass,
         osFamily,
-        locale: "en-AU",
+        locale: regionConfig.locale,
         timezone: regionConfig.timezone,
-        country: "AU",
+        country: regionConfig.country,
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
@@ -193,9 +202,9 @@ export async function createIdentities(
         profileProvider: provider,
         deviceClass,
         osFamily,
-        locale: "en-AU",
+        locale: regionConfig.locale,
         timezone: regionConfig.timezone,
-        country: "AU",
+        country: regionConfig.country,
         region: regionConfig.region,
         city: regionConfig.city,
         active: true,
@@ -226,7 +235,7 @@ export async function createIdentities(
 export async function createAdditionalIdentities(
   options: CreateIdentitiesOptions,
 ): Promise<{ created: Identity[]; fromExternalId: string; toExternalId: string }> {
-  const { count, desktopPercent = 65, city } = options;
+  const { count, desktopPercent = 65, country, city, custom } = options;
   if (count <= 0) {
     throw new Error("count must be positive");
   }
@@ -235,12 +244,12 @@ export async function createAdditionalIdentities(
   }
 
   const maxIndex = await getMaxExternalIdNumber();
-  const created = await createIdentityBatch(maxIndex + 1, count, desktopPercent, city);
+  const created = await createIdentityBatch(maxIndex + 1, count, desktopPercent, { country, city, custom });
 
   return {
     created,
-    fromExternalId: externalIdForIndex(maxIndex + 1),
-    toExternalId: externalIdForIndex(maxIndex + count),
+    fromExternalId: created[0]?.externalId ?? externalIdForIndex(maxIndex + 1),
+    toExternalId: created[created.length - 1]?.externalId ?? externalIdForIndex(maxIndex + count),
   };
 }
 
@@ -255,15 +264,15 @@ export async function validateIdentities(): Promise<ValidationIssue[]> {
   const issues: ValidationIssue[] = [];
 
   for (const identity of identities) {
-    if (!isRegionCoherent(identity.region, identity.timezone, identity.locale)) {
+    if (!isRegionCoherent(identity.region, identity.timezone, identity.locale, identity.country)) {
       issues.push({
         identityId: identity.id,
         externalId: identity.externalId,
-        issue: `Inconsistent region/timezone/locale: ${identity.region}/${identity.timezone}/${identity.locale}`,
+        issue: `Inconsistent region/timezone/locale: ${identity.country}/${identity.region}/${identity.timezone}/${identity.locale}`,
       });
     }
 
-    const regionMatch = AU_REGIONS.find((r) => r.region === identity.region);
+    const regionMatch = findRegionConfigByCode(identity.region, identity.country);
     if (regionMatch && regionMatch.city !== identity.city) {
       issues.push({
         identityId: identity.id,

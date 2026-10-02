@@ -10,11 +10,13 @@ import { isDryRun } from "../config/env.js";
 import { FAST_DRY_RUN_PERSONA } from "../behaviour/personas.js";
 import { generateSessionTraits } from "../behaviour/session-traits.js";
 import type { PreflightQueryResult } from "./preflight-types.js";
+import type { GoogleTarget } from "../geo/google-target.js";
 
 export async function checkGmbQueryOnPage(
   page: Page,
   query: string,
   businessName: string,
+  google: GoogleTarget,
   placeId?: string | null,
 ): Promise<PreflightQueryResult> {
   try {
@@ -29,7 +31,7 @@ export async function checkGmbQueryOnPage(
       };
     }
 
-    await openGoogle(page);
+    await openGoogle(page, google);
     const blockedAfterOpen = await checkBlocked(page);
     if (blockedAfterOpen.blocked) {
       return {

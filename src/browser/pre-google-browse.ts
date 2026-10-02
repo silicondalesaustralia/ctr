@@ -1,23 +1,18 @@
 import type { Page } from "./pw.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
-
-const AU_WARM_SITES = [
-  "https://www.abc.net.au/",
-  "https://www.bom.gov.au/",
-  "https://www.news.com.au/",
-  "https://www.smh.com.au/",
-  "https://www.theage.com.au/",
-];
+import { warmSitesFor } from "../geo/locations.js";
 
 export interface BrowseAuSitesOptions {
   minSites?: number;
   maxSites?: number;
   /** Longer dwells for cookie-age browse-only sessions. */
   longDwell?: boolean;
+  /** Identity country; picks that country's everyday sites (default AU). */
+  country?: string;
 }
 
 /**
- * Browse normal AU sites (never Google) to age cookies / look human.
+ * Browse normal local sites (never Google) to age cookies / look human.
  */
 export async function browseAuSites(
   page: Page,
@@ -28,7 +23,7 @@ export async function browseAuSites(
   const longDwell = options.longDwell ?? false;
   const visited: string[] = [];
   const count = randomBetween(minSites, maxSites);
-  const pool = [...AU_WARM_SITES];
+  const pool = [...warmSitesFor(options.country ?? "AU")];
 
   for (let i = 0; i < count && pool.length > 0; i += 1) {
     const index = randomBetween(0, pool.length - 1);
@@ -45,7 +40,7 @@ export async function browseAuSites(
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[warmup] AU browse failed for ${url}: ${message}`);
+      console.error(`[warmup] local browse failed for ${url}: ${message}`);
     }
   }
 
@@ -53,8 +48,8 @@ export async function browseAuSites(
 }
 
 /**
- * Short AU softener before Google so the session is not Search-only.
+ * Short local softener before Google so the session is not Search-only.
  */
-export async function browseAuSitesBeforeGoogle(page: Page): Promise<string[]> {
-  return browseAuSites(page, { minSites: 1, maxSites: 2 });
+export async function browseAuSitesBeforeGoogle(page: Page, country = "AU"): Promise<string[]> {
+  return browseAuSites(page, { minSites: 1, maxSites: 2, country });
 }

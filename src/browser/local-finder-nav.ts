@@ -1,14 +1,20 @@
 import type { Page } from "./pw.js";
 import { acceptConsentIfPresent, assertNotBlocked } from "./blocked-detection.js";
 import { mapsSearchUrl } from "./local-pack-collect.js";
+import {
+  DEFAULT_GOOGLE_TARGET,
+  googleQueryParams,
+  googleTargetForPage,
+  type GoogleTarget,
+} from "../geo/google-target.js";
 
 const MORE_BUSINESSES_LINK = 'a[href*="udm=local"], a[href*="udm=1"], a[href*="tbm=lcl"]';
 const LOCAL_FINDER_URL = /[?&](udm=(1|local)|tbm=lcl)(&|$)/i;
 
 /** Last-resort URL: a direct jump draws CAPTCHAs far more often than clicking "More businesses". */
-export function localFinderUrl(query: string): string {
+export function localFinderUrl(query: string, target: GoogleTarget = DEFAULT_GOOGLE_TARGET): string {
   const q = encodeURIComponent(query.trim());
-  return `https://www.google.com.au/search?q=${q}&udm=1&hl=en-AU&gl=au`;
+  return `${target.origin}/search?q=${q}&udm=1&${googleQueryParams(target)}`;
 }
 
 export function isLocalFinderPage(url: string): boolean {
@@ -78,7 +84,7 @@ export async function openLocalFinder(page: Page, query: string): Promise<void> 
   if (isLocalFinderPage(page.url())) return;
   if (!(await clickMoreBusinesses(page))) {
     console.error("[gmb] No usable 'More businesses' link; opening Places list by URL");
-    await gotoSettled(page, localFinderUrl(query));
+    await gotoSettled(page, localFinderUrl(query, googleTargetForPage(page)));
   }
   await acceptConsentIfPresent(page);
   await page.waitForTimeout(2000);
@@ -88,7 +94,7 @@ export async function openLocalFinder(page: Page, query: string): Promise<void> 
 
 /** Keyword-only Maps search, used when the Places list is empty. */
 export async function openMapsSearch(page: Page, query: string): Promise<void> {
-  const target = mapsSearchUrl(query);
+  const target = mapsSearchUrl(query, googleTargetForPage(page));
   if (page.url().startsWith(target.split("?")[0]!)) return;
   await gotoSettled(page, target);
   await acceptConsentIfPresent(page);

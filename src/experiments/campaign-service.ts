@@ -18,7 +18,7 @@ import {
   buildExperimentName,
   extractTargetDomain,
   generateQueryCluster,
-  resolveRegionTimezone,
+  normalizeCampaignCountry,
 } from "./query-generator.js";
 import { createExperimentFromInput, type CreateExperimentInput } from "./experiment-service.js";
 import { assignMissingPersonas, createAdditionalIdentities } from "../identities/identity-service.js";
@@ -31,7 +31,11 @@ import {
   setCampaignIdentities,
 } from "../warmup/warmup-service.js";
 import { isWarmupExperiment } from "../warmup/warmup-experiment.js";
-import { findRegionByCity } from "../campaign/geo-capacity.js";
+import {
+  campaignIdentityLocation,
+  resolveCampaignCity,
+  resolveCampaignTimezone,
+} from "../campaign/geo-capacity.js";
 import { resolveCampaignGeo } from "../campaign/campaign-geo-input.js";
 import { parseGmbTarget } from "../campaign/gmb-target.js";
 import {
@@ -89,7 +93,7 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   selectedIdentityIds?: string[];
 }
 
-function resolveGmbFields(input: UpsertCampaignInput): {
+async function resolveGmbFields(input: UpsertCampaignInput): Promise<{
   campaignKind: CampaignKind;
   focusCity: string | null;
   region: string;
@@ -99,7 +103,7 @@ function resolveGmbFields(input: UpsertCampaignInput): {
   gmbPlaceId: string | null;
   gmbMapsUrl: string | null;
   gmbActionsJson: string | null;
-} {
+}> {
   const kind = (input.campaignKind ?? "url") as CampaignKind;
   if (kind !== "gmb") {
     const targetUrl = input.targetUrl.trim();
@@ -116,9 +120,12 @@ function resolveGmbFields(input: UpsertCampaignInput): {
     };
   }
 
-  const cityConfig = findRegionByCity(input.focusCity ?? "");
+  const country = normalizeCampaignCountry(input.country);
+  const cityConfig = await resolveCampaignCity(input.focusCity ?? "", country);
   if (!cityConfig) {
-    throw new Error("GMB campaigns require a geo city (e.g. Adelaide)");
+    throw new Error(
+      `GMB campaigns require a geo city in ${country} (a built-in city, or a custom city that already has identities)`,
+    );
   }
   const businessName = input.gmbBusinessName?.trim();
   if (!businessName) {
@@ -239,8 +246,16 @@ export async function previewCampaignIntensity(
   input: UpsertCampaignInput,
   experimentId?: string | null,
 ): Promise<CampaignIntensityResult> {
-  const resolved = resolveGmbFields({
+  const experiment = experimentId
+    ? await prisma.experiment.findUnique({
+        where: { id: experimentId },
+        select: { requireWarmupIdentities: true, country: true, identityGeoScope: true },
+      })
+    : null;
+  const country = normalizeCampaignCountry(input.country ?? experiment?.country);
+  const resolved = await resolveGmbFields({
     ...input,
+    country,
     keyword: input.keyword,
     targetUrl: input.targetUrl || input.gmbMapsUrl || "https://www.google.com/maps",
     region: input.region || "ALL",
@@ -250,7 +265,7 @@ export async function previewCampaignIntensity(
 
   let queries: CampaignQueryInput[] =
     input.queries ??
-    generateQueryCluster(keyword, region).map((q) => ({
+    generateQueryCluster(keyword, region, country, resolved.focusCity).map((q) => ({
       text: q.text,
       type: q.type,
       weight: q.weight,
@@ -262,12 +277,6 @@ export async function previewCampaignIntensity(
     queries = await enrichQueriesWithGsc(experimentId ?? null, resolved.targetUrl, queries);
   }
 
-  const experiment = experimentId
-    ? await prisma.experiment.findUnique({
-        where: { id: experimentId },
-        select: { requireWarmupIdentities: true, country: true, identityGeoScope: true },
-      })
-    : null;
   const requireWarmup = input.requireWarmupIdentities ?? experiment?.requireWarmupIdentities ?? true;
   const geoScope =
     input.identityGeoScope === "country" || input.identityGeoScope === "city"
@@ -277,11 +286,12 @@ export async function previewCampaignIntensity(
         : "city";
   const identityCount =
     geoScope === "country"
-      ? await countEligibleIdentitiesInCountry(experiment?.country ?? "AU", requireWarmup)
+      ? await countEligibleIdentitiesInCountry(country, requireWarmup)
       : await countEligibleIdentities(
           region === "ALL" ? null : region,
           requireWarmup,
           resolved.focusCity,
+          country,
         );
 
   const siteCurveData =
@@ -386,8 +396,10 @@ async function saveCampaignConfig(
   existing?: Experiment,
 ): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
   const keyword = input.keyword.trim();
-  const resolved = resolveGmbFields({
+  const country = normalizeCampaignCountry(input.country ?? existing?.country);
+  const resolved = await resolveGmbFields({
     ...input,
+    country,
     keyword,
     targetUrl: input.targetUrl || input.gmbMapsUrl || "https://www.google.com/maps",
     region: input.region || "ALL",
@@ -398,10 +410,13 @@ async function saveCampaignConfig(
     existing?.campaignDurationDays ??
     (resolved.campaignKind === "gmb" ? 7 : 14);
   const density = deriveScheduleDensity(campaignDurationDays);
+  const geoChanged =
+    !existing || existing.country !== country || existing.focusCity !== resolved.focusCity;
 
   const experiment = await prisma.experiment.update({
     where: { id: experimentId },
     data: {
+      country,
       name: input.name?.trim() || buildExperimentName(keyword, resolved.region),
       targetUrl: resolved.targetUrl,
       targetDomain: resolved.targetDomain,
@@ -429,8 +444,8 @@ async function saveCampaignConfig(
       campaignDurationDays,
       scheduleTimezone:
         input.scheduleTimezone?.trim() ||
-        existing?.scheduleTimezone ||
-        resolveRegionTimezone(resolved.region),
+        (geoChanged ? undefined : existing?.scheduleTimezone) ||
+        (await resolveCampaignTimezone(resolved.region, country, resolved.focusCity)),
       repeatIdentityMinGapDays: density.repeatIdentityMinGapDays,
       maxSessionsPerIdentityPerDay: density.maxSessionsPerIdentityPerDay,
       minMinutesBetweenGlobalSessions: density.minMinutesBetweenGlobalSessions,
@@ -469,8 +484,10 @@ export async function createCampaign(
   input: UpsertCampaignInput,
 ): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
   const keyword = input.keyword.trim();
-  const resolved = resolveGmbFields({
+  const country = normalizeCampaignCountry(input.country);
+  const resolved = await resolveGmbFields({
     ...input,
+    country,
     keyword,
     targetUrl: input.targetUrl || input.gmbMapsUrl || "https://www.google.com/maps",
     region: input.region || "ALL",
@@ -478,7 +495,7 @@ export async function createCampaign(
 
   let queries: CampaignQueryInput[] =
     input.queries ??
-    generateQueryCluster(keyword, resolved.region).map((q) => ({
+    generateQueryCluster(keyword, resolved.region, country, resolved.focusCity).map((q) => ({
       text: q.text,
       type: q.type,
       weight: q.weight,
@@ -487,10 +504,11 @@ export async function createCampaign(
   if (resolved.campaignKind === "url") {
     queries = await enrichQueriesWithGsc(null, resolved.targetUrl, queries);
   }
-  const intensity = await previewCampaignIntensity({ ...input, queries }, null);
+  const intensity = await previewCampaignIntensity({ ...input, country, queries }, null);
 
   const created = await createExperimentFromInput({
     ...input,
+    country,
     targetUrl: resolved.targetUrl,
     region: resolved.region,
     activate: false,
@@ -505,7 +523,7 @@ export async function createCampaign(
     targetDomain: resolved.targetDomain,
   });
 
-  return saveCampaignConfig(created.experiment.id, input, queries, intensity);
+  return saveCampaignConfig(created.experiment.id, { ...input, country }, queries, intensity);
 }
 
 export async function updateCampaign(
@@ -514,8 +532,10 @@ export async function updateCampaign(
 ): Promise<{ experiment: Experiment; queries: ExperimentQuery[]; intensity: CampaignIntensityResult }> {
   const existing = await prisma.experiment.findUniqueOrThrow({ where: { id: experimentId } });
   const keyword = input.keyword.trim();
-  const resolved = resolveGmbFields({
+  const country = normalizeCampaignCountry(input.country ?? existing.country);
+  const resolved = await resolveGmbFields({
     ...input,
+    country,
     keyword,
     targetUrl: input.targetUrl || input.gmbMapsUrl || existing.targetUrl,
     region: input.region || existing.focusRegion || "ALL",
@@ -523,7 +543,7 @@ export async function updateCampaign(
 
   let queries: CampaignQueryInput[] =
     input.queries ??
-    generateQueryCluster(keyword, resolved.region).map((q) => ({
+    generateQueryCluster(keyword, resolved.region, country, resolved.focusCity).map((q) => ({
       text: q.text,
       type: q.type,
       weight: q.weight,
@@ -745,10 +765,14 @@ export async function createIdentitiesForCampaign(
     ? await prisma.experiment.findUnique({ where: { id: experimentId } })
     : null;
 
+  const location = await campaignIdentityLocation(
+    input.country ?? campaign?.country ?? "AU",
+    input.focusCity ?? campaign?.focusCity,
+  );
   const result = await createAdditionalIdentities({
     count: toCreate,
     desktopPercent: input.desktopPercent ?? campaign?.desktopPercent ?? 65,
-    city: input.focusCity ?? campaign?.focusCity ?? undefined,
+    ...location,
   });
 
   await assignMissingPersonas();
@@ -930,6 +954,7 @@ export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
     targetUrl: campaign.targetUrl,
     campaignKind: campaign.campaignKind,
     region: campaign.focusRegion ?? "ALL",
+    country: campaign.country,
     focusCity: campaign.focusCity,
     identityGeoScope: campaign.identityGeoScope,
     gmbBusinessName: campaign.gmbBusinessName,

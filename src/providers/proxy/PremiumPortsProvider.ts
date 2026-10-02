@@ -35,9 +35,10 @@ export class PremiumPortsProxyProvider implements ProxyProvider {
   async allocate(input: ProxyAllocationRequest): Promise<ProxyLease> {
     const endpoint = resolvePremiumPortsEndpoint();
     const sessionKey = input.sessionKey ?? randomUUID().slice(0, 12);
+    const country = (input.country || "AU").toUpperCase();
     const username = buildPremiumPortsUsername(endpoint.baseUsername, {
       ...input,
-      country: input.country || "AU",
+      country,
       sessionKey,
     });
 
@@ -48,7 +49,7 @@ export class PremiumPortsProxyProvider implements ProxyProvider {
       port: endpoint.port,
       username,
       password: endpoint.password,
-      country: "AU",
+      country,
       region: input.region,
       city: input.city,
       sessionKey,

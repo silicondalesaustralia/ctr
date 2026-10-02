@@ -6,12 +6,14 @@ import AppLayout from "../components/AppLayout";
 import WarmPoolPanel from "../components/WarmPoolPanel";
 import CreateIdentitiesForm from "../components/CreateIdentitiesForm";
 import { apiGet, apiPost } from "../../lib/api";
+import { describeLocation, useCountries, type CreateIdentitiesRequest } from "../../lib/geo";
 import { cellStyle, panelStyle, secondaryButtonStyle, thStyle } from "../components/campaign/shared";
 import type { WarmupProgress } from "../components/campaign/CampaignIdentityPicker";
 
 interface IdentityRow {
   id: string;
   externalId: string;
+  country?: string;
   region: string;
   city: string;
   deviceClass: string;
@@ -60,6 +62,7 @@ function IdentitiesPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const { countries } = useCountries();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,14 +81,15 @@ function IdentitiesPage() {
     void load();
   }, [load]);
 
-  async function createIdentities(count: number, city: string | null) {
+  async function createIdentities(request: CreateIdentitiesRequest) {
     setBusy("create");
     setMessage(null);
     setError(null);
     try {
-      await apiPost("/identities/create", city ? { count, city } : { count });
+      await apiPost("/identities/create", request);
+      const count = request.count;
       setMessage(
-        `Created ${count} ${city ?? "mixed-location"} identit${count === 1 ? "y" : "ies"} — warmup sessions scheduled automatically`,
+        `Created ${count} ${describeLocation(request, countries)} identit${count === 1 ? "y" : "ies"} — warmup sessions scheduled automatically`,
       );
       await load();
     } catch (err) {
@@ -124,7 +128,8 @@ function IdentitiesPage() {
           </div>
           <CreateIdentitiesForm
             busy={busy === "create"}
-            onCreate={(count, city) => void createIdentities(count, city)}
+            countries={countries}
+            onCreate={(request) => void createIdentities(request)}
           />
         </div>
 
@@ -162,7 +167,7 @@ function IdentitiesPage() {
                 <tr style={{ background: "#fafbfc" }}>
                   {[
                     "ID",
-                    "Region",
+                    "Location",
                     "Device",
                     "Warmup",
                     "Google sessions",
@@ -183,7 +188,7 @@ function IdentitiesPage() {
                   <tr key={identity.id}>
                     <td style={cellStyle}>{identity.externalId}</td>
                     <td style={cellStyle}>
-                      {identity.region} / {identity.city}
+                      {identity.country ?? "AU"} · {identity.region} / {identity.city}
                     </td>
                     <td style={cellStyle}>{identity.deviceClass}</td>
                     <td

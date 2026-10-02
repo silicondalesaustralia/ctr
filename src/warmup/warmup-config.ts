@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { countryName } from "../geo/locations.js";
 
 function warmupInt(envKey: string, fallback: number): number {
   const raw = process.env[envKey]?.trim();
@@ -155,25 +156,48 @@ const GRADUATION_QUERY_TEMPLATES = [
   "NDIS provider {city}",
 ];
 
-function fillCity(template: string, city: string): string {
-  return template.replace(/\{city\}/gi, city.toLowerCase());
+/** Everyday searches for identities outside Australia. */
+const WORLD_BENIGN_TEMPLATES = [
+  "{city} weather",
+  "weather today",
+  "news {country}",
+  "things to do {city}",
+  "{city} restaurants",
+  "recipes dinner",
+  "public holidays 2026",
+  "train timetable {city}",
+  "nearby cafes",
+  "movie times {city}",
+  "football scores",
+];
+
+function fillCity(template: string, city: string, country = "AU"): string {
+  return template
+    .replace(/\{city\}/gi, city.toLowerCase())
+    .replace(/\baustralia\b/gi, countryName(country).toLowerCase());
 }
 
-export function pickBenignWarmupQuery(city: string, index: number): string {
+export function pickBenignWarmupQuery(city: string, index: number, country = "AU"): string {
+  if (country.toUpperCase() !== "AU") {
+    const template = WORLD_BENIGN_TEMPLATES[index % WORLD_BENIGN_TEMPLATES.length]!;
+    return template
+      .replace(/\{city\}/gi, city.toLowerCase())
+      .replace(/\{country\}/gi, countryName(country).toLowerCase());
+  }
   const cityQueries = CITY_BENIGN[city] ?? [];
   const pool = [...cityQueries, ...BENIGN_QUERIES];
   return pool[index % pool.length] ?? BENIGN_QUERIES[0]!;
 }
 
-export function pickGraduationQuery(externalId: string, city: string): string {
+export function pickGraduationQuery(externalId: string, city: string, country = "AU"): string {
   const hash = createHash("sha256").update(externalId).digest();
   const index = hash.readUInt32BE(0) % GRADUATION_QUERY_TEMPLATES.length;
-  return fillCity(GRADUATION_QUERY_TEMPLATES[index]!, city);
+  return fillCity(GRADUATION_QUERY_TEMPLATES[index]!, city, country);
 }
 
 /** @deprecated Use pickBenignWarmupQuery */
-export function pickWarmupQuery(city: string, index: number): string {
-  return pickBenignWarmupQuery(city, index);
+export function pickWarmupQuery(city: string, index: number, country = "AU"): string {
+  return pickBenignWarmupQuery(city, index, country);
 }
 
 export function graduationQueryPoolSize(): number {

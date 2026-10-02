@@ -1,9 +1,9 @@
 import type { CtrSource, TreatmentIntensity } from "@prisma/client";
 import { calculateCampaignIntensity } from "./intensity-calculator.js";
-import { generateQueryCluster } from "../experiments/query-generator.js";
+import { generateQueryCluster, normalizeCampaignCountry } from "../experiments/query-generator.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
 import { countEligibleIdentities } from "../warmup/warmup-service.js";
-import { findRegionByCity } from "./geo-capacity.js";
+import { resolveCampaignCity } from "./geo-capacity.js";
 import { parseGmbTarget } from "./gmb-target.js";
 import {
   actionsFromFlags,
@@ -21,6 +21,7 @@ export interface GmbCampaignProposalInput {
   gmbMapsUrl: string;
   gmbActions?: GmbActionFlags | GmbAction[];
   monthlySearchVolume?: number | null;
+  country?: string | null;
 }
 
 export type GmbCampaignProposal = CampaignProposal & {
@@ -37,9 +38,10 @@ export async function buildGmbCampaignProposal(
 ): Promise<GmbCampaignProposal> {
   const keyword = input.keyword.trim();
   const businessName = input.gmbBusinessName.trim();
-  const cityConfig = findRegionByCity(input.focusCity);
+  const country = normalizeCampaignCountry(input.country);
+  const cityConfig = await resolveCampaignCity(input.focusCity, country);
   if (!cityConfig) {
-    throw new Error(`Unknown geo city: ${input.focusCity}`);
+    throw new Error(`Unknown geo city for ${country}: ${input.focusCity}`);
   }
   if (!businessName) {
     throw new Error("Business name is required for GMB campaigns");
@@ -52,7 +54,7 @@ export async function buildGmbCampaignProposal(
     : (input.gmbActions ?? flagsFromActions(null));
   const gmbActions = actionsFromFlags(flags);
 
-  const queries: CampaignQueryInput[] = generateQueryCluster(keyword, region).map((q) => ({
+  const queries: CampaignQueryInput[] = generateQueryCluster(keyword, region, country, cityConfig.city).map((q) => ({
     text: q.text,
     type: q.type,
     weight: q.weight,
@@ -60,7 +62,7 @@ export async function buildGmbCampaignProposal(
     startingPosition: null,
   }));
 
-  const eligible = await countEligibleIdentities(region, true, cityConfig.city);
+  const eligible = await countEligibleIdentities(region, true, cityConfig.city, country);
   const campaignDurationDays = 7;
   const density = deriveScheduleDensity(campaignDurationDays);
   const treatmentIntensity: TreatmentIntensity = "normal";
@@ -100,7 +102,7 @@ export async function buildGmbCampaignProposal(
     {
       setting: "Geo / proxies",
       value: `${cityConfig.city} (${region})`,
-      reason: "Identity pool and Decodo exits are locked to this city.",
+      reason: "Identity pool and proxy exits are locked to this city.",
     },
     {
       setting: "Schedule window",

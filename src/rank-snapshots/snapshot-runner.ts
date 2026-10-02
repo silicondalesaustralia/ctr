@@ -93,7 +93,10 @@ export async function runExperimentSnapshots(experimentId: string): Promise<void
   if (!identity) {
     await prisma.rankSnapshot.updateMany({
       where: { id: { in: ids } },
-      data: { status: "error", errorMessage: `No runnable identity in ${experiment.focusCity ?? experiment.focusRegion ?? "campaign area"}` },
+      data: {
+        status: "error",
+        errorMessage: `No runnable identity in ${experiment.focusCity ?? experiment.focusRegion ?? "campaign area"} (${experiment.country})`,
+      },
     });
     return;
   }

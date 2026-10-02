@@ -101,10 +101,9 @@ export function identityMatchesCampaignGeo(
     country?: string | null;
   },
 ): boolean {
-  if (opts.scope === "country") {
-    const country = opts.country?.trim();
-    return !country || identity.country === country;
-  }
+  const country = opts.country?.trim().toUpperCase();
+  if (country && identity.country.toUpperCase() !== country) return false;
+  if (opts.scope === "country") return true;
   if (opts.focusCity?.trim()) {
     return (identity.city ?? "").toLowerCase() === opts.focusCity.trim().toLowerCase();
   }
@@ -346,8 +345,8 @@ function scheduleWarmupRows(
     rows.push({
       identityId: identity.id,
       queryText: isGraduationSlot
-        ? pickGraduationQuery(identity.externalId, identity.city)
-        : pickBenignWarmupQuery(identity.city, identity.warmupSiteClicks + googleSlotIndex),
+        ? pickGraduationQuery(identity.externalId, identity.city, identity.country)
+        : pickBenignWarmupQuery(identity.city, identity.warmupSiteClicks + googleSlotIndex, identity.country),
       kind: isGraduationSlot ? "graduation" : "benign",
       scheduledAt,
     });
@@ -524,10 +523,12 @@ export async function countEligibleIdentities(
   region?: string | null,
   requireWarmup = true,
   city?: string | null,
+  country = "AU",
 ): Promise<number> {
   const identities = await prisma.identity.findMany({
     where: {
       active: true,
+      country: country.toUpperCase(),
       ...(city?.trim() ? { city: city.trim() } : {}),
       ...(!city?.trim() && region && region !== "ALL" ? { region } : {}),
     },

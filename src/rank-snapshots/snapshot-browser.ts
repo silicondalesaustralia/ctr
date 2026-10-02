@@ -20,7 +20,7 @@ export interface SnapshotBrowser {
   egress: EgressGeo | undefined;
 }
 
-/** Launch the identity's Camoufox on a verified AU lease, run fn, then always tear down. */
+/** Launch the identity's Camoufox on a lease verified for its country, run fn, then always tear down. */
 export async function withSnapshotBrowser<T>(
   identity: Identity,
   geoPoint: GeoPoint | undefined,
@@ -50,13 +50,14 @@ export async function withSnapshotBrowser<T>(
       browserProvider,
       profileId,
       allocation: {
-        country: "AU",
+        country: identity.country,
         region: identity.region,
         city: identity.city,
         sessionKey: `snapshot-${identity.externalId}-${Date.now()}`,
         deviceClass: identity.deviceClass,
       },
       timezone: identity.timezone,
+      locale: identity.locale,
       options: { geoPoint },
       onLease: (leaseId) => {
         refs.proxyLeaseId = leaseId;
@@ -69,7 +70,7 @@ export async function withSnapshotBrowser<T>(
         const page = running.context.pages()[0] ?? (await running.context.newPage());
         if (isDryRun() || env.PROXY_PROVIDER === "mock") return { page, egress: undefined };
         const expectedCity = shouldSkipCityTargeting(identity.city) ? undefined : identity.city;
-        const egress = await verifyBrowserEgressGeo(page, "AU", expectedCity);
+        const egress = await verifyBrowserEgressGeo(page, identity.country, expectedCity);
         await assertEgressPrefixClean(egress.ip);
         return { page, egress };
       },

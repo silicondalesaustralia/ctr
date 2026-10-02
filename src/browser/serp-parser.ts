@@ -57,7 +57,7 @@ export function isOrganicCandidate(candidate: SerpLinkCandidate): boolean {
     return true;
   }
   const resolvedHref = resolveGoogleSerpHref(candidate.href);
-  return resolvedHref.startsWith("http") && !/google\.com/i.test(resolvedHref);
+  return resolvedHref.startsWith("http") && !/google\.[a-z.]+\//i.test(resolvedHref);
 }
 
 const ORGANIC_SELECTORS = [
@@ -83,10 +83,10 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
     for (const selector of selectors) {
       for (const anchor of Array.from(document.querySelectorAll(selector))) {
         const href = anchor.getAttribute("href");
-        if (!href || href.startsWith("#") || href.startsWith("/search") || href.includes("google.com/search")) {
+        if (!href || href.startsWith("#") || href.startsWith("/search") || /google\.[a-z.]+\/search/i.test(href)) {
           continue;
         }
-        if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {
+        if (/google\.[a-z.]+\/(sorry|accounts|preferences|maps)/i.test(href)) {
           continue;
         }
         const title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -133,10 +133,10 @@ export async function collectSerpLinkCandidates(page: Page): Promise<SerpLinkCan
 
     for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
       const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("#") || href.startsWith("/search") || href.includes("google.com/search")) {
+      if (!href || href.startsWith("#") || href.startsWith("/search") || /google\.[a-z.]+\/search/i.test(href)) {
         continue;
       }
-      if (/google\.com\/(sorry|accounts|preferences|maps)/i.test(href)) {
+      if (/google\.[a-z.]+\/(sorry|accounts|preferences|maps)/i.test(href)) {
         continue;
       }
       const title = (anchor.textContent ?? "").replace(/\s+/g, " ").trim();

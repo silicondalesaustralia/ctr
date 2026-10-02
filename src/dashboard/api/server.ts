@@ -11,10 +11,7 @@ import {
   createExperimentFromInput,
   type CreateExperimentInput,
 } from "../../experiments/experiment-service.js";
-import {
-  generateQueryCluster,
-  listRegionOptions,
-} from "../../experiments/query-generator.js";
+import { generateQueryCluster } from "../../experiments/query-generator.js";
 import {
   createIdentitiesForCampaign,
   createCampaign,
@@ -39,7 +36,6 @@ import {
 } from "../../experiments/campaign-service.js";
 import { buildCampaignProposal } from "../../campaign/campaign-proposal.js";
 import { buildGmbCampaignProposal } from "../../campaign/gmb-proposal.js";
-import { getGeoCapacity, listCityOptions } from "../../campaign/geo-capacity.js";
 import { createPreflightJob, getPreflightJob } from "../../campaign/preflight-jobs.js";
 import {
   buildBaseProposalForPreflight,
@@ -47,8 +43,8 @@ import {
 } from "../../campaign/preflight-request.js";
 import { registerWarmPoolRoutes } from "./warm-pool-routes.js";
 import { registerRankSnapshotRoutes } from "./rank-snapshot-routes.js";
+import { registerGeoRoutes } from "./geo-routes.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
-import { createAdditionalIdentities } from "../../identities/identity-service.js";
 import { computeWarmupProgress, setCampaignIdentities, backfillWarmupForExistingIdentities } from "../../warmup/warmup-service.js";
 import {
   completeOAuthConnection,
@@ -153,6 +149,7 @@ export function createApiServer() {
 
   registerWarmPoolRoutes(app);
   registerRankSnapshotRoutes(app);
+  registerGeoRoutes(app);
 
   app.get("/experiments", async (_req, res) => {
     const experiments = await prisma.experiment.findMany({
@@ -163,37 +160,6 @@ export function createApiServer() {
       orderBy: { createdAt: "desc" },
     });
     res.json(experiments);
-  });
-
-  app.get("/regions", (_req, res) => {
-    res.json([
-      { code: "ALL", label: "All Australia", city: "Mixed" },
-      ...listRegionOptions(),
-    ]);
-  });
-
-  app.get("/cities", (_req, res) => {
-    res.json(listCityOptions());
-  });
-
-  app.get("/campaign/geo-capacity", async (req, res) => {
-    const city = String(req.query.city ?? "").trim();
-    const suggested = Number(req.query.suggested ?? 0);
-    if (!city) {
-      res.status(400).json({ error: "city is required" });
-      return;
-    }
-    try {
-      const capacity = await getGeoCapacity(
-        city,
-        Number.isFinite(suggested) ? suggested : 0,
-        true,
-      );
-      res.json(capacity);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      res.status(400).json({ error: message });
-    }
   });
 
   app.get("/gsc/status", (_req, res) => {
@@ -627,6 +593,7 @@ export function createApiServer() {
       gscConnectionId?: string | null;
       gscSiteUrl?: string | null;
       monthlySearchVolume?: number | null;
+      country?: string | null;
     };
 
     if (body.campaignKind === "gmb") {
@@ -655,6 +622,7 @@ export function createApiServer() {
               }
             : undefined,
           monthlySearchVolume: body.monthlySearchVolume ?? null,
+          country: body.country ?? null,
         });
         res.json({ proposal });
       } catch (error) {
@@ -681,6 +649,7 @@ export function createApiServer() {
         keyword: body.keyword,
         targetUrl: body.targetUrl,
         region: body.region,
+        country: body.country ?? null,
         gscConnectionId: body.gscConnectionId ?? null,
         gscSiteUrl: body.gscSiteUrl ?? null,
       });
@@ -835,14 +804,14 @@ export function createApiServer() {
   });
 
   app.post("/experiments/preview-queries", (req, res) => {
-    const { keyword, region } = req.body as { keyword?: string; region?: string };
+    const { keyword, region, country } = req.body as { keyword?: string; region?: string; country?: string };
     if (!keyword?.trim()) {
       res.status(400).json({ error: "keyword is required" });
       return;
     }
 
     try {
-      const queries = generateQueryCluster(keyword, region ?? "ALL");
+      const queries = generateQueryCluster(keyword, region ?? "ALL", country);
       res.json({ queries });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1093,34 +1062,6 @@ export function createApiServer() {
     }
   });
 
-  app.post("/identities/create", async (req, res) => {
-    const body = req.body as { count?: number; desktopPercent?: number; city?: unknown };
-    const count = body.count ?? 1;
-    const city = typeof body.city === "string" && body.city.trim() ? body.city.trim() : undefined;
-
-    try {
-      const result = await createAdditionalIdentities({
-        count,
-        desktopPercent: body.desktopPercent,
-        city,
-      });
-      res.json({
-        createdCount: result.created.length,
-        fromExternalId: result.fromExternalId,
-        toExternalId: result.toExternalId,
-        identities: result.created.map((identity) => ({
-          id: identity.id,
-          externalId: identity.externalId,
-          region: identity.region,
-          deviceClass: identity.deviceClass,
-        })),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      res.status(400).json({ error: message });
-    }
-  });
-
   app.get("/identities", async (_req, res) => {
     try {
       await backfillWarmupForExistingIdentities();
@@ -1145,6 +1086,7 @@ export function createApiServer() {
         identities: identities.map((identity) => ({
           id: identity.id,
           externalId: identity.externalId,
+          country: identity.country,
           region: identity.region,
           city: identity.city,
           deviceClass: identity.deviceClass,

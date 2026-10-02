@@ -2,40 +2,60 @@
 
 import { useState } from "react";
 import { primaryButtonStyle } from "./campaign/shared";
+import CountrySelect from "./CountrySelect";
+import CustomLocationFields, { isCustomLocationComplete } from "./CustomLocationFields";
+import {
+  CUSTOM_COUNTRY,
+  DEFAULT_COUNTRY,
+  type CountryOption,
+  type CreateIdentitiesRequest,
+  type CustomLocation,
+} from "../../lib/geo";
 
 const MAX_BATCH = 50;
 
-const CITY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "", label: "Mixed (population-weighted)" },
-  { value: "Sydney", label: "Sydney, NSW" },
-  { value: "Melbourne", label: "Melbourne, VIC" },
-  { value: "Brisbane", label: "Brisbane, QLD" },
-  { value: "Perth", label: "Perth, WA" },
-  { value: "Adelaide", label: "Adelaide, SA" },
-  { value: "Darwin", label: "Darwin, NT" },
-  { value: "Hobart", label: "Hobart, TAS (poor proxy coverage)" },
-  { value: "Canberra", label: "Canberra, ACT (poor proxy coverage)" },
-];
+const fieldStyle = {
+  padding: "8px 10px",
+  border: "1px solid #dfe2ea",
+  borderRadius: 6,
+  fontSize: 14,
+};
 
 interface CreateIdentitiesFormProps {
   busy: boolean;
-  onCreate: (count: number, city: string | null) => void;
+  countries: CountryOption[];
+  onCreate: (request: CreateIdentitiesRequest) => void;
 }
 
-export default function CreateIdentitiesForm({ busy, onCreate }: CreateIdentitiesFormProps) {
+export default function CreateIdentitiesForm({ busy, countries, onCreate }: CreateIdentitiesFormProps) {
   const [count, setCount] = useState(5);
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [city, setCity] = useState("");
-  const valid = Number.isInteger(count) && count >= 1 && count <= MAX_BATCH;
+  const [custom, setCustom] = useState<CustomLocation>({ country: "", city: "", timezone: "" });
+  const isCustom = country === CUSTOM_COUNTRY;
+  const cities = countries.find((row) => row.code === country)?.cities ?? [];
+  const validCount = Number.isInteger(count) && count >= 1 && count <= MAX_BATCH;
+  const valid = validCount && (!isCustom || isCustomLocationComplete(custom));
 
-  const fieldStyle = {
-    padding: "8px 10px",
-    border: "1px solid #dfe2ea",
-    borderRadius: 6,
-    fontSize: 14,
-  };
+  function submit() {
+    if (isCustom) {
+      onCreate({
+        count,
+        custom: {
+          country: custom.country.trim(),
+          city: custom.city.trim(),
+          timezone: custom.timezone.trim(),
+          region: custom.region?.trim() || undefined,
+          locale: custom.locale?.trim() || undefined,
+        },
+      });
+      return;
+    }
+    onCreate({ count, country, city: city || undefined });
+  }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", maxWidth: 640 }}>
       <input
         type="number"
         min={1}
@@ -45,26 +65,40 @@ export default function CreateIdentitiesForm({ busy, onCreate }: CreateIdentitie
         aria-label="Number of identities"
         style={{ ...fieldStyle, width: 72 }}
       />
-      <select
-        value={city}
-        onChange={(event) => setCity(event.target.value)}
-        aria-label="Identity location"
+      <CountrySelect
+        countries={countries}
+        value={country}
+        onChange={(code) => {
+          setCountry(code);
+          setCity("");
+        }}
+        allowCustom
         style={fieldStyle}
-      >
-        {CITY_OPTIONS.map((option) => (
-          <option key={option.value || "mixed"} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      />
+      {!isCustom && (
+        <select
+          value={city}
+          onChange={(event) => setCity(event.target.value)}
+          aria-label="Identity city"
+          style={fieldStyle}
+        >
+          <option value="">Mixed (population-weighted)</option>
+          {cities.map((row) => (
+            <option key={row.city} value={row.city}>
+              {row.city}, {row.region}
+            </option>
+          ))}
+        </select>
+      )}
       <button
         type="button"
         style={primaryButtonStyle("#6155dc", busy || !valid)}
         disabled={busy || !valid}
-        onClick={() => onCreate(count, city || null)}
+        onClick={submit}
       >
-        {busy ? "Creating..." : `Create ${valid ? count : ""} identit${count === 1 ? "y" : "ies"}`}
+        {busy ? "Creating..." : `Create ${validCount ? count : ""} identit${count === 1 ? "y" : "ies"}`}
       </button>
+      {isCustom && <CustomLocationFields value={custom} onChange={setCustom} fieldStyle={fieldStyle} />}
     </div>
   );
 }

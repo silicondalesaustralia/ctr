@@ -8,9 +8,16 @@ import {
 import type { Persona, SessionTraits } from "../behaviour/types.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
 import { acceptConsentIfPresent, detectBlockedPage, GoogleBlockedError } from "./blocked-detection.js";
+import {
+  googleQueryParams,
+  googleTargetForPage,
+  rememberGoogleTarget,
+  type GoogleTarget,
+} from "../geo/google-target.js";
 
-export async function openGoogle(page: Page): Promise<void> {
-  await page.goto("https://www.google.com.au/?hl=en-AU&gl=au", {
+export async function openGoogle(page: Page, target: GoogleTarget): Promise<void> {
+  rememberGoogleTarget(page, target);
+  await page.goto(`${target.origin}/?${googleQueryParams(target)}`, {
     waitUntil: "domcontentloaded",
     timeout: 60_000,
   });
@@ -92,7 +99,8 @@ async function gotoGoogleSearchSettled(page: Page, url: string): Promise<void> {
 export async function ensureFullGoogleSearch(page: Page, query: string): Promise<void> {
   if (!isLiteGooglePage(page.url())) return;
 
-  const fullUrl = `https://www.google.com.au/search?q=${encodeURIComponent(query)}&hl=en-AU&gl=au`;
+  const target = googleTargetForPage(page);
+  const fullUrl = `${target.origin}/search?q=${encodeURIComponent(query)}&${googleQueryParams(target)}`;
   await gotoGoogleSearchSettled(page, fullUrl);
   await acceptConsentIfPresent(page);
 

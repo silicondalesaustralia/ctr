@@ -22,7 +22,12 @@ export async function pickSnapshotIdentity(experiment: Experiment): Promise<Iden
 
   const candidates = (
     await prisma.identity.findMany({
-      where: { active: true, deviceClass: "desktop", externalProfileId: { not: null } },
+      where: {
+        active: true,
+        country: experiment.country,
+        deviceClass: "desktop",
+        externalProfileId: { not: null },
+      },
       orderBy: { lastUsedAt: { sort: "asc", nulls: "first" } },
     })
   ).filter((identity) => isIdentityRunnable(identity));

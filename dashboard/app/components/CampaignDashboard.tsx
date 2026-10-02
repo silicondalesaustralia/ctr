@@ -17,6 +17,8 @@ import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
 import type { CityOption } from "./campaign/CampaignGmbSetupStep";
 import { timezoneForRegion } from "../../lib/format-timezone";
+import { DEFAULT_COUNTRY, useCountries, withCountry } from "../../lib/geo";
+import CampaignCountryField from "./campaign/CampaignCountryField";
 import {
   DEFAULT_GMB_ACTIONS,
   getStartCampaignBlockReason,
@@ -91,6 +93,7 @@ interface Campaign {
   targetUrl: string;
   campaignKind?: CampaignKind;
   region: string;
+  country?: string;
   focusCity?: string | null;
   identityGeoScope?: IdentityGeoScope | null;
   requireWarmupIdentities?: boolean;
@@ -137,6 +140,7 @@ const defaultForm = (): CampaignFormState => ({
   campaignKind: "url",
   keyword: "",
   targetUrl: "",
+  country: DEFAULT_COUNTRY,
   region: "ALL",
   focusCity: "",
   identityGeoScope: "city",
@@ -280,6 +284,7 @@ export default function CampaignDashboard({
   const [campaignStatus, setCampaignStatus] = useState("draft");
   const [regions, setRegions] = useState<RegionOption[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
+  const { countries } = useCountries();
   const [gscConnections, setGscConnections] = useState<GscConnectionOption[]>([]);
   const [gscSites, setGscSites] = useState<GscSiteOption[]>([]);
   const [gscSitesLoading, setGscSitesLoading] = useState(false);
@@ -336,6 +341,7 @@ export default function CampaignDashboard({
       campaignKind: c.campaignKind === "gmb" ? "gmb" : "url",
       keyword: c.keyword,
       targetUrl: c.targetUrl,
+      country: c.country ?? DEFAULT_COUNTRY,
       region: c.region,
       focusCity: c.focusCity ?? "",
       // Prefer API value; if older API omits the field, keep the in-form selection.
@@ -418,13 +424,7 @@ export default function CampaignDashboard({
   useEffect(() => {
     void (async () => {
       try {
-        const [regionOptions, cityOptions, connectionsRes] = await Promise.all([
-          apiGet<RegionOption[]>("/regions"),
-          apiGet<CityOption[]>("/cities").catch(() => [] as CityOption[]),
-          apiGet<{ connections: GscConnectionOption[] }>("/gsc/connections"),
-        ]);
-        setRegions(regionOptions);
-        setCities(cityOptions);
+        const connectionsRes = await apiGet<{ connections: GscConnectionOption[] }>("/gsc/connections");
         setGscConnections(connectionsRes.connections);
         if (!isNew) {
           await loadCampaign();
@@ -436,6 +436,37 @@ export default function CampaignDashboard({
       }
     })();
   }, [loadCampaign, isNew]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [regionOptions, cityOptions] = await Promise.all([
+          apiGet<RegionOption[]>(withCountry("/regions", form.country)),
+          apiGet<CityOption[]>(withCountry("/cities", form.country)),
+        ]);
+        if (cancelled) return;
+        setRegions(regionOptions);
+        setCities(cityOptions);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load regions");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.country]);
+
+  function changeCountry(code: string) {
+    const firstCity = countries.find((row) => row.code === code)?.cities[0];
+    setForm((prev) => ({
+      ...prev,
+      country: code,
+      region: "ALL",
+      focusCity: "",
+      scheduleTimezone: firstCity?.timezone ?? prev.scheduleTimezone,
+    }));
+  }
 
   useEffect(() => {
     if (!form.gscConnectionId) {
@@ -451,6 +482,7 @@ export default function CampaignDashboard({
       keyword: form.keyword,
       targetUrl:
         form.campaignKind === "gmb" ? form.gmbMapsUrl || form.targetUrl : form.targetUrl,
+      country: form.country,
       region: form.region,
       focusCity: form.focusCity || null,
       identityGeoScope: form.identityGeoScope,
@@ -644,6 +676,7 @@ export default function CampaignDashboard({
               gmbBusinessName: form.gmbBusinessName,
               gmbMapsUrl: form.gmbMapsUrl,
               gmbActions: form.gmbActions,
+              country: form.country,
               region: form.region,
               targetUrl: form.gmbMapsUrl,
             }
@@ -651,6 +684,7 @@ export default function CampaignDashboard({
               campaignKind: "url",
               keyword: form.keyword,
               targetUrl: form.targetUrl,
+              country: form.country,
               region: form.region,
               gscConnectionId: form.gscConnectionId,
               gscSiteUrl: form.gscSiteUrl,
@@ -678,7 +712,10 @@ export default function CampaignDashboard({
       campaignKind: kind,
       desktopPercent: kind === "gmb" ? 40 : 65,
       campaignDurationDays: kind === "gmb" ? 7 : 14,
-      scheduleTimezone: "Australia/Adelaide",
+      scheduleTimezone:
+        prev.country === DEFAULT_COUNTRY
+          ? "Australia/Adelaide"
+          : (countries.find((row) => row.code === prev.country)?.cities[0]?.timezone ?? prev.scheduleTimezone),
       gscConnectionId: kind === "gmb" ? null : prev.gscConnectionId,
       gscSiteUrl: kind === "gmb" ? null : prev.gscSiteUrl,
     }));
@@ -865,6 +902,10 @@ export default function CampaignDashboard({
           identityGeoScope={form.identityGeoScope}
           gmbActions={form.gmbActions}
           cities={cities}
+          country={form.country}
+          countryField={
+            <CampaignCountryField countries={countries} value={form.country} onChange={changeCountry} />
+          }
           busy={busy === "analyze"}
           onKeywordChange={(value) => updateForm("keyword", value)}
           onBusinessNameChange={(value) => updateForm("gmbBusinessName", value)}
@@ -891,6 +932,9 @@ export default function CampaignDashboard({
           gscConnectionId={form.gscConnectionId}
           gscSiteUrl={form.gscSiteUrl}
           regions={regions}
+          countryField={
+            <CampaignCountryField countries={countries} value={form.country} onChange={changeCountry} />
+          }
           connections={gscConnections}
           sites={gscSites}
           sitesLoading={gscSitesLoading}
@@ -898,7 +942,10 @@ export default function CampaignDashboard({
           onKeywordChange={(value) => updateForm("keyword", value)}
           onTargetUrlChange={(value) => updateForm("targetUrl", value)}
           onRegionChange={(value) => {
-            const tz = timezoneForRegion(value);
+            const tz =
+              form.country === DEFAULT_COUNTRY
+                ? timezoneForRegion(value)
+                : (cities.find((row) => row.region === value)?.timezone ?? null);
             setForm((prev) => ({
               ...prev,
               region: value,
@@ -919,6 +966,7 @@ export default function CampaignDashboard({
           )}
           <CampaignReviewStep
             form={form}
+            countryTimezones={cities.map((row) => row.timezone)}
             intensity={intensity}
             rationales={rationales}
             gscStatus={gscStatus}

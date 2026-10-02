@@ -6,6 +6,7 @@ export interface CampaignSummary {
   targetUrl: string;
   campaignKind?: string;
   region: string;
+  country?: string;
   focusCity?: string | null;
   gmbBusinessName?: string | null;
   campaignDurationDays: number;
@@ -47,7 +48,15 @@ export function matchesStatus(status: string, filter: StatusFilter): boolean {
 /** Primary line (city) and secondary line (state) for the region column. */
 export function regionParts(campaign: CampaignSummary): { primary: string; secondary: string } {
   const code = campaign.region.toUpperCase();
-  const state = code === "ALL" ? "All Australia" : (STATE_NAMES[code] ?? campaign.region);
+  const country = (campaign.country ?? "AU").toUpperCase();
+  const state =
+    country !== "AU"
+      ? code === "ALL"
+        ? `All ${country}`
+        : `${campaign.region}, ${country}`
+      : code === "ALL"
+        ? "All Australia"
+        : (STATE_NAMES[code] ?? campaign.region);
   if (campaign.focusCity) return { primary: campaign.focusCity, secondary: state };
   return { primary: code === "ALL" ? "All regions" : state, secondary: code === "ALL" ? "Unrestricted" : code };
 }

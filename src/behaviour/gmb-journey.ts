@@ -25,6 +25,7 @@ import type {
   SessionTraits,
 } from "./types.js";
 import { runSiteJourney } from "./site-journey.js";
+import type { GoogleTarget } from "../geo/google-target.js";
 
 export interface GmbJourneyInput {
   page: Page;
@@ -35,6 +36,8 @@ export interface GmbJourneyInput {
   placeId?: string | null;
   actions: GmbAction[];
   onEvent: BehaviourEventCallback;
+  /** Identity's Google country/language. */
+  google: GoogleTarget;
 }
 
 function attempt(query: ExperimentQuery, extras?: Partial<SearchAttempt>): SearchAttempt {
@@ -76,7 +79,7 @@ export async function runGmbSearchJourney(
     };
   }
 
-  await openGoogle(page);
+  await openGoogle(page, input.google);
   await onEvent("google_loaded");
   const blockedOpen = await checkBlocked(page);
   if (blockedOpen.blocked) {

@@ -25,6 +25,22 @@ export function timezoneForRegion(regionCode: string): string | null {
   return REGION_TIMEZONES[regionCode.toUpperCase()] ?? null;
 }
 
+/** Schedule timezone choices for a campaign country; the current value is always included. */
+export function scheduleTimezoneOptions(
+  country: string,
+  countryTimezones: string[],
+  current: string,
+): Array<{ value: string; label: string }> {
+  const base: Array<{ value: string; label: string }> =
+    country === "AU"
+      ? [...AU_TIMEZONE_OPTIONS]
+      : [...new Set(countryTimezones)].map((value) => ({ value, label: value.replace(/_/g, " ") }));
+  if (current && !base.some((row) => row.value === current)) {
+    base.unshift({ value: current, label: current.replace(/_/g, " ") });
+  }
+  return base;
+}
+
 export function timezoneLabel(timeZone: string): string {
   return AU_TIMEZONE_OPTIONS.find((row) => row.value === timeZone)?.label ?? timeZone;
 }

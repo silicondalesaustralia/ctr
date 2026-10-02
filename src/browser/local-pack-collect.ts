@@ -1,4 +1,5 @@
 import type { Page } from "./pw.js";
+import { DEFAULT_GOOGLE_TARGET, type GoogleTarget } from "../geo/google-target.js";
 
 export interface LocalPackCandidate {
   title: string;
@@ -17,9 +18,9 @@ export const TITLE_SELECTORS =
 export const UI_TITLE =
   /^(directions|website|call|more places|see more|share|save|collapse|results|maps|all|images|news|videos|shopping|books|flights|finance|short videos|places|search|filters|sort|overview|menu|about|hours|photos)$/i;
 
-export function mapsSearchUrl(query: string): string {
+export function mapsSearchUrl(query: string, target: GoogleTarget = DEFAULT_GOOGLE_TARGET): string {
   const q = encodeURIComponent(query.trim());
-  return `https://www.google.com.au/maps/search/${q}?hl=en-AU`;
+  return `${target.origin}/maps/search/${q}?hl=${encodeURIComponent(target.hl)}`;
 }
 
 /** Paid listings carry the ad-disclosure label in their title; they are not ranks. */

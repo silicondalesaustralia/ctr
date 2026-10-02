@@ -28,11 +28,13 @@ export async function buildBaseProposalForPreflight(body: PreflightRequestBody):
         gmbActions: Array.isArray(body.gmbActions)
           ? undefined
           : (body.gmbActions ?? undefined),
+        country: body.country ?? current?.country,
       })
     : await buildCampaignProposal({
         keyword: body.keyword!,
         targetUrl: body.targetUrl!,
         region: body.region!,
+        country: body.country ?? current?.country,
         gscConnectionId: body.gscConnectionId ?? null,
         gscSiteUrl: body.gscSiteUrl ?? null,
       });
@@ -84,6 +86,7 @@ export async function buildBaseProposalForPreflight(body: PreflightRequestBody):
 export async function runPreflightJob(jobId: string, body: PreflightRequestBody): Promise<void> {
   try {
     const baseProposal = await buildBaseProposalForPreflight(body);
+    const country = body.country ?? (await getCurrentCampaign())?.country;
     const proposal = await runKeywordPreflight(
       {
         proposal: baseProposal,
@@ -94,6 +97,7 @@ export async function runPreflightJob(jobId: string, body: PreflightRequestBody)
         runSerpPreflightChecks({
           queries,
           ...context,
+          country,
           jobId,
         }),
     );

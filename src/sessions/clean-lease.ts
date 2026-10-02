@@ -78,7 +78,7 @@ export async function allocateCleanLease(
         console.error(`[proxy] release failed: ${errorMessage(releaseError)}`);
       });
       if (attempt >= MAX_LEASE_ATTEMPTS) {
-        throw new ProxyPoolExhaustedError(expectedCity ?? "AU", errorMessage(error));
+        throw new ProxyPoolExhaustedError(expectedCity ?? allocation.country, errorMessage(error));
       }
     }
   }

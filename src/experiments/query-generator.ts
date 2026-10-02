@@ -1,5 +1,11 @@
 import type { QueryType } from "@prisma/client";
-import { AU_REGIONS } from "../identities/regions.js";
+import {
+  countryName,
+  DEFAULT_COUNTRY,
+  findCity,
+  findCityByRegion,
+  getCountry,
+} from "../geo/locations.js";
 
 export interface GeneratedQuery {
   text: string;
@@ -66,11 +72,33 @@ function dedupeQueries(queries: GeneratedQuery[]): GeneratedQuery[] {
   return deduped;
 }
 
-export function generateQueryCluster(keyword: string, regionCode?: string): GeneratedQuery[] {
+export function normalizeCampaignCountry(country?: string | null): string {
+  const code = country?.trim().toUpperCase();
+  return code && /^[A-Z]{2}$/.test(code) ? code : DEFAULT_COUNTRY;
+}
+
+/** Local phrase for a region: AU state names, else the region's catalog city or the focus city. */
+function regionLocalPhrase(country: string, regionCode: string, focusCity?: string | null): string | null {
+  if (country === "AU") {
+    const phrase = REGION_LOCAL_PHRASES[regionCode.toUpperCase()];
+    if (phrase) return phrase;
+  }
+  const city = focusCity?.trim() || findCityByRegion(country, regionCode)?.city;
+  return city ? city.toLowerCase() : null;
+}
+
+export function generateQueryCluster(
+  keyword: string,
+  regionCode?: string,
+  country: string = DEFAULT_COUNTRY,
+  focusCity?: string | null,
+): GeneratedQuery[] {
   const core = keyword.trim().replace(/\s+/g, " ");
   if (!core) {
     throw new Error("Keyword is required");
   }
+  const code = normalizeCampaignCountry(country);
+  const place = countryName(code).toLowerCase();
 
   const queries: GeneratedQuery[] = [
     { text: core, type: "core", weight: 0.35 },
@@ -88,11 +116,11 @@ export function generateQueryCluster(keyword: string, regionCode?: string): Gene
 
   queries.push(
     { text: `${core} online`, type: "close_variation", weight: 0.1 },
-    { text: `${core} australia`, type: "local", weight: 0.15 },
+    { text: `${core} ${place}`, type: "local", weight: 0.15 },
   );
 
   if (regionCode && regionCode !== "ALL") {
-    const phrase = REGION_LOCAL_PHRASES[regionCode.toUpperCase()];
+    const phrase = regionLocalPhrase(code, regionCode, focusCity);
     if (phrase) {
       queries.push({
         text: `${core} ${phrase}`,
@@ -103,8 +131,8 @@ export function generateQueryCluster(keyword: string, regionCode?: string): Gene
   }
 
   queries.push(
-    { text: `buy ${core} online australia`, type: "long_tail", weight: 0.06 },
-    { text: `best ${core} australia`, type: "long_tail", weight: 0.05 },
+    { text: `buy ${core} online ${place}`, type: "long_tail", weight: 0.06 },
+    { text: `best ${core} ${place}`, type: "long_tail", weight: 0.05 },
   );
 
   return normalizeWeights(dedupeQueries(queries));
@@ -115,17 +143,22 @@ export function extractTargetDomain(targetUrl: string): string {
   return hostname;
 }
 
-export function resolveRegionTimezone(regionCode?: string): string {
-  if (!regionCode || regionCode === "ALL") {
-    return "Australia/Adelaide";
-  }
-
-  const match = AU_REGIONS.find((region) => region.region === regionCode.toUpperCase());
-  return match?.timezone ?? "Australia/Adelaide";
+/** Schedule timezone: focus city, else region, else the country's largest catalog city. */
+export function resolveRegionTimezone(
+  regionCode?: string,
+  country: string = DEFAULT_COUNTRY,
+  focusCity?: string | null,
+): string {
+  const code = normalizeCampaignCountry(country);
+  const fallback = code === "AU" ? "Australia/Adelaide" : (getCountry(code)?.cities[0]?.timezone ?? "UTC");
+  const byCity = findCity(code, focusCity);
+  if (byCity) return byCity.timezone;
+  if (!regionCode || regionCode === "ALL") return fallback;
+  return findCityByRegion(code, regionCode)?.timezone ?? fallback;
 }
 
-export function listRegionOptions(): Array<{ code: string; label: string; city: string }> {
-  return AU_REGIONS.map((region) => ({
+export function listRegionOptions(country: string = DEFAULT_COUNTRY): Array<{ code: string; label: string; city: string }> {
+  return (getCountry(country)?.cities ?? []).map((region) => ({
     code: region.region,
     label: `${region.region} — ${region.city}`,
     city: region.city,

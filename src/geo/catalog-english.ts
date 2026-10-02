@@ -1,0 +1,84 @@
+import type { CountryConfig } from "./types.js";
+
+export const ENGLISH_COUNTRIES: readonly CountryConfig[] = [
+  {
+    code: "AU", name: "Australia", locale: "en-AU",
+    warmSites: ["https://www.abc.net.au/", "https://www.bom.gov.au/", "https://www.news.com.au/", "https://www.smh.com.au/", "https://www.theage.com.au/"],
+    cities: [
+      { region: "NSW", city: "Sydney", timezone: "Australia/Sydney", weight: 31, latitude: -33.8688, longitude: 151.2093 },
+      { region: "VIC", city: "Melbourne", timezone: "Australia/Melbourne", weight: 25, latitude: -37.8136, longitude: 144.9631 },
+      { region: "QLD", city: "Brisbane", timezone: "Australia/Brisbane", weight: 20, latitude: -27.4698, longitude: 153.0251 },
+      { region: "WA", city: "Perth", timezone: "Australia/Perth", weight: 10, latitude: -31.9523, longitude: 115.8613 },
+      { region: "SA", city: "Adelaide", timezone: "Australia/Adelaide", weight: 9, latitude: -34.9285, longitude: 138.6007 },
+      { region: "TAS", city: "Hobart", timezone: "Australia/Hobart", weight: 2, latitude: -42.8821, longitude: 147.3272 },
+      { region: "ACT", city: "Canberra", timezone: "Australia/Sydney", weight: 2, latitude: -35.2809, longitude: 149.13 },
+      { region: "NT", city: "Darwin", timezone: "Australia/Darwin", weight: 1, latitude: -12.4634, longitude: 130.8456 },
+    ],
+  },
+  {
+    code: "NZ", name: "New Zealand", locale: "en-NZ",
+    warmSites: ["https://www.nzherald.co.nz/", "https://www.stuff.co.nz/", "https://www.rnz.co.nz/", "https://www.metservice.com/"],
+    cities: [
+      { region: "AUK", city: "Auckland", timezone: "Pacific/Auckland", weight: 40, latitude: -36.8485, longitude: 174.7633 },
+      { region: "WGN", city: "Wellington", timezone: "Pacific/Auckland", weight: 15, latitude: -41.2865, longitude: 174.7762 },
+      { region: "CAN", city: "Christchurch", timezone: "Pacific/Auckland", weight: 15, latitude: -43.5321, longitude: 172.6362 },
+      { region: "WKO", city: "Hamilton", timezone: "Pacific/Auckland", weight: 8, latitude: -37.787, longitude: 175.2793 },
+      { region: "BOP", city: "Tauranga", timezone: "Pacific/Auckland", weight: 7, latitude: -37.6878, longitude: 176.1651 },
+      { region: "OTA", city: "Dunedin", timezone: "Pacific/Auckland", weight: 5, latitude: -45.8788, longitude: 170.5028 },
+    ],
+  },
+  {
+    code: "US", name: "United States", locale: "en-US",
+    warmSites: ["https://www.cnn.com/", "https://weather.com/", "https://www.nytimes.com/", "https://www.espn.com/", "https://www.usatoday.com/"],
+    cities: [
+      { region: "NY", city: "New York", timezone: "America/New_York", weight: 20, latitude: 40.7128, longitude: -74.006 },
+      { region: "CA", city: "Los Angeles", timezone: "America/Los_Angeles", weight: 14, latitude: 34.0522, longitude: -118.2437 },
+      { region: "IL", city: "Chicago", timezone: "America/Chicago", weight: 9, latitude: 41.8781, longitude: -87.6298 },
+      { region: "TX", city: "Houston", timezone: "America/Chicago", weight: 8, latitude: 29.7604, longitude: -95.3698 },
+      { region: "PA", city: "Philadelphia", timezone: "America/New_York", weight: 6, latitude: 39.9526, longitude: -75.1652 },
+      { region: "FL", city: "Miami", timezone: "America/New_York", weight: 6, latitude: 25.7617, longitude: -80.1918 },
+      { region: "AZ", city: "Phoenix", timezone: "America/Phoenix", weight: 5, latitude: 33.4484, longitude: -112.074 },
+      { region: "GA", city: "Atlanta", timezone: "America/New_York", weight: 5, latitude: 33.749, longitude: -84.388 },
+      { region: "WA", city: "Seattle", timezone: "America/Los_Angeles", weight: 5, latitude: 47.6062, longitude: -122.3321 },
+      { region: "MA", city: "Boston", timezone: "America/New_York", weight: 5, latitude: 42.3601, longitude: -71.0589 },
+      { region: "CO", city: "Denver", timezone: "America/Denver", weight: 4, latitude: 39.7392, longitude: -104.9903 },
+      { region: "DC", city: "Washington", timezone: "America/New_York", weight: 4, latitude: 38.9072, longitude: -77.0369 },
+    ],
+  },
+  {
+    code: "CA", name: "Canada", locale: "en-CA",
+    warmSites: ["https://www.cbc.ca/", "https://www.theweathernetwork.com/", "https://www.ctvnews.ca/", "https://globalnews.ca/"],
+    cities: [
+      { region: "ON", city: "Toronto", timezone: "America/Toronto", weight: 35, latitude: 43.6532, longitude: -79.3832 },
+      { region: "QC", city: "Montreal", timezone: "America/Toronto", weight: 22, latitude: 45.5019, longitude: -73.5674 },
+      { region: "BC", city: "Vancouver", timezone: "America/Vancouver", weight: 15, latitude: 49.2827, longitude: -123.1207 },
+      { region: "AB", city: "Calgary", timezone: "America/Edmonton", weight: 12, latitude: 51.0447, longitude: -114.0719 },
+      { region: "MB", city: "Winnipeg", timezone: "America/Winnipeg", weight: 6, latitude: 49.8951, longitude: -97.1384 },
+      { region: "NS", city: "Halifax", timezone: "America/Halifax", weight: 4, latitude: 44.6488, longitude: -63.5752 },
+    ],
+  },
+  {
+    code: "GB", name: "United Kingdom", locale: "en-GB",
+    warmSites: ["https://www.bbc.co.uk/", "https://www.theguardian.com/uk", "https://www.metoffice.gov.uk/", "https://news.sky.com/"],
+    cities: [
+      { region: "LDN", city: "London", timezone: "Europe/London", weight: 40, latitude: 51.5072, longitude: -0.1276 },
+      { region: "MAN", city: "Manchester", timezone: "Europe/London", weight: 12, latitude: 53.4808, longitude: -2.2426 },
+      { region: "BIR", city: "Birmingham", timezone: "Europe/London", weight: 12, latitude: 52.4862, longitude: -1.8904 },
+      { region: "LDS", city: "Leeds", timezone: "Europe/London", weight: 8, latitude: 53.8008, longitude: -1.5491 },
+      { region: "GLA", city: "Glasgow", timezone: "Europe/London", weight: 8, latitude: 55.8642, longitude: -4.2518 },
+      { region: "LIV", city: "Liverpool", timezone: "Europe/London", weight: 7, latitude: 53.4084, longitude: -2.9916 },
+      { region: "EDI", city: "Edinburgh", timezone: "Europe/London", weight: 7, latitude: 55.9533, longitude: -3.1883 },
+      { region: "BRS", city: "Bristol", timezone: "Europe/London", weight: 6, latitude: 51.4545, longitude: -2.5879 },
+    ],
+  },
+  {
+    code: "IE", name: "Ireland", locale: "en-IE",
+    warmSites: ["https://www.rte.ie/", "https://www.irishtimes.com/", "https://www.independent.ie/", "https://www.met.ie/"],
+    cities: [
+      { region: "D", city: "Dublin", timezone: "Europe/Dublin", weight: 50, latitude: 53.3498, longitude: -6.2603 },
+      { region: "CO", city: "Cork", timezone: "Europe/Dublin", weight: 20, latitude: 51.8985, longitude: -8.4756 },
+      { region: "G", city: "Galway", timezone: "Europe/Dublin", weight: 10, latitude: 53.2707, longitude: -9.0568 },
+      { region: "L", city: "Limerick", timezone: "Europe/Dublin", weight: 10, latitude: 52.668, longitude: -8.6305 },
+    ],
+  },
+];

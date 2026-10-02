@@ -63,7 +63,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
     const dir = profileDir(profileId);
     await mkdir(dir, { recursive: true });
     const googleGeo = getEnv().GOOGLE_XGEO_ENABLED
-      ? (options.googleGeoPoint ?? options.geoPoint ?? cityGeoPoint(proxy?.city, profileId))
+      ? (options.googleGeoPoint ?? options.geoPoint ?? cityGeoPoint(proxy?.city, profileId, proxy?.country))
       : undefined;
 
     console.error(
@@ -80,7 +80,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       webgl_config: pinned.webgl,
       config: { ...pinned.seeds, ...geo.config },
       firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs },
-      locale: "en-AU",
+      locale: proxy?.locale ?? "en-AU",
       humanize: true,
       i_know_what_im_doing: true,
       ...(proxy && {

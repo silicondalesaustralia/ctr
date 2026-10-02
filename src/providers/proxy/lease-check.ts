@@ -43,8 +43,8 @@ async function lookup(lease: ProxyLease, url: string, source: string): Promise<E
 }
 
 /**
- * Test a lease before any browser starts: two geo services must both say AU, at least one
- * must place it in the expected metro, and both must see the same IP.
+ * Test a lease before any browser starts: two geo services must both report the lease's
+ * country, at least one must place it in the expected metro, and both must see the same IP.
  */
 export async function checkLeaseBeforeLaunch(lease: ProxyLease, expectedCity?: string): Promise<EgressGeo> {
   let first: EgressGeo;
@@ -64,11 +64,11 @@ export async function checkLeaseBeforeLaunch(lease: ProxyLease, expectedCity?: s
   if (second && second.ip !== first.ip) throw new UnstableLeaseError(first.ip, second.ip);
 
   const lookups = second ? [first, second] : [first];
-  for (const geo of lookups) assertExpectedCountry(geo, "AU");
+  for (const geo of lookups) assertExpectedCountry(geo, lease.country);
   if (expectedCity?.trim()) {
     const want = normalizeCityName(expectedCity);
     const inMetro = lookups.some((geo) => geo.city && isSameMetro(want, normalizeCityName(geo.city)));
-    if (!inMetro) throw new WrongEgressGeoError(second ?? first, "AU", expectedCity);
+    if (!inMetro) throw new WrongEgressGeoError(second ?? first, lease.country, expectedCity);
   }
   console.error(
     `[proxy] lease check ok ip=${first.ip} ${lookups.map((geo) => `${geo.country}/${geo.city ?? "?"}`).join(" ")}`,

@@ -1,54 +1,43 @@
-export interface RegionConfig {
-  region: string;
-  city: string;
-  timezone: string;
-  weight: number;
+import type { CityConfig } from "../geo/types.js";
+import {
+  DEFAULT_COUNTRY,
+  findCity,
+  findCityByRegion,
+  getCountry,
+  isValidTimezone,
+  pickWeightedCity,
+} from "../geo/locations.js";
+
+export type RegionConfig = CityConfig;
+
+export const AU_REGIONS: readonly RegionConfig[] = getCountry("AU")?.cities ?? [];
+
+export function pickWeightedRegion(index: number, total: number, country = DEFAULT_COUNTRY): RegionConfig {
+  return pickWeightedCity(country, index, total);
 }
 
-export const AU_REGIONS: RegionConfig[] = [
-  { region: "NSW", city: "Sydney", timezone: "Australia/Sydney", weight: 31 },
-  { region: "VIC", city: "Melbourne", timezone: "Australia/Melbourne", weight: 25 },
-  { region: "QLD", city: "Brisbane", timezone: "Australia/Brisbane", weight: 20 },
-  { region: "WA", city: "Perth", timezone: "Australia/Perth", weight: 10 },
-  { region: "SA", city: "Adelaide", timezone: "Australia/Adelaide", weight: 9 },
-  { region: "TAS", city: "Hobart", timezone: "Australia/Hobart", weight: 2 },
-  { region: "ACT", city: "Canberra", timezone: "Australia/Sydney", weight: 2 },
-  { region: "NT", city: "Darwin", timezone: "Australia/Darwin", weight: 1 },
-];
-
-export function pickWeightedRegion(index: number, total: number): RegionConfig {
-  const cumulative: Array<{ threshold: number; region: RegionConfig }> = [];
-  let sum = 0;
-  for (const region of AU_REGIONS) {
-    sum += region.weight;
-    cumulative.push({ threshold: sum, region });
-  }
-
-  const target = ((index + 0.5) / total) * sum;
-  for (const entry of cumulative) {
-    if (target <= entry.threshold) {
-      return entry.region;
-    }
-  }
-  return AU_REGIONS[AU_REGIONS.length - 1]!;
-}
-
+/**
+ * Catalog cities must match their catalog timezone; custom locations only need a real
+ * timezone and a locale tagged with the identity's country.
+ */
 export function isRegionCoherent(
   region: string,
   timezone: string,
   locale: string,
+  country = DEFAULT_COUNTRY,
 ): boolean {
-  if (locale !== "en-AU") return false;
-  const match = AU_REGIONS.find((r) => r.region === region);
-  if (!match) return false;
-  return match.timezone === timezone;
+  const config = getCountry(country);
+  if (config) {
+    const match = findCityByRegion(country, region);
+    if (match) return locale === config.locale && match.timezone === timezone;
+  }
+  return isValidTimezone(timezone) && locale.toUpperCase().endsWith(`-${country.toUpperCase()}`);
 }
 
-export function findRegionConfigByCity(city: string): RegionConfig | undefined {
-  const normalized = city.trim().toLowerCase();
-  return AU_REGIONS.find((row) => row.city.toLowerCase() === normalized);
+export function findRegionConfigByCity(city: string, country = DEFAULT_COUNTRY): RegionConfig | undefined {
+  return findCity(country, city);
 }
 
-export function findRegionConfigByCode(region: string): RegionConfig | undefined {
-  return AU_REGIONS.find((row) => row.region === region.toUpperCase());
+export function findRegionConfigByCode(region: string, country = DEFAULT_COUNTRY): RegionConfig | undefined {
+  return findCityByRegion(country, region);
 }

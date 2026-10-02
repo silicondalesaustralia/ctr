@@ -16,6 +16,7 @@ import { applyBrowserStealth } from "../src/browser/stealth.js";
 import { verifyBrowserEgressGeo } from "../src/browser/egress-geo.js";
 import { browseAuSitesBeforeGoogle } from "../src/browser/pre-google-browse.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../src/browser/google-search.js";
+import { DEFAULT_GOOGLE_TARGET } from "../src/geo/google-target.js";
 import { createGoLoginProvider } from "../src/providers/browser/GoLoginProvider.js";
 import { sleep } from "../src/utils/helpers.js";
 
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
     const sites = await browseAuSitesBeforeGoogle(page);
     console.log(`Pre-Google browse: ${sites.join(", ") || "none"}`);
 
-    await openGoogle(page);
+    await openGoogle(page, DEFAULT_GOOGLE_TARGET);
     const afterLoad = await checkBlocked(page);
     console.log(`Google homepage: ${afterLoad.blocked ? `BLOCKED (${afterLoad.reason})` : "ok"}`);
 

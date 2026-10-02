@@ -4,7 +4,8 @@ import { resolveGscContext } from "../analytics/gsc-connection-service.js";
 import { buildGscSiteCurve } from "./ctr-curve.js";
 import { calculateCampaignIntensity, normalizeQueryWeights } from "./intensity-calculator.js";
 import type { CampaignIntensityResult } from "./types.js";
-import { generateQueryCluster } from "../experiments/query-generator.js";
+import { generateQueryCluster, normalizeCampaignCountry } from "../experiments/query-generator.js";
+import { countryName, getCountry } from "../geo/locations.js";
 import type { CampaignQueryInput } from "../experiments/campaign-service.js";
 import { prisma } from "../db/client.js";
 
@@ -20,6 +21,7 @@ export interface CampaignProposalInput {
   keyword: string;
   targetUrl: string;
   region: string;
+  country?: string | null;
   gscConnectionId?: string | null;
   gscSiteUrl?: string | null;
 }
@@ -55,11 +57,12 @@ export interface CampaignProposal {
   gmbActions?: string[];
 }
 
-function classifyQueryType(query: string, keyword: string): CampaignQueryInput["type"] {
+function classifyQueryType(query: string, keyword: string, country: string): CampaignQueryInput["type"] {
   const q = query.toLowerCase();
   const k = keyword.toLowerCase();
   if (q === k) return "core";
-  if (q.includes("australia") || q.includes("sydney") || q.includes("melbourne")) return "local";
+  const places = [countryName(country), ...(getCountry(country)?.cities.map((row) => row.city) ?? [])];
+  if (places.some((place) => q.includes(place.toLowerCase()))) return "local";
   if (q.split(/\s+/).length >= 5) return "long_tail";
   return "close_variation";
 }
@@ -67,6 +70,7 @@ function classifyQueryType(query: string, keyword: string): CampaignQueryInput["
 function mergeQueriesFromGsc(
   keyword: string,
   region: string,
+  country: string,
   gscRows: Array<{
     query: string;
     impressions: number;
@@ -74,7 +78,7 @@ function mergeQueriesFromGsc(
     position: number;
   }>,
 ): CampaignQueryInput[] {
-  const generated = generateQueryCluster(keyword, region);
+  const generated = generateQueryCluster(keyword, region, country);
   const byText = new Map<string, CampaignQueryInput>();
 
   for (const item of generated) {
@@ -90,7 +94,7 @@ function mergeQueriesFromGsc(
     const existing = byText.get(key);
     byText.set(key, {
       text: row.query,
-      type: existing?.type ?? classifyQueryType(row.query, keyword),
+      type: existing?.type ?? classifyQueryType(row.query, keyword, country),
       weight: existing?.weight ?? 0,
       startingPosition: row.position,
       gscImpressions28d: row.impressions,
@@ -144,7 +148,7 @@ export async function buildCampaignProposal(
     }
   }
 
-  const queries = mergeQueriesFromGsc(keyword, region, gscRows);
+  const queries = mergeQueriesFromGsc(keyword, region, normalizeCampaignCountry(input.country), gscRows);
 
   const totalImpressions = gscRows.reduce((sum, row) => sum + row.impressions, 0);
   const weightedPosition =

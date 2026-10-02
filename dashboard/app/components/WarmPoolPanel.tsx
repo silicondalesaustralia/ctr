@@ -2,10 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPut } from "../../lib/api";
-import type { CityOption } from "./campaign/CampaignGmbSetupStep";
+import { DEFAULT_COUNTRY, useCountries } from "../../lib/geo";
+import CountrySelect from "./CountrySelect";
 import { cellStyle, inputStyle, panelStyle, primaryButtonStyle, thStyle } from "./campaign/shared";
 
+function warmPoolKey(country: string, city: string): string {
+  return country === DEFAULT_COUNTRY ? city : `${country}:${city}`;
+}
+
 interface WarmPoolCity {
+  key?: string;
+  country?: string;
   city: string;
   target: number;
   warming: number;
@@ -18,7 +25,8 @@ interface WarmPoolResponse {
 }
 
 export default function WarmPoolPanel() {
-  const [cities, setCities] = useState<CityOption[]>([]);
+  const { countries } = useCountries();
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [pool, setPool] = useState<WarmPoolResponse | null>(null);
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -27,18 +35,13 @@ export default function WarmPoolPanel() {
 
   const applyPool = useCallback((result: WarmPoolResponse) => {
     setPool(result);
-    setTargets(Object.fromEntries(result.cities.map((row) => [row.city, String(row.target)])));
+    setTargets(Object.fromEntries(result.cities.map((row) => [row.key ?? row.city, String(row.target)])));
   }, []);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [cityOptions, poolResult] = await Promise.all([
-          apiGet<CityOption[]>("/cities"),
-          apiGet<WarmPoolResponse>("/settings/warm-pool"),
-        ]);
-        setCities(cityOptions);
-        applyPool(poolResult);
+        applyPool(await apiGet<WarmPoolResponse>("/settings/warm-pool"));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load warm pool");
       }
@@ -62,7 +65,8 @@ export default function WarmPoolPanel() {
     }
   }
 
-  const statusFor = (city: string) => pool?.cities.find((row) => row.city === city);
+  const cities = countries.find((row) => row.code === country)?.cities ?? [];
+  const statusFor = (key: string) => pool?.cities.find((row) => (row.key ?? row.city) === key);
 
   return (
     <section style={{ ...panelStyle, marginBottom: 20 }}>
@@ -74,6 +78,12 @@ export default function WarmPoolPanel() {
           <strong style={{ color: "#b45309" }}> Inactive: browser provider is {pool.provider}.</strong>
         )}
       </p>
+      <CountrySelect
+        countries={countries}
+        value={country}
+        onChange={setCountry}
+        style={{ ...inputStyle, width: "auto", marginBottom: 12 }}
+      />
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, marginBottom: 12 }}>
         <thead>
           <tr style={{ background: "#fafbfc" }}>
@@ -85,24 +95,27 @@ export default function WarmPoolPanel() {
           </tr>
         </thead>
         <tbody>
-          {cities.map((option) => (
-            <tr key={option.city}>
-              <td style={cellStyle}>{option.city}</td>
-              <td style={cellStyle}>
-                <input
-                  style={{ ...inputStyle, width: 90, padding: "6px 8px" }}
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={targets[option.city] ?? ""}
-                  placeholder="0"
-                  onChange={(e) => setTargets((prev) => ({ ...prev, [option.city]: e.target.value }))}
-                />
-              </td>
-              <td style={cellStyle}>{statusFor(option.city)?.warming ?? "—"}</td>
-              <td style={cellStyle}>{statusFor(option.city)?.eligible ?? "—"}</td>
-            </tr>
-          ))}
+          {cities.map((option) => {
+            const key = warmPoolKey(country, option.city);
+            return (
+              <tr key={key}>
+                <td style={cellStyle}>{option.city}</td>
+                <td style={cellStyle}>
+                  <input
+                    style={{ ...inputStyle, width: 90, padding: "6px 8px" }}
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={targets[key] ?? ""}
+                    placeholder="0"
+                    onChange={(e) => setTargets((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </td>
+                <td style={cellStyle}>{statusFor(key)?.warming ?? "—"}</td>
+                <td style={cellStyle}>{statusFor(key)?.eligible ?? "—"}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <button

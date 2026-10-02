@@ -15,7 +15,7 @@ import {
   secondaryButtonStyle,
   thStyle,
 } from "./shared";
-import { AU_TIMEZONE_OPTIONS } from "../../../lib/format-timezone";
+import { scheduleTimezoneOptions } from "../../../lib/format-timezone";
 
 const CAMPAIGN_SETTING_HINTS = {
   duration:
@@ -45,6 +45,7 @@ const SCHEDULE_WINDOW_PRESETS = [
 
 interface Props {
   form: CampaignFormState;
+  countryTimezones?: string[];
   intensity: IntensitySummary | null;
   rationales: SettingRationale[];
   gscStatus: "live" | "unavailable" | null;
@@ -79,6 +80,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default function CampaignReviewStep({
   form,
+  countryTimezones = [],
   intensity,
   rationales,
   gscStatus,
@@ -195,7 +197,7 @@ export default function CampaignReviewStep({
             }}
           >
             {gscStatus === "live"
-              ? "GSC data loaded for this URL (AU, last 28 days)."
+              ? `GSC data loaded for this URL (${form.country}, last 28 days).`
               : "GSC data unavailable — recommendations use keyword variations and defaults."}
           </div>
         )}
@@ -352,9 +354,9 @@ export default function CampaignReviewStep({
                   style={{ marginTop: 3 }}
                 />
                 <span>
-                  <strong>Country-wide (Australia)</strong>
+                  <strong>Country-wide ({form.country})</strong>
                   <div style={{ color: "#767d8e", fontSize: 13 }}>
-                    Any eligible AU identity. Proxies still use the focus city when available.
+                    Any eligible {form.country} identity. Proxies still use the focus city when available.
                   </div>
                 </span>
               </label>
@@ -373,7 +375,7 @@ export default function CampaignReviewStep({
               value={form.scheduleTimezone}
               onChange={(e) => onFormChange("scheduleTimezone", e.target.value)}
             >
-              {AU_TIMEZONE_OPTIONS.map((tz) => (
+              {scheduleTimezoneOptions(form.country, countryTimezones, form.scheduleTimezone).map((tz) => (
                 <option key={tz.value} value={tz.value}>
                   {tz.label}
                 </option>
@@ -622,7 +624,7 @@ export default function CampaignReviewStep({
                   {form.campaignKind === "gmb" && form.identityGeoScope === "city" && form.focusCity
                     ? ` ${form.focusCity}`
                     : form.campaignKind === "gmb" && form.identityGeoScope === "country"
-                      ? " AU"
+                      ? ` ${form.country}`
                       : ""}{" "}
                   identities
                 </strong>
@@ -631,7 +633,7 @@ export default function CampaignReviewStep({
                     <>
                       You have {intensity.activeIdentityCount} eligible country-wide but this plan
                       needs about {intensity.suggestedIdentities}. Clear any Identities-tab
-                      selection to use the full AU pool.
+                      selection to use the full {form.country} pool.
                     </>
                   ) : form.campaignKind === "gmb" && form.focusCity ? (
                     <>

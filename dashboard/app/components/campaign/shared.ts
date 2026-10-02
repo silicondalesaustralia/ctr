@@ -91,6 +91,8 @@ export interface CampaignFormState {
   campaignKind: CampaignKind;
   keyword: string;
   targetUrl: string;
+  /** ISO country code; identities, proxies and Google gl/hl follow it. */
+  country: string;
   region: string;
   focusCity: string;
   identityGeoScope: IdentityGeoScope;

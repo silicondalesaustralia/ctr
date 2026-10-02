@@ -16,7 +16,7 @@ export class MockProxyProvider implements ProxyProvider {
       port: 0,
       username: "mock",
       password: "mock",
-      country: "AU",
+      country: (input.country || "AU").toUpperCase(),
       region: input.region,
       city: input.city,
       sessionKey: input.sessionKey ?? leaseId,

@@ -8,6 +8,7 @@ export interface AnalyzeInput {
   keyword: string;
   targetUrl?: string;
   region?: string;
+  country?: string;
   campaignKind?: "url" | "gmb";
   focusCity?: string;
   gmbBusinessName?: string;
@@ -203,6 +204,7 @@ export async function buildCampaignProposalViaRailway(
           gmbMapsUrl: input.gmbMapsUrl ?? input.targetUrl,
           gmbActions: input.gmbActions,
           monthlySearchVolume: input.monthlySearchVolume ?? null,
+          country: input.country,
           region: input.region,
           targetUrl: input.gmbMapsUrl ?? input.targetUrl,
         }
@@ -210,6 +212,7 @@ export async function buildCampaignProposalViaRailway(
           campaignKind: "url" as const,
           keyword,
           targetUrl: input.targetUrl?.trim(),
+          country: input.country,
           region: input.region?.trim().toUpperCase(),
           gscConnectionId: input.gscConnectionId ?? null,
           gscSiteUrl: input.gscSiteUrl ?? null,
@@ -248,7 +251,7 @@ export async function buildCampaignProposalViaRailway(
     apiOrigin,
     apiKey,
     "/experiments/preview-queries",
-    { keyword, region },
+    { keyword, region, country: input.country },
   );
 
   const campaignDurationDays = recommendDuration();
@@ -263,6 +266,7 @@ export async function buildCampaignProposalViaRailway(
       keyword,
       targetUrl,
       region,
+      country: input.country,
       campaignDurationDays,
       treatmentIntensity,
       adaptivePacing: true,

@@ -91,7 +91,7 @@ export function assertExpectedCountry(
   }
 }
 
-/** Soft Premium Ports city targeting can land another AU city — reject before Google. */
+/** Soft Premium Ports city targeting can land another city in the country — reject before Google. */
 export function assertExpectedCity(
   egress: EgressGeo,
   expectedCountry: string,
@@ -158,7 +158,7 @@ function assertEgressGeo(
  */
 export async function verifyBrowserEgressGeo(
   page: Page,
-  expectedCountry = "AU",
+  expectedCountry: string,
   expectedCity?: string,
 ): Promise<EgressGeo> {
   const geoPage = await page.context().newPage();

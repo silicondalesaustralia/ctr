@@ -11,6 +11,7 @@ import { browseAuSites, browseAuSitesBeforeGoogle } from "../browser/pre-google-
 import { applyBrowserStealth } from "../browser/stealth.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
+import { googleTargetFor } from "../geo/google-target.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
@@ -186,13 +187,14 @@ export async function runWarmupSession(
       browserProvider,
       profileId,
       allocation: {
-        country: "AU",
+        country: input.identity.country,
         region: input.identity.region,
         city: input.identity.city,
         sessionKey: session.id,
         deviceClass: input.identity.deviceClass,
       },
       timezone: input.identity.timezone,
+      locale: input.identity.locale,
       onLease: (leaseId) => {
         proxyLeaseId = leaseId;
       },
@@ -220,7 +222,7 @@ export async function runWarmupSession(
         const expectedCity = shouldSkipCityTargeting(input.identity.city)
           ? undefined
           : input.identity.city;
-        const verified = await verifyBrowserEgressGeo(openedPage, "AU", expectedCity);
+        const verified = await verifyBrowserEgressGeo(openedPage, input.identity.country, expectedCity);
         if (!isBrowse) await assertEgressPrefixClean(verified.ip);
         return { page: openedPage, egress: verified };
       },
@@ -239,7 +241,7 @@ export async function runWarmupSession(
     const { page, egress } = started.prepared;
 
     const bandwidth = trackBandwidth(page);
-    let egressCountry = "AU";
+    let egressCountry = input.identity.country;
     let egressRegion = input.identity.region;
     let egressCity = input.identity.city;
     let egressIpHash = hashValue(`${proxyLease.host}:${proxyLease.sessionKey ?? "unknown"}`);
@@ -286,7 +288,12 @@ export async function runWarmupSession(
     }
 
     if (isBrowse) {
-      const sites = await browseAuSites(page, { minSites: 2, maxSites: 4, longDwell: true });
+      const sites = await browseAuSites(page, {
+        minSites: 2,
+        maxSites: 4,
+        longDwell: true,
+        country: input.identity.country,
+      });
       await appendSessionEvent(session.id, "scroll", {
         warmup: true,
         phase: "cookie_age_browse",
@@ -320,14 +327,14 @@ export async function runWarmupSession(
       return { sessionId: session.id, status: "completed", siteClicked: true };
     }
 
-    const preSites = await browseAuSitesBeforeGoogle(page);
+    const preSites = await browseAuSitesBeforeGoogle(page, input.identity.country);
     await appendSessionEvent(session.id, "scroll", {
       warmup: true,
       phase: "pre_google_browse",
       sites: preSites,
     });
 
-    await openGoogle(page);
+    await openGoogle(page, googleTargetFor(input.identity.country, input.identity.locale));
     await appendSessionEvent(session.id, "google_loaded");
 
     const blockedAfterLoad = await checkBlocked(page);

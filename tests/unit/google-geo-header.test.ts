@@ -22,8 +22,17 @@ describe("google-geo-header", () => {
   });
 
   it("pins validation to the campaign city, region capital, or Adelaide", () => {
-    expect(preflightGeoPoint("WA", "Perth").latitude).toBeCloseTo(-31.9523);
-    expect(preflightGeoPoint("QLD").latitude).toBeCloseTo(-27.4698);
-    expect(preflightGeoPoint("ALL").latitude).toBeCloseTo(-34.9285);
+    expect(preflightGeoPoint("AU", "WA", "Perth")?.latitude).toBeCloseTo(-31.9523);
+    expect(preflightGeoPoint("AU", "QLD")?.latitude).toBeCloseTo(-27.4698);
+    expect(preflightGeoPoint("AU", "ALL")?.latitude).toBeCloseTo(-34.9285);
+  });
+
+  it("resolves city centres per country", () => {
+    expect(preflightGeoPoint("US", "WA")?.latitude).toBeCloseTo(47.6062);
+    expect(preflightGeoPoint("GB", "ALL")?.latitude).toBeCloseTo(51.5072);
+    expect(preflightGeoPoint("XX", "ALL")).toBeUndefined();
+    const london = cityGeoPoint("London", "profile-a", "GB");
+    expect(Math.abs(london!.latitude - 51.5072)).toBeLessThan(0.1);
+    expect(cityGeoPoint("London", "profile-a", "AU")).toBeUndefined();
   });
 });

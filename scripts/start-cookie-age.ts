@@ -23,7 +23,7 @@ async function createOneIdentity(): Promise<string> {
     { encoding: "utf8", cwd: process.cwd() },
   );
   process.stdout.write(out);
-  const match = out.match(/Created 1 identities \((au_\d+)/);
+  const match = out.match(/Created 1 identities \(([a-z]{2}_\d+)/);
   if (!match?.[1]) {
     throw new Error("Failed to parse new identity id from create output");
   }

@@ -20,6 +20,7 @@ export interface StartWithLeaseInput<T> {
   profileId: string;
   allocation: ProxyAllocationRequest & { sessionKey: string };
   timezone?: string;
+  locale?: string;
   options?: StartProfileOptions;
   /** Called with each lease id as soon as it is allocated, so outer cleanup can release it. */
   onLease: (leaseId: string | null) => void;
@@ -59,6 +60,7 @@ export async function startBrowserWithLeaseRetry<T>(
           city: lease.city,
           sessionKey: lease.sessionKey,
           timezone: input.timezone,
+          locale: input.locale,
         },
         input.options,
       );
@@ -70,7 +72,7 @@ export async function startBrowserWithLeaseRetry<T>(
       await rejectLease(error, attempt, expectedCity);
       await releaseRejected(input, lease, running);
       if (attempt >= MAX_LEASE_ATTEMPTS) {
-        throw new ProxyPoolExhaustedError(expectedCity ?? "AU", errorMessage(error));
+        throw new ProxyPoolExhaustedError(expectedCity ?? input.allocation.country, errorMessage(error));
       }
     }
   }

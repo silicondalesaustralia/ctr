@@ -10,6 +10,7 @@ import {
   openMorePlaces,
 } from "../src/browser/local-pack.js";
 import { openGoogle, typeAndSubmitQuery } from "../src/browser/google-search.js";
+import { DEFAULT_GOOGLE_TARGET } from "../src/geo/google-target.js";
 import { FAST_DRY_RUN_PERSONA } from "../src/behaviour/personas.js";
 import { generateSessionTraits } from "../src/behaviour/session-traits.js";
 
@@ -46,7 +47,7 @@ async function main(): Promise<void> {
   const page = context.pages()[0] ?? (await context.newPage());
 
   const traits = generateSessionTraits(FAST_DRY_RUN_PERSONA, "probe", "probe");
-  await openGoogle(page);
+  await openGoogle(page, DEFAULT_GOOGLE_TARGET);
   await typeAndSubmitQuery(page, query, FAST_DRY_RUN_PERSONA, traits);
 
   const serpCandidates = await collectLocalPackCandidates(page);

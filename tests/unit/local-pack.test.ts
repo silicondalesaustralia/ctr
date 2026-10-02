@@ -4,11 +4,18 @@ import {
   localFinderUrl,
   namesMatch,
 } from "../../src/browser/local-pack.js";
+import { googleTargetFor } from "../../src/geo/google-target.js";
 
 describe("localFinderUrl", () => {
   it("builds udm=1 AU local finder URL", () => {
     expect(localFinderUrl("plumber Mount Barker")).toBe(
-      "https://www.google.com.au/search?q=plumber%20Mount%20Barker&udm=1&hl=en-AU&gl=au",
+      "https://www.google.com/search?q=plumber%20Mount%20Barker&udm=1&hl=en-AU&gl=au",
+    );
+  });
+
+  it("uses the identity country's gl/hl", () => {
+    expect(localFinderUrl("plumber Denver", googleTargetFor("US", "en-US"))).toBe(
+      "https://www.google.com/search?q=plumber%20Denver&udm=1&hl=en-US&gl=us",
     );
   });
 });
@@ -44,7 +51,7 @@ describe("mapsSearchUrl", () => {
   it("builds AU maps search URL", async () => {
     const { mapsSearchUrl } = await import("../../src/browser/local-pack.js");
     expect(mapsSearchUrl("plumber Mount Barker")).toContain(
-      "google.com.au/maps/search/plumber%20Mount%20Barker",
+      "www.google.com/maps/search/plumber%20Mount%20Barker?hl=en-AU",
     );
   });
 });

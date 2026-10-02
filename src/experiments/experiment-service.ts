@@ -6,6 +6,7 @@ import {
   buildExperimentName,
   extractTargetDomain,
   generateQueryCluster,
+  normalizeCampaignCountry,
   resolveRegionTimezone,
 } from "./query-generator.js";
 import { randomUUID } from "node:crypto";
@@ -14,6 +15,8 @@ export interface CreateExperimentInput {
   keyword: string;
   targetUrl: string;
   region: string;
+  /** ISO country code; identities, proxies and Google all follow it (default AU). */
+  country?: string | null;
   name?: string;
   sessionsPerMonth?: number;
   activate?: boolean;
@@ -33,17 +36,19 @@ export async function createExperimentFromInput(
   const keyword = input.keyword.trim();
   const targetUrl = input.targetUrl.trim();
   const region = input.region.trim().toUpperCase();
+  const country = normalizeCampaignCountry(input.country);
   const targetDomain = input.targetDomain ?? extractTargetDomain(targetUrl);
   const name = input.name?.trim() || buildExperimentName(keyword, region);
   const baseSlug = slugify(name);
   const slug = await uniqueSlug(baseSlug);
-  const generatedQueries = generateQueryCluster(keyword, region);
-  const timezone = resolveRegionTimezone(region);
+  const generatedQueries = generateQueryCluster(keyword, region, country, input.focusCity);
+  const timezone = resolveRegionTimezone(region, country, input.focusCity);
 
   const experiment = await prisma.experiment.create({
     data: {
       name,
       slug,
+      country,
       targetUrl,
       targetDomain,
       campaignKind: input.campaignKind === "gmb" ? "gmb" : "url",

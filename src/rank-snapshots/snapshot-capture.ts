@@ -6,6 +6,7 @@ import { GoogleBlockedError } from "../browser/blocked-detection.js";
 import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-search.js";
 import { findGmbInLocalPack } from "../browser/local-pack.js";
 import { collectSerpLinkCandidates, findTargetInSerp, isOrganicCandidate } from "../browser/serp-parser.js";
+import { googleTargetFor, type GoogleTarget } from "../geo/google-target.js";
 
 export interface SnapshotCapture {
   outcome: "captured" | "not_found" | "blocked";
@@ -40,8 +41,8 @@ function blockedCapture(page: Page, reason: string | undefined): SnapshotCapture
 }
 
 /** Returns a block reason, or null when the SERP loaded cleanly. */
-async function searchQuery(page: Page, query: string): Promise<string | null> {
-  await openGoogle(page);
+async function searchQuery(page: Page, query: string, google: GoogleTarget): Promise<string | null> {
+  await openGoogle(page, google);
   const afterOpen = await checkBlocked(page);
   if (afterOpen.blocked) return afterOpen.reason ?? "blocked";
 
@@ -115,7 +116,7 @@ export async function captureQuerySnapshot(
   experiment: Experiment,
   query: string,
 ): Promise<SnapshotCapture> {
-  const blockReason = await searchQuery(page, query);
+  const blockReason = await searchQuery(page, query, googleTargetFor(experiment.country));
   if (blockReason) return blockedCapture(page, blockReason);
   return experiment.campaignKind === "gmb"
     ? captureGmb(page, experiment, query)

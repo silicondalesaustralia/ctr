@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { apiGet } from "../../../lib/api";
+import { withCountry } from "../../../lib/geo";
 import type { GmbActionFlags, IdentityGeoScope } from "./shared";
 import { inputStyle, labelStyle, panelStyle, primaryButtonStyle, secondaryButtonStyle } from "./shared";
 
@@ -30,6 +31,8 @@ interface Props {
   identityGeoScope: IdentityGeoScope;
   gmbActions: GmbActionFlags;
   cities: CityOption[];
+  country: string;
+  countryField?: ReactNode;
   busy: boolean;
   onKeywordChange: (value: string) => void;
   onBusinessNameChange: (value: string) => void;
@@ -49,6 +52,8 @@ export default function CampaignGmbSetupStep({
   identityGeoScope,
   gmbActions,
   cities,
+  country,
+  countryField,
   busy,
   onKeywordChange,
   onBusinessNameChange,
@@ -71,7 +76,7 @@ export default function CampaignGmbSetupStep({
     void (async () => {
       try {
         const result = await apiGet<GeoCapacity>(
-          `/campaign/geo-capacity?city=${encodeURIComponent(focusCity)}&suggested=0`,
+          withCountry(`/campaign/geo-capacity?city=${encodeURIComponent(focusCity)}&suggested=0`, country),
         );
         if (!cancelled) {
           setCapacity(result);
@@ -87,7 +92,7 @@ export default function CampaignGmbSetupStep({
     return () => {
       cancelled = true;
     };
-  }, [focusCity]);
+  }, [focusCity, country]);
 
   const canAnalyze = Boolean(
     keyword.trim() && gmbBusinessName.trim() && gmbMapsUrl.trim() && focusCity,
@@ -99,7 +104,7 @@ export default function CampaignGmbSetupStep({
       <h2 style={{ margin: "0 0 8px" }}>Google Business Profile</h2>
       <p style={{ color: "#767d8e", margin: "0 0 24px", fontSize: 15 }}>
         Target a Maps listing from the local pack. Choose whether sessions use identities from the
-        focus city only, or anywhere in Australia.
+        focus city only, or anywhere in the campaign country.
       </p>
 
       <div style={{ display: "grid", gap: 16 }}>
@@ -132,6 +137,8 @@ export default function CampaignGmbSetupStep({
             placeholder="e.g. horse vet Adelaide"
           />
         </label>
+
+        {countryField}
 
         <label>
           <span style={labelStyle}>Geo location (query / proxy city)</span>
@@ -180,9 +187,9 @@ export default function CampaignGmbSetupStep({
               style={{ marginTop: 3 }}
             />
             <span>
-              <strong>Country-wide (Australia)</strong>
+              <strong>Country-wide ({country})</strong>
               <div style={{ color: "#767d8e", fontSize: 13 }}>
-                Any eligible AU identity. Proxies still use the focus city when available.
+                Any eligible {country} identity. Proxies still use the focus city when available.
               </div>
             </span>
           </label>
@@ -216,7 +223,7 @@ export default function CampaignGmbSetupStep({
               fontSize: 14,
             }}
           >
-            Country-wide mode uses the full eligible AU identity pool (clear the Identities tab
+            Country-wide mode uses the full eligible {country} identity pool (clear the Identities tab
             selection to use everyone, or keep an explicit selection).
           </div>
         )}
