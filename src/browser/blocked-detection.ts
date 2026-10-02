@@ -62,6 +62,21 @@ export async function detectBlockedPage(page: Page): Promise<BlockCheckResult> {
   return { blocked: false };
 }
 
+/**
+ * A results page with no result titles is an interstitial (JS check, soft block),
+ * not "target not found" — logs what Google served and treats it as a block.
+ */
+export async function assertSerpHasResults(page: Page, resultTitleSelector: string): Promise<void> {
+  const snapshot = await page.evaluate((selector) => ({
+    titles: document.querySelectorAll(selector).length,
+    title: document.title,
+    body: (document.body?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 300),
+  }), resultTitleSelector);
+  if (snapshot.titles > 0) return;
+  console.error(`[serp] no results on page url=${page.url()} title="${snapshot.title}" body="${snapshot.body}"`);
+  throw new GoogleBlockedError("serp_without_results");
+}
+
 export async function acceptConsentIfPresent(page: Page): Promise<boolean> {
   const selectors = [
     "#L2AGLb",

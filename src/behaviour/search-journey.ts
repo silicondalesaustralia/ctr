@@ -13,7 +13,8 @@ import {
   goToNextSerpPage,
 } from "../browser/serp-parser.js";
 import { expandOmittedResults } from "../browser/serp-omitted.js";
-import { GoogleBlockedError } from "../browser/blocked-detection.js";
+import { assertSerpHasResults, GoogleBlockedError } from "../browser/blocked-detection.js";
+import { RESULT_TITLE_SELECTOR } from "../browser/serp-pagination.js";
 import { captureRankView } from "../browser/rank-view.js";
 import { isProbabilisticBehaviourEnabled } from "./behaviour-config.js";
 import { FAST_DRY_RUN_PERSONA } from "./personas.js";
@@ -64,6 +65,7 @@ async function findTargetWithInspection(
   const counted = new Set<string>();
   for (let serpPage = 1; serpPage <= maxSerpPages; serpPage += 1) {
     await inspectSerp(page, persona, traits, onEvent);
+    if (serpPage === 1 && !omittedExpanded && !isDryRun()) await assertSerpHasResults(page, RESULT_TITLE_SELECTOR);
     const result = await findTargetOnCurrentPage(page, targetDomain, serpPage, counted);
     if (result) {
       return { result, pagesSearched: serpPage };
