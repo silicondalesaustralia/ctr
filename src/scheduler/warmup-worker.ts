@@ -8,6 +8,7 @@ import {
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
+import { addUniqueJob } from "./enqueue-unique.js";
 import { warmupInfraRetryDelayMs } from "../warmup/warmup-config.js";
 import { PROXY_POOL_DEFER_MINUTES } from "./retry-policy.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
@@ -36,12 +37,7 @@ export interface WarmupJobData {
 }
 
 export async function enqueueWarmupSession(warmupSessionId: string): Promise<void> {
-  const warmupQueue = getWarmupQueue();
-  await warmupQueue.add(
-    "run-warmup",
-    { warmupSessionId },
-    { jobId: warmupSessionId, removeOnComplete: true, removeOnFail: false },
-  );
+  await addUniqueJob(getWarmupQueue(), "run-warmup", { warmupSessionId }, warmupSessionId);
 }
 
 export async function processWarmupSession(warmupSessionId: string): Promise<void> {

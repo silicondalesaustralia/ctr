@@ -11,6 +11,7 @@ import {
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
+import { addUniqueJob } from "./enqueue-unique.js";
 import { addMinutes } from "../utils/helpers.js";
 import { logger } from "../config/logger.js";
 
@@ -38,12 +39,7 @@ export interface SessionJobData {
 }
 
 export async function enqueueScheduledSession(scheduledSessionId: string): Promise<void> {
-  const sessionQueue = getSessionQueue();
-  await sessionQueue.add(
-    "run-session",
-    { scheduledSessionId },
-    { jobId: scheduledSessionId, removeOnComplete: true, removeOnFail: false },
-  );
+  await addUniqueJob(getSessionQueue(), "run-session", { scheduledSessionId }, scheduledSessionId);
 }
 
 export async function processScheduledSession(
@@ -138,7 +134,10 @@ export async function processScheduledSession(
   } catch (error) {
     await prisma.scheduledSession.update({
       where: { id: scheduledSessionId },
-      data: { status: "scheduled" },
+      data: {
+        status: "scheduled",
+        scheduledAt: addMinutes(new Date(), getRetryDelayMinutes("browser_error")),
+      },
     });
     throw error;
   }
