@@ -121,7 +121,7 @@ export function generateQueryCluster(
 
   if (regionCode && regionCode !== "ALL") {
     const phrase = regionLocalPhrase(code, regionCode, focusCity);
-    if (phrase) {
+    if (phrase && !` ${core.toLowerCase()} `.includes(` ${phrase} `)) {
       queries.push({
         text: `${core} ${phrase}`,
         type: "local",

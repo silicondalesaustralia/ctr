@@ -22,6 +22,7 @@ import CampaignCountryField from "./campaign/CampaignCountryField";
 import {
   DEFAULT_GMB_ACTIONS,
   getStartCampaignBlockReason,
+  noneFoundMessage,
   type CampaignFormState,
   type CampaignKind,
   type CampaignTab,
@@ -582,7 +583,7 @@ export default function CampaignDashboard({
         if (start.proposal.preflight?.status === "blocked") {
           setMessage("Google blocked preflight — try again later");
         } else if (start.proposal.preflight?.findableCount === 0) {
-          setMessage("No queries were findable on Google within 4 pages");
+          setMessage(noneFoundMessage(start.proposal.preflight));
         } else {
           setMessage(
             start.proposal.preflight?.keywordAdjusted
@@ -639,7 +640,7 @@ export default function CampaignDashboard({
         if (job.proposal.preflight?.status === "blocked") {
           setMessage("Google blocked preflight — try again later");
         } else if (job.proposal.preflight?.findableCount === 0) {
-          setMessage("No queries were findable on Google within 4 pages");
+          setMessage(noneFoundMessage(job.proposal.preflight));
         } else {
           setMessage(
             job.proposal.preflight?.keywordAdjusted

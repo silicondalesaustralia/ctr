@@ -71,6 +71,16 @@ export function placesSourceLabel(source: string | undefined): string {
   return source ? (placesSourceLabels[source] ?? source) : "";
 }
 
+/** Message for a run where nothing was found; distinguishes "never searched" from "not ranking". */
+export function noneFoundMessage(summary: PreflightSummary): string {
+  const errored = summary.results.filter((row) => row.status === "error");
+  if (summary.results.length > 0 && errored.length === summary.results.length) {
+    const reason = errored[0]?.errorMessage?.split("\n")[0] ?? "unknown error";
+    return `Validation could not search Google (${reason}) — run it again`;
+  }
+  return "No queries were findable on Google within 4 pages";
+}
+
 export interface SettingRationale {
   setting: string;
   value: string;

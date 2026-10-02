@@ -22,6 +22,12 @@ describe("query-generator", () => {
     expect(queries.some((query) => query.text.includes("south australia"))).toBe(true);
   });
 
+  it("skips the local phrase when the keyword already names the city", () => {
+    const queries = generateQueryCluster("vets for pets bradford", "WYK", "GB");
+    expect(queries.some((query) => query.text.includes("bradford bradford"))).toBe(false);
+    expect(queries.some((query) => query.text.includes("united kingdom"))).toBe(true);
+  });
+
   it("extracts target domain from url", () => {
     expect(extractTargetDomain("https://www.theequestrian.com.au/page")).toBe(
       "theequestrian.com.au",

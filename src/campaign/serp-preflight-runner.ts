@@ -10,7 +10,9 @@ import {
 } from "../browser/google-search.js";
 import { findTargetInSerp, findTargetOnCurrentPage } from "../browser/serp-parser.js";
 import { GoogleBlockedError } from "../browser/blocked-detection.js";
-import { allocateCleanLease } from "../sessions/clean-lease.js";
+import { startBrowserWithLeaseRetry } from "../sessions/start-browser-with-lease.js";
+import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
+import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -279,39 +281,56 @@ export async function runSerpPreflightChecks(input: {
       });
     }
 
-    const proxyLease = await allocateCleanLease(proxyProvider, {
-      country: identity.country,
-      region: identity.region,
-      city: identity.city,
-      sessionKey: `preflight-${hashValue(input.targetUrl)}`,
-      deviceClass: identity.deviceClass,
-    });
-    proxyLeaseId = proxyLease.leaseId;
-
-    runningBrowser = await browserProvider.startProfile(profileId, {
-      host: proxyLease.host,
-      port: proxyLease.port,
-      username: proxyLease.username,
-      password: proxyLease.password,
-      country: proxyLease.country,
-      region: proxyLease.region,
-      city: proxyLease.city,
-      sessionKey: proxyLease.sessionKey,
+    const started = await startBrowserWithLeaseRetry({
+      proxyProvider,
+      browserProvider,
+      profileId,
+      allocation: {
+        country: identity.country,
+        region: identity.region,
+        city: identity.city,
+        sessionKey: `preflight-${hashValue(`${input.targetUrl}:${Date.now()}`)}`,
+        deviceClass: identity.deviceClass,
+      },
       timezone: identity.timezone,
       locale: identity.locale,
-    }, { googleGeoPoint: preflightGeoPoint(identity.country, input.region, input.focusCity) });
-    cloudStarted = useGoLogin;
-
-    let page: Page;
-    if (runningBrowser.context) {
-      page = runningBrowser.context.pages()[0] ?? (await runningBrowser.context.newPage());
-    } else if (runningBrowser.wsEndpoint) {
-      connectedBrowser = await connectBrowserWithRetry(runningBrowser.wsEndpoint);
-      const context = connectedBrowser.contexts()[0] ?? (await connectedBrowser.newContext());
-      page = context.pages()[0] ?? (await context.newPage());
-    } else {
-      throw new Error("Browser provider did not return a usable browser");
-    }
+      options: { googleGeoPoint: preflightGeoPoint(identity.country, input.region, input.focusCity) },
+      onLease: (leaseId) => {
+        proxyLeaseId = leaseId;
+      },
+      onRunning: (running) => {
+        runningBrowser = running;
+        cloudStarted = useGoLogin && running !== null;
+      },
+      prepare: async (running) => {
+        let openedPage: Page;
+        if (running.context) {
+          openedPage = running.context.pages()[0] ?? (await running.context.newPage());
+        } else if (running.wsEndpoint) {
+          connectedBrowser = await connectBrowserWithRetry(running.wsEndpoint);
+          const context = connectedBrowser.contexts()[0] ?? (await connectedBrowser.newContext());
+          openedPage = context.pages()[0] ?? (await context.newPage());
+        } else {
+          throw new Error("Browser provider did not return a usable browser");
+        }
+        if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
+          const expectedCity = shouldSkipCityTargeting(identity.city) ? undefined : identity.city;
+          await verifyBrowserEgressGeo(openedPage, identity.country, expectedCity);
+        }
+        return openedPage;
+      },
+      discard: async (running) => {
+        await cleanupBrowserSession({
+          ...cleanupRefs,
+          connectedBrowser,
+          runningBrowser: running,
+          cloudStarted: useGoLogin,
+          proxyLeaseId: null,
+        });
+        connectedBrowser = null;
+      },
+    });
+    const page = started.prepared;
 
     const isGmb = input.campaignKind === "gmb";
     const businessName = input.gmbBusinessName?.trim() ?? "";
