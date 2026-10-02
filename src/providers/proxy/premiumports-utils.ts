@@ -21,7 +21,7 @@ export interface PremiumPortsEndpoint {
 }
 
 /** Cities with no / unreliable Premium Ports inventory — country-only sticky. */
-const COUNTRY_ONLY_CITIES = new Set(["darwin"]);
+const COUNTRY_ONLY_CITIES = new Set(["darwin", "bradford"]);
 
 export function toPremiumPortsCitySlug(city: string): string {
   return city.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
@@ -35,7 +35,7 @@ export function shouldSkipCityTargeting(city?: string): boolean {
 /**
  * Sticky Premium Ports username.
  * Format: {user}-country-au-city-{slug}-session-{id}-ttl-{mins}
- * Omit city for Darwin (no inventory) so allocate still returns an AU IP.
+ * Omit city for COUNTRY_ONLY_CITIES so allocate still returns an in-country IP.
  */
 export function buildPremiumPortsUsername(
   baseUsername: string,

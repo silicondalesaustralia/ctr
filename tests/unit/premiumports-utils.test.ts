@@ -29,6 +29,11 @@ describe("premiumports-utils", () => {
     expect(shouldSkipCityTargeting("Darwin")).toBe(true);
   });
 
+  it("omits city for Bradford (pool geolocates outside West Yorkshire)", () => {
+    const username = buildPremiumPortsUsername("u", { country: "GB", city: "Bradford", sessionKey: "b01" });
+    expect(username).toBe("u-country-gb-session-b01-ttl-30");
+  });
+
   it("strips hyphens from session keys so dash params stay parseable", () => {
     const username = buildPremiumPortsUsername("u_mirfyuibzz", {
       country: "AU",
