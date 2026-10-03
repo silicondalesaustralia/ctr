@@ -9,7 +9,9 @@ import {
   typeAndSubmitQuery,
 } from "../browser/google-search.js";
 import { findTargetInSerp, findTargetOnCurrentPage } from "../browser/serp-parser.js";
-import { GoogleBlockedError } from "../browser/blocked-detection.js";
+import { assertSerpHasResults, GoogleBlockedError } from "../browser/blocked-detection.js";
+import { RESULT_TITLE_SELECTOR } from "../browser/serp-pagination.js";
+import { registerGoogleBlock } from "../identities/block-policy.js";
 import { startBrowserWithLeaseRetry } from "../sessions/start-browser-with-lease.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
 import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
@@ -173,6 +175,7 @@ async function checkQueryOnPage(
         errorMessage: blockedAfterSearch.reason,
       };
     }
+    await assertSerpHasResults(page, RESULT_TITLE_SELECTOR);
 
     const { result, pagesSearched } = await findTargetInSerp(page, targetDomain, maxSerpPages);
     if (!result) {
@@ -357,6 +360,7 @@ export async function runSerpPreflightChecks(input: {
       }
 
       if (result.status === "blocked") {
+        await registerGoogleBlock(identity.id, undefined);
         break;
       }
 
