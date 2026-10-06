@@ -11,6 +11,7 @@ const failureMessages: Record<CampaignAction, string> = {
   start: "Failed to start campaign",
   stop: "Failed to stop campaign",
   delete: "Failed to delete campaign",
+  rank: "Failed to queue position check",
 };
 
 export function useCampaigns() {
@@ -20,6 +21,7 @@ export function useCampaigns() {
   const [lastLoaded, setLastLoaded] = useState<Date | null>(null);
   const [busy, setBusy] = useState<{ id: string; action: CampaignAction } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [updatingAll, setUpdatingAll] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +80,23 @@ export function useCampaigns() {
     void run(id, "delete", () => apiDelete(`/campaigns/${id}`));
   }
 
+  function updateRank(id: string) {
+    void run(id, "rank", () => apiPost(`/campaigns/${id}/rank-snapshots`));
+  }
+
+  async function updateAllRanks() {
+    setUpdatingAll(true);
+    setError(null);
+    try {
+      await apiPost<{ campaigns: number }>("/rank-snapshots/run-all");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to queue position checks");
+    } finally {
+      setUpdatingAll(false);
+    }
+  }
+
   return {
     campaigns,
     activeCount,
@@ -85,8 +104,11 @@ export function useCampaigns() {
     lastLoaded,
     busy,
     error,
+    updatingAll,
     startCampaign,
     stopCampaign,
     deleteCampaign,
+    updateRank,
+    updateAllRanks,
   };
 }

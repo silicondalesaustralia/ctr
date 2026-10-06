@@ -92,3 +92,13 @@ export async function queueManualSnapshots(experimentId: string): Promise<number
   const inserted = await insertPending(experimentId, queries, "manual", localDate);
   return requeued.count + retriedBaselines.count + inserted;
 }
+
+/** "Update all positions": manual snapshots for every active campaign with active queries. */
+export async function queueManualSnapshotsForActive(): Promise<string[]> {
+  const experiments = await prisma.experiment.findMany({
+    where: { status: "active", queries: { some: { active: true } } },
+    select: { id: true },
+  });
+  for (const { id } of experiments) await queueManualSnapshots(id);
+  return experiments.map(({ id }) => id);
+}

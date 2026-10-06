@@ -61,6 +61,12 @@ export default function SessionRankSnapshotLink({ campaignId, query, sessionAt }
       Ranking snapshot for “{query}” · {positionLabel(snapshot)} · captured{" "}
       {new Date(snapshot.capturedAt).toLocaleString()} ·{" "}
       <BlobImageLink imagePath={`/rank-snapshots/${snapshot.id}/image`} label="Open snapshot ↗" />
+      {snapshot.hasSerpImage && (
+        <>
+          {" · "}
+          <BlobImageLink imagePath={`/rank-snapshots/${snapshot.id}/image?view=serp`} label="Open results page ↗" />
+        </>
+      )}
     </p>
   );
 }

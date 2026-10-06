@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "../../../lib/api";
 import { panelStyle } from "./shared";
 import type { CampaignFormState, QueryRow } from "./shared";
-import type { RankSnapshotRow } from "./snapshot-types";
+import { positionLabel, type RankSnapshotRow } from "./snapshot-types";
 
 interface Props {
   campaignId: string;
@@ -18,7 +18,7 @@ interface StartingRank {
 
 function startingRank(row: QueryRow, baseline: RankSnapshotRow | undefined): StartingRank {
   if (baseline?.status === "captured" && baseline.position !== null) {
-    return { label: `#${baseline.position}`, source: `baseline snapshot ${baseline.localDate}` };
+    return { label: positionLabel(baseline), source: `baseline snapshot ${baseline.localDate}` };
   }
   if (baseline?.status === "not_found") {
     return { label: "Not found", source: `baseline snapshot ${baseline.localDate}` };

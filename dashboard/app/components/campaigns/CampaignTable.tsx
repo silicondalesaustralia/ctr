@@ -8,6 +8,7 @@ interface Props {
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onDelete: (id: string, label: string) => void;
+  onUpdateRank: (id: string) => void;
 }
 
 const headers = [
@@ -20,10 +21,10 @@ const headers = [
   "Next session",
   "Days",
   "Progress",
-  "Rank by session",
+  "Rank check",
 ];
 
-export default function CampaignTable({ campaigns, busy, onStart, onStop, onDelete }: Props) {
+export default function CampaignTable({ campaigns, busy, onStart, onStop, onDelete, onUpdateRank }: Props) {
   return (
     <div className={styles.wrap}>
       <table className={styles.table}>
@@ -44,6 +45,7 @@ export default function CampaignTable({ campaigns, busy, onStart, onStop, onDele
               onStart={onStart}
               onStop={onStop}
               onDelete={onDelete}
+              onUpdateRank={onUpdateRank}
             />
           ))}
         </tbody>

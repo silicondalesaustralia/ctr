@@ -1,3 +1,11 @@
+export interface RankPoint {
+  /** Null when the check ran but the target wasn't found. */
+  position: number | null;
+  source: string | null;
+  localDate: string;
+  capturedAt: string | null;
+}
+
 export interface CampaignSummary {
   id: string;
   name: string;
@@ -16,8 +24,10 @@ export interface CampaignSummary {
   scheduledSessions: number;
   /** Earliest still-scheduled session, if any. */
   nextSessionAt?: string | null;
-  /** Rank observed by each session on the main keyword, oldest first. */
-  rankHistory?: number[];
+  /** Rank snapshots (fixed-point checks) on the main keyword, oldest first. */
+  rankHistory?: RankPoint[];
+  /** A rank check is waiting or running. */
+  rankCheckQueued?: boolean;
   updatedAt: string;
   startDate: string | null;
   endDate: string | null;
@@ -25,7 +35,19 @@ export interface CampaignSummary {
 
 export type StatusFilter = "all" | "active" | "stopped" | "draft";
 
-export type CampaignAction = "start" | "stop" | "delete";
+export type CampaignAction = "start" | "stop" | "delete" | "rank";
+
+const RANK_SOURCE_LABELS: Record<string, string> = {
+  local_pack: "3-pack",
+  more_places: "Places list",
+  maps_keyword: "Maps",
+  organic: "Organic",
+};
+
+/** Which Google list the rank came from; 3-pack and Places list positions are not comparable. */
+export function rankSourceLabel(source: string | null): string {
+  return source ? (RANK_SOURCE_LABELS[source] ?? source) : "";
+}
 
 const STATE_NAMES: Record<string, string> = {
   NSW: "New South Wales",

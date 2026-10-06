@@ -16,6 +16,7 @@ export interface SnapshotCapture {
   resultTitle: string | null;
   pageUrl: string;
   imageJpeg: Uint8Array<ArrayBuffer> | null;
+  serpImageJpeg: Uint8Array<ArrayBuffer> | null;
   blockReason?: string;
 }
 
@@ -36,6 +37,7 @@ function blockedCapture(page: Page, reason: string | undefined): SnapshotCapture
     resultTitle: null,
     pageUrl: page.url(),
     imageJpeg: null,
+    serpImageJpeg: null,
     blockReason: reason ?? "blocked",
   };
 }
@@ -77,6 +79,7 @@ async function captureOrganic(page: Page, experiment: Experiment): Promise<Snaps
       resultTitle: null,
       pageUrl: pageOneUrl,
       imageJpeg: pageOneImage,
+      serpImageJpeg: null,
     };
   }
   return {
@@ -87,12 +90,14 @@ async function captureOrganic(page: Page, experiment: Experiment): Promise<Snaps
     resultTitle: result.title,
     pageUrl: page.url(),
     imageJpeg: result.serpPage === 1 ? pageOneImage : await screenshot(page),
+    serpImageJpeg: null,
   };
 }
 
 async function captureGmb(page: Page, experiment: Experiment, query: string): Promise<SnapshotCapture> {
   const businessName = experiment.gmbBusinessName?.trim();
   if (!businessName) throw new Error("GMB campaign has no business name");
+  const serpImage = await screenshot(page);
   let found: Awaited<ReturnType<typeof findGmbInLocalPack>>;
   try {
     found = await findGmbInLocalPack(page, { businessName, placeId: experiment.gmbPlaceId, query });
@@ -100,6 +105,7 @@ async function captureGmb(page: Page, experiment: Experiment, query: string): Pr
     if (error instanceof GoogleBlockedError) return blockedCapture(page, error.reason);
     throw error;
   }
+  const inThreePack = found?.source === "local_pack";
   return {
     outcome: found ? "captured" : "not_found",
     position: found?.position ?? null,
@@ -107,7 +113,8 @@ async function captureGmb(page: Page, experiment: Experiment, query: string): Pr
     source: found?.source ?? null,
     resultTitle: found?.title ?? null,
     pageUrl: page.url(),
-    imageJpeg: await screenshot(page),
+    imageJpeg: inThreePack ? serpImage : await screenshot(page),
+    serpImageJpeg: inThreePack ? null : serpImage,
   };
 }
 

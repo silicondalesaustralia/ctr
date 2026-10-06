@@ -65,6 +65,7 @@ async function captureRows(
             pageUrl: capture.pageUrl,
             egressCity: egress?.city ?? null,
             imageJpeg: capture.imageJpeg,
+            serpImageJpeg: capture.serpImageJpeg,
             errorMessage: null,
             capturedAt: new Date(),
           },

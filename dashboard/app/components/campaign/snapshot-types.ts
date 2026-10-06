@@ -1,3 +1,5 @@
+import { rankSourceLabel } from "../campaigns/campaign-list-types";
+
 export type SnapshotKind = "baseline" | "daily" | "manual";
 export type SnapshotStatus = "pending" | "running" | "captured" | "not_found" | "blocked" | "error";
 
@@ -18,10 +20,15 @@ export interface RankSnapshotRow {
   errorMessage: string | null;
   capturedAt: string | null;
   hasImage: boolean;
+  /** Results page saved because the rank came from a fallback list, not the 3-pack. */
+  hasSerpImage: boolean;
 }
 
 export function positionLabel(row: RankSnapshotRow): string {
-  if (row.status === "captured" && row.position !== null) return `#${row.position}`;
+  if (row.status === "captured" && row.position !== null) {
+    const source = row.source && row.source !== "organic" ? rankSourceLabel(row.source) : "";
+    return source ? `${source} #${row.position}` : `#${row.position}`;
+  }
   if (row.status === "not_found") return "Not found";
   if (row.status === "pending" || row.status === "running") return "Queued";
   return row.status === "blocked" ? "Blocked" : "Error";

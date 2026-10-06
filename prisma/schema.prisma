@@ -503,6 +503,8 @@ model RankSnapshot {
   egressCity   String?            @map("egress_city")
   identityExternalId String?      @map("identity_external_id")
   imageJpeg    Bytes?             @map("image_jpeg")
+  /** Results page before any fallback to the Places list; null when the rank came from it. */
+  serpImageJpeg Bytes?            @map("serp_image_jpeg")
   errorMessage String?            @map("error_message")
   capturedAt   DateTime?          @map("captured_at")
   createdAt    DateTime           @default(now()) @map("created_at")

@@ -9,13 +9,14 @@ interface Props {
   onStart: () => void;
   onStop: () => void;
   onDelete: () => void;
+  onUpdateRank: () => void;
 }
 
-const MENU_WIDTH = 130;
-const MENU_HEIGHT = 86;
+const MENU_WIDTH = 160;
+const MENU_HEIGHT = 124;
 const EDGE = 8;
 
-export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDelete }: Props) {
+export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDelete, onUpdateRank }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -87,6 +88,9 @@ export default function CampaignRowMenu({ label, isActive, onStart, onStop, onDe
             onClick={() => choose(isActive ? onStop : onStart)}
           >
             {isActive ? "Stop campaign" : "Start campaign"}
+          </button>
+          <button type="button" role="menuitem" className={styles.item} onClick={() => choose(onUpdateRank)}>
+            Update position
           </button>
           <button
             type="button"

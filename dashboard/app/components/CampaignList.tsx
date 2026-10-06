@@ -63,11 +63,22 @@ export default function CampaignList() {
           <div className={styles.sectionTitle}>
             Your campaigns <span className={styles.count}>{campaigns.length}</span>
           </div>
-          {data.lastLoaded && (
-            <span className={styles.small}>
-              Last updated {data.lastLoaded.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-            </span>
-          )}
+          <div className={styles.headActions}>
+            {data.lastLoaded && (
+              <span className={styles.small}>
+                Last updated {data.lastLoaded.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.updateAll}
+              onClick={() => void data.updateAllRanks()}
+              disabled={data.updatingAll || data.activeCount === 0}
+              title="Run a rank check now for every active campaign, outside of sessions"
+            >
+              {data.updatingAll ? "Queuing…" : "Update all positions"}
+            </button>
+          </div>
         </div>
         <CampaignToolbar
           status={status}
@@ -96,6 +107,7 @@ export default function CampaignList() {
             onStart={data.startCampaign}
             onStop={data.stopCampaign}
             onDelete={data.deleteCampaign}
+            onUpdateRank={data.updateRank}
           />
         )}
 
@@ -103,7 +115,7 @@ export default function CampaignList() {
           <span>
             Showing {visible.length} of {campaigns.length} campaigns
           </span>
-          <span>Latest rank shown · lower is better</span>
+          <span>Latest rank check from the campaign centre · lower is better</span>
         </div>
       </section>
 

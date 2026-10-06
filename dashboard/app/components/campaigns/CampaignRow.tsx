@@ -21,12 +21,14 @@ interface Props {
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onDelete: (id: string, label: string) => void;
+  onUpdateRank: (id: string) => void;
 }
 
 const busyLabels: Record<CampaignAction, string> = {
   start: "Starting…",
   stop: "Stopping…",
   delete: "Deleting…",
+  rank: "Queuing…",
 };
 
 function badgeClass(status: string): string {
@@ -35,7 +37,7 @@ function badgeClass(status: string): string {
   return cells.badge;
 }
 
-export default function CampaignRow({ campaign, busyAction, onStart, onStop, onDelete }: Props) {
+export default function CampaignRow({ campaign, busyAction, onStart, onStop, onDelete, onUpdateRank }: Props) {
   const title = campaignTitle(campaign);
   const region = regionParts(campaign);
   const isGmb = campaign.campaignKind === "gmb";
@@ -90,7 +92,12 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
         <CampaignProgressCell progress={progress} />
       </td>
       <td>
-        <RankSparkline ranks={campaign.rankHistory ?? []} />
+        <RankSparkline points={campaign.rankHistory ?? []} />
+        {campaign.rankCheckQueued && (
+          <small className={cells.updated} role="status">
+            Checking position…
+          </small>
+        )}
       </td>
       <td>
         <div className={cells.actions}>
@@ -108,6 +115,7 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
               onStart={() => onStart(campaign.id)}
               onStop={() => onStop(campaign.id)}
               onDelete={() => onDelete(campaign.id, label)}
+              onUpdateRank={() => onUpdateRank(campaign.id)}
             />
           )}
         </div>
