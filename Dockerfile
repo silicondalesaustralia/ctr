@@ -8,8 +8,10 @@ RUN apt-get update \
 
 COPY package.json package-lock.json ./
 COPY scripts/patch-gologin.js ./scripts/patch-gologin.js
+COPY scripts/pin-camoufox.sh ./scripts/pin-camoufox.sh
 RUN npm ci
-RUN npx camoufox-js fetch
+ARG CAMOUFOX_VERSION=152.0.4-beta.30
+RUN bash scripts/pin-camoufox.sh "${CAMOUFOX_VERSION}"
 
 COPY prisma ./prisma
 RUN npx prisma generate
