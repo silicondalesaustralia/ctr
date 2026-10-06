@@ -7,6 +7,7 @@ import { BULLMQ_JOB_LOCK_MS, BULLMQ_STALLED_INTERVAL_MS } from "../scheduler/bul
 import { withBrowserJobExclusive } from "../scheduler/browser-job-mutex.js";
 import { runExperimentSnapshots } from "./snapshot-runner.js";
 import { queueDueSnapshots } from "./snapshot-triggers.js";
+import { queueFollowupSnapshots } from "./followup-triggers.js";
 
 const QUEUE_NAME = "rank-snapshot-jobs";
 
@@ -55,6 +56,8 @@ export async function pollAndEnqueueDueSnapshots(): Promise<number> {
   if (await isRunnerEnabledAsync()) {
     const queued = await queueDueSnapshots();
     if (queued > 0) logger.info({ event: "rank_snapshots_queued", count: queued });
+    const followups = await queueFollowupSnapshots();
+    if (followups > 0) logger.info({ event: "rank_snapshot_followups_queued", count: followups });
   }
 
   const due = await prisma.rankSnapshot.findMany({

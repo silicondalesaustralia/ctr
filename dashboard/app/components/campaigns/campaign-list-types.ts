@@ -4,6 +4,15 @@ export interface RankPoint {
   source: string | null;
   localDate: string;
   capturedAt: string | null;
+  /** National panel only: cities where the target was found, out of cities checked. */
+  foundCities?: number;
+  totalCities?: number;
+}
+
+/** Latest finished coverage grid: points in the 3-pack out of all points. */
+export interface GridCoverage {
+  inPackCount: number;
+  pointCount: number;
 }
 
 export interface CampaignSummary {
@@ -28,6 +37,7 @@ export interface CampaignSummary {
   rankHistory?: RankPoint[];
   /** A rank check is waiting or running. */
   rankCheckQueued?: boolean;
+  gridCoverage?: GridCoverage | null;
   updatedAt: string;
   startDate: string | null;
   endDate: string | null;
@@ -42,11 +52,24 @@ const RANK_SOURCE_LABELS: Record<string, string> = {
   more_places: "Places list",
   maps_keyword: "Maps",
   organic: "Organic",
+  national: "National avg",
 };
 
 /** Which Google list the rank came from; 3-pack and Places list positions are not comparable. */
 export function rankSourceLabel(source: string | null): string {
   return source ? (RANK_SOURCE_LABELS[source] ?? source) : "";
+}
+
+/** Extra rank-cell line: grid coverage for GMB, city reach for national panels. */
+export function coverageLine(campaign: CampaignSummary): string | null {
+  if (campaign.gridCoverage) {
+    return `3-pack ${campaign.gridCoverage.inPackCount}/${campaign.gridCoverage.pointCount}`;
+  }
+  const latest = campaign.rankHistory?.[campaign.rankHistory.length - 1];
+  if (latest?.source === "national" && latest.totalCities) {
+    return `Found in ${latest.foundCities ?? 0}/${latest.totalCities} cities`;
+  }
+  return null;
 }
 
 const STATE_NAMES: Record<string, string> = {

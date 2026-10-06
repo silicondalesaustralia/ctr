@@ -15,7 +15,7 @@ const CITY_SPREAD_KM = 8;
  * Only www.google.com: google.com.au redirects there, and intercepting a redirected
  * navigation makes Firefox fail with NS_ERROR_REDIRECT_LOOP.
  */
-const GOOGLE_HOSTS = /^https:\/\/www\.google\.com\//;
+export const GOOGLE_HOSTS = /^https:\/\/www\.google\.com\//;
 
 /** Undefined for custom cities outside the catalog (no known centre, so no header). */
 export function cityGeoPoint(

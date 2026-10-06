@@ -15,6 +15,8 @@ import { runWarmPoolTick } from "../src/warmup/warm-pool.js";
 import { SERP_CLICK_STRATEGY } from "../src/browser/serp-parser.js";
 import { createSnapshotWorker, pollAndEnqueueDueSnapshots } from "../src/rank-snapshots/snapshot-queue.js";
 import { resetStrandedSnapshots } from "../src/rank-snapshots/snapshot-runner.js";
+import { createGridWorker, pollAndEnqueueDueGridScans } from "../src/geo-grid/grid-queue.js";
+import { resetStrandedGridScans } from "../src/geo-grid/grid-runner.js";
 import { failStrandedPreflightJobs, pollPreflightJobs } from "../src/scheduler/preflight-worker.js";
 
 // OOM kills leave Orbita/Chrome behind; clear before accepting jobs.
@@ -34,6 +36,11 @@ const snapshotWorker = createSnapshotWorker();
 
 snapshotWorker.on("failed", (job, err) => {
   logger.error({ event: "rank_snapshot_job_failed", jobId: job?.id, error: err.message });
+});
+
+const gridWorker = createGridWorker();
+gridWorker.on("failed", (job, err) => {
+  logger.error({ event: "geo_grid_job_failed", jobId: job?.id, error: err.message });
 });
 
 worker.on("completed", (job) => {
@@ -72,6 +79,13 @@ async function pollLoop(): Promise<void> {
     logger.error({ event: "rank_snapshot_poll_failed", error: String(error) });
   }
 
+  try {
+    const gridScans = await pollAndEnqueueDueGridScans();
+    if (gridScans > 0) logger.info({ event: "geo_grid_jobs_enqueued", scans: gridScans });
+  } catch (error) {
+    logger.error({ event: "geo_grid_poll_failed", error: String(error) });
+  }
+
   const activeExperiments = await prisma.experiment.findMany({
     where: { status: "active", adaptivePacing: true },
     orderBy: { updatedAt: "desc" },
@@ -107,7 +121,7 @@ setInterval(() => {
     .catch((error) => logger.error({ event: "stale_session_cleanup_failed", error: String(error) }));
 }, STALE_CLEANUP_MS);
 
-resetStrandedSnapshots()
+Promise.all([resetStrandedSnapshots(), resetStrandedGridScans()])
   .catch((error) => logger.error({ event: "rank_snapshot_reset_failed", error: String(error) }))
   .finally(() => {
     pollLoop().catch((error) => logger.error({ event: "poll_failed", error: String(error) }));

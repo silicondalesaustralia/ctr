@@ -12,6 +12,7 @@ import CampaignModePicker from "./campaign/CampaignModePicker";
 import CampaignReviewStep from "./campaign/CampaignReviewStep";
 import CampaignSessionsTab from "./campaign/CampaignSessionsTab";
 import CampaignStartSummary from "./campaign/CampaignStartSummary";
+import CampaignRankSections from "./campaign/CampaignRankSections";
 import CampaignSetupStep from "./campaign/CampaignSetupStep";
 import CampaignTabBar from "./campaign/CampaignTabBar";
 import type { GscConnectionOption, GscSiteOption } from "./campaign/CampaignSetupStep";
@@ -971,7 +972,10 @@ export default function CampaignDashboard({
       ) : (
         <>
           {campaignId && (campaignActive || campaignStatus !== "draft") && (
-            <CampaignStartSummary campaignId={campaignId} form={form} />
+            <>
+              <CampaignStartSummary campaignId={campaignId} form={form} />
+              <CampaignRankSections campaignId={campaignId} form={form} />
+            </>
           )}
           <CampaignReviewStep
             form={form}

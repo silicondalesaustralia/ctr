@@ -136,6 +136,22 @@ enum RankSnapshotKind {
   baseline
   daily
   manual
+  followup
+}
+
+enum GeoGridScanKind {
+  baseline
+  weekly
+  manual
+  followup
+}
+
+enum GeoGridScanStatus {
+  pending
+  running
+  complete
+  partial
+  error
 }
 
 enum RankSnapshotStatus {
@@ -202,6 +218,9 @@ model Experiment {
   /** Where rank checks search from; null = the campaign city's centre. */
   rankCheckLatitude    Float?           @map("rank_check_latitude")
   rankCheckLongitude   Float?           @map("rank_check_longitude")
+  /** Coverage grid: points per side (null = 5) and spacing between points (null = 2 km). */
+  gridSize             Int?             @map("grid_size")
+  gridSpacingKm        Float?           @map("grid_spacing_km")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
@@ -211,6 +230,7 @@ model Experiment {
   rankingSnapshots RankingSnapshot[]
   rankSnapshots    RankSnapshot[]
   sessionSnapshots SessionSnapshot[]
+  geoGridScans     GeoGridScan[]
   notes            ExperimentNote[]
   gscConnection    GscConnection?   @relation(fields: [gscConnectionId], references: [id], onDelete: SetNull)
   selectedIdentities ExperimentIdentity[]
@@ -493,6 +513,8 @@ model RankSnapshot {
   experimentId String             @map("experiment_id")
   query        String
   kind         RankSnapshotKind
+  /** National URL campaigns: the panel city this check searched from; "" for local campaigns. */
+  panelCity    String             @default("") @map("panel_city")
   /** YYYY-MM-DD in the campaign's schedule timezone. */
   localDate    String             @map("local_date")
   scheduledAt  DateTime           @default(now()) @map("scheduled_at")
@@ -514,9 +536,64 @@ model RankSnapshot {
 
   experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
 
-  @@unique([experimentId, query, localDate, kind])
+  @@unique([experimentId, query, localDate, kind, panelCity])
   @@index([status, scheduledAt])
   @@map("rank_snapshots")
+}
+
+/** One coverage-grid run: the same query searched from every point of a grid around the rank check location. */
+model GeoGridScan {
+  id                 String            @id @default(cuid())
+  experimentId       String            @map("experiment_id")
+  query              String
+  kind               GeoGridScanKind
+  /** YYYY-MM-DD in the campaign's schedule timezone. */
+  localDate          String            @map("local_date")
+  scheduledAt        DateTime          @default(now()) @map("scheduled_at")
+  status             GeoGridScanStatus @default(pending)
+  attemptCount       Int               @default(0) @map("attempt_count")
+  centreLatitude     Float             @map("centre_latitude")
+  centreLongitude    Float             @map("centre_longitude")
+  gridSize           Int               @map("grid_size")
+  spacingKm          Float             @map("spacing_km")
+  identityExternalId String?           @map("identity_external_id")
+  inPackCount        Int?              @map("in_pack_count")
+  foundCount         Int?              @map("found_count")
+  avgRank            Float?            @map("avg_rank")
+  centreImageJpeg    Bytes?            @map("centre_image_jpeg")
+  errorMessage       String?           @map("error_message")
+  startedAt          DateTime?         @map("started_at")
+  completedAt        DateTime?         @map("completed_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+
+  experiment Experiment     @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  points     GeoGridPoint[]
+
+  @@unique([experimentId, query, localDate, kind])
+  @@index([status, scheduledAt])
+  @@map("geo_grid_scans")
+}
+
+model GeoGridPoint {
+  id             String             @id @default(cuid())
+  scanId         String             @map("scan_id")
+  row            Int
+  col            Int
+  latitude       Float
+  longitude      Float
+  status         RankSnapshotStatus @default(pending)
+  position       Int?
+  source         String?
+  resultTitle    String?            @map("result_title")
+  /** 3-pack titles seen at this point, so competitor movement is visible. */
+  topResultsJson String?            @map("top_results_json")
+  errorMessage   String?            @map("error_message")
+  capturedAt     DateTime?          @map("captured_at")
+
+  scan GeoGridScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, row, col])
+  @@map("geo_grid_points")
 }
 
 /** What the session saw when it found the target, captured just before clicking. */

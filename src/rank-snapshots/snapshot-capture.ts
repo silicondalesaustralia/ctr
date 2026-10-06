@@ -43,7 +43,7 @@ function blockedCapture(page: Page, reason: string | undefined): SnapshotCapture
 }
 
 /** Returns a block reason, or null when the SERP loaded cleanly. */
-async function searchQuery(page: Page, query: string, google: GoogleTarget): Promise<string | null> {
+export async function searchQuery(page: Page, query: string, google: GoogleTarget): Promise<string | null> {
   await openGoogle(page, google);
   const afterOpen = await checkBlocked(page);
   if (afterOpen.blocked) return afterOpen.reason ?? "blocked";

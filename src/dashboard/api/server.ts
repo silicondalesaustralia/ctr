@@ -43,6 +43,8 @@ import {
 } from "../../campaign/preflight-request.js";
 import { registerWarmPoolRoutes } from "./warm-pool-routes.js";
 import { registerRankSnapshotRoutes } from "./rank-snapshot-routes.js";
+import { registerGeoGridRoutes } from "./geo-grid-routes.js";
+import { registerNationalPanelRoutes } from "./national-panel-routes.js";
 import { registerGeoRoutes } from "./geo-routes.js";
 import { recalculateCampaignPacing } from "../../campaign/adaptive-pacing.js";
 import { computeWarmupProgress, setCampaignIdentities, backfillWarmupForExistingIdentities } from "../../warmup/warmup-service.js";
@@ -149,6 +151,8 @@ export function createApiServer() {
 
   registerWarmPoolRoutes(app);
   registerRankSnapshotRoutes(app);
+  registerGeoGridRoutes(app);
+  registerNationalPanelRoutes(app);
   registerGeoRoutes(app);
 
   app.get("/experiments", async (_req, res) => {

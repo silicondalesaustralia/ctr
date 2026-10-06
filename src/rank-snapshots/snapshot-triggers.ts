@@ -1,5 +1,6 @@
-import type { RankSnapshotKind } from "@prisma/client";
+import type { Experiment, RankSnapshotKind } from "@prisma/client";
 import { prisma } from "../db/client.js";
+import { panelCityNames } from "./national-panel.js";
 import {
   getCalendarDateInTimezone,
   localHourMinute,
@@ -19,15 +20,21 @@ export function dailyDueMinute(scheduleEnd: string): number {
   return Math.min(parseTimeToMinutes(scheduleEnd) + DAILY_DELAY_AFTER_END_MINUTES, LATEST_DAILY_MINUTE);
 }
 
-async function insertPending(
-  experimentId: string,
+type PanelFields = Pick<Experiment, "id" | "campaignKind" | "focusCity" | "focusRegion" | "country">;
+
+/** One row per query, times each panel city for national campaigns. */
+export async function insertPending(
+  experiment: PanelFields,
   queries: string[],
   kind: RankSnapshotKind,
   localDate: string,
 ): Promise<number> {
   if (queries.length === 0) return 0;
+  const panels = panelCityNames(experiment);
   const result = await prisma.rankSnapshot.createMany({
-    data: queries.map((query) => ({ experimentId, query, kind, localDate })),
+    data: queries.flatMap((query) =>
+      panels.map((panelCity) => ({ experimentId: experiment.id, query, kind, localDate, panelCity })),
+    ),
     skipDuplicates: true,
   });
   return result.count;
@@ -47,19 +54,20 @@ export async function queueDueSnapshots(now = new Date()): Promise<number> {
 
     const baselined = await prisma.rankSnapshot.findMany({
       where: { experimentId: experiment.id, kind: "baseline" },
-      select: { query: true },
+      select: { query: true, panelCity: true },
     });
-    const hasBaseline = new Set(baselined.map((row) => row.query));
+    const hasBaseline = new Set(baselined.map((row) => `${row.query}|${row.panelCity}`));
+    const panels = panelCityNames(experiment);
     queued += await insertPending(
-      experiment.id,
-      queries.filter((query) => !hasBaseline.has(query)),
+      experiment,
+      queries.filter((query) => panels.some((panel) => !hasBaseline.has(`${query}|${panel}`))),
       "baseline",
       localDate,
     );
 
     const { hour, minute } = localHourMinute(now, experiment.scheduleTimezone);
     if (hour * 60 + minute >= dailyDueMinute(experiment.scheduleEnd)) {
-      queued += await insertPending(experiment.id, queries, "daily", localDate);
+      queued += await insertPending(experiment, queries, "daily", localDate);
     }
   }
   return queued;
@@ -89,7 +97,7 @@ export async function queueManualSnapshots(experimentId: string): Promise<number
     where: { experimentId, kind: "baseline", query: { in: queries }, status: { in: ["error", "blocked"] } },
     data: { status: "pending", attemptCount: 0, scheduledAt: new Date(), errorMessage: null },
   });
-  const inserted = await insertPending(experimentId, queries, "manual", localDate);
+  const inserted = await insertPending(experiment, queries, "manual", localDate);
   return requeued.count + retriedBaselines.count + inserted;
 }
 

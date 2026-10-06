@@ -7,6 +7,7 @@ import progressStyles from "./CampaignProgress.module.css";
 import {
   campaignInitials,
   campaignTitle,
+  coverageLine,
   formatUpdated,
   regionParts,
   type CampaignAction,
@@ -93,6 +94,7 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
       </td>
       <td>
         <RankSparkline points={campaign.rankHistory ?? []} />
+        {coverageLine(campaign) && <small className={cells.updated}>{coverageLine(campaign)}</small>}
         {campaign.rankCheckQueued && (
           <small className={cells.updated} role="status">
             Checking position…

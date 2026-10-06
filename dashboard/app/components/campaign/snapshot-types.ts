@@ -1,6 +1,6 @@
 import { rankSourceLabel } from "../campaigns/campaign-list-types";
 
-export type SnapshotKind = "baseline" | "daily" | "manual";
+export type SnapshotKind = "baseline" | "daily" | "manual" | "followup";
 export type SnapshotStatus = "pending" | "running" | "captured" | "not_found" | "blocked" | "error";
 
 export interface RankSnapshotRow {
@@ -8,6 +8,8 @@ export interface RankSnapshotRow {
   query: string;
   kind: SnapshotKind;
   localDate: string;
+  /** National panel city; "" for the campaign's own rank check location. */
+  panelCity: string;
   status: SnapshotStatus;
   attemptCount: number;
   position: number | null;

@@ -39,6 +39,7 @@ import {
 import { resolveCampaignGeo } from "../campaign/campaign-geo-input.js";
 import { parseGmbTarget } from "../campaign/gmb-target.js";
 import { getSnapshotRankHistory, isRankCheckQueued } from "../rank-snapshots/rank-history.js";
+import { getLatestGridCoverage } from "../geo-grid/grid-coverage.js";
 import {
   actionsFromFlags,
   flagsFromActions,
@@ -936,7 +937,7 @@ export async function getCampaignIdentities(experimentId: string): Promise<Campa
 
 export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
   const keyword = getCampaignKeyword(campaign);
-  const [completedSessions, scheduledSessions, rankHistory, rankCheckQueued, nextScheduled] = await Promise.all([
+  const [completedSessions, scheduledSessions, rankHistory, rankCheckQueued, nextScheduled, gridCoverage] = await Promise.all([
     prisma.session.count({ where: { experimentId: campaign.id, status: "completed" } }),
     prisma.scheduledSession.count({
       where: { experimentId: campaign.id, status: "scheduled" },
@@ -948,6 +949,7 @@ export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
       orderBy: { scheduledAt: "asc" },
       select: { scheduledAt: true },
     }),
+    campaign.campaignKind === "gmb" ? getLatestGridCoverage(campaign.id, keyword) : Promise.resolve(null),
   ]);
 
   return {
@@ -970,6 +972,7 @@ export async function serializeCampaignSummary(campaign: CampaignWithQueries) {
     nextSessionAt: nextScheduled?.scheduledAt.toISOString() ?? null,
     rankHistory,
     rankCheckQueued,
+    gridCoverage,
     updatedAt: campaign.updatedAt.toISOString(),
     startDate: campaign.startDate?.toISOString() ?? null,
     endDate: campaign.endDate?.toISOString() ?? null,
