@@ -1,5 +1,7 @@
 import { randomInt } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { generateFingerprint } from "camoufox-js/dist/fingerprints.js";
+import { getPath } from "camoufox-js/dist/pkgman.js";
 import { sampleWebGL } from "camoufox-js/dist/webgl/sample.js";
 import type { Fingerprint } from "fingerprint-generator";
 import { prisma } from "../../db/client.js";
@@ -17,6 +19,23 @@ const SEED_KEYS = ["fonts:spacing_seed", "audio:seed", "canvas:seed"] as const;
 
 /** Realistic AU desktop screens; Camoufox sizes the window inside these. */
 const SCREEN = { minWidth: 1280, maxWidth: 1920, minHeight: 720, maxHeight: 1080 };
+
+let knownProperties: Set<string> | null = null;
+
+/** Property names the installed Camoufox build accepts; launches fail on any other key. */
+function installedCamoufoxProperties(): Set<string> {
+  if (!knownProperties) {
+    const entries = JSON.parse(readFileSync(getPath("properties.json"), "utf8")) as Array<{ property: string }>;
+    knownProperties = new Set(entries.map((entry) => entry.property));
+  }
+  return knownProperties;
+}
+
+/** Pinned seeds minus any the installed browser dropped (e.g. fonts:spacing_seed in newer builds). */
+export function supportedSeeds(seeds: Record<string, number>): Record<string, number> {
+  const known = installedCamoufoxProperties();
+  return Object.fromEntries(Object.entries(seeds).filter(([key]) => known.has(key)));
+}
 
 export function camoufoxOsFor(osFamily: string): CamoufoxOs {
   return osFamily === "mac" || osFamily === "macos" ? "macos" : "windows";

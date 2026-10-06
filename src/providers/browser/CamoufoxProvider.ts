@@ -17,6 +17,7 @@ import {
   camoufoxOsFor,
   createPinnedFingerprint,
   loadPinnedFingerprint,
+  supportedSeeds,
 } from "./camoufox-fingerprint.js";
 import { buildCamoufoxGeo } from "./camoufox-geo.js";
 import { DISK_CACHE_PREFS, pruneProfileCaches } from "./profile-disk.js";
@@ -78,7 +79,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       os: pinned.os,
       fingerprint: pinned.fingerprint,
       webgl_config: pinned.webgl,
-      config: { ...pinned.seeds, ...geo.config },
+      config: { ...supportedSeeds(pinned.seeds), ...geo.config },
       firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs },
       locale: proxy?.locale ?? "en-AU",
       humanize: true,
