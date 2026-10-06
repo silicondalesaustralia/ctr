@@ -72,6 +72,9 @@ export interface UpsertCampaignInput extends CreateExperimentInput {
   geoLatitude?: number | null;
   geoLongitude?: number | null;
   geoRadiusKm?: number | null;
+  /** Rank-check search location; null = campaign city centre. */
+  rankCheckLatitude?: number | null;
+  rankCheckLongitude?: number | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -993,6 +996,8 @@ export function serializeCampaign(
     geoLatitude: campaign.geoLatitude,
     geoLongitude: campaign.geoLongitude,
     geoRadiusKm: campaign.geoRadiusKm,
+    rankCheckLatitude: campaign.rankCheckLatitude,
+    rankCheckLongitude: campaign.rankCheckLongitude,
     gmbBusinessName: campaign.gmbBusinessName,
     gmbPlaceId: campaign.gmbPlaceId,
     gmbMapsUrl: campaign.gmbMapsUrl,

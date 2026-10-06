@@ -110,6 +110,8 @@ export interface CampaignFormState {
   geoLatitude: number | null;
   geoLongitude: number | null;
   geoRadiusKm: number | null;
+  rankCheckLatitude: number | null;
+  rankCheckLongitude: number | null;
   gmbBusinessName: string;
   gmbPlaceId: string;
   gmbMapsUrl: string;

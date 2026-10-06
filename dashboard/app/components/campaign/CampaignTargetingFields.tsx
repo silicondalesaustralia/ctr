@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { CampaignFormState, IdentityPool } from "./shared";
+import GpsPointInput from "./GpsPointInput";
 import HintLabel from "./HintLabel";
 import { inputStyle } from "./shared";
 
@@ -24,44 +24,7 @@ const POOL_OPTIONS: Array<{ value: IdentityPool; title: string; detail: string }
   },
 ];
 
-function formatPoint(lat: number | null, lng: number | null): string {
-  return lat !== null && lng !== null ? `${lat}, ${lng}` : "";
-}
-
-function parsePoint(text: string): { lat: number; lng: number } | null {
-  const match = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
-  if (!match) return null;
-  const lat = Number(match[1]);
-  const lng = Number(match[2]);
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat, lng };
-}
-
 export default function CampaignTargetingFields({ form, running, onFormChange }: Props) {
-  const [pointText, setPointText] = useState(formatPoint(form.geoLatitude, form.geoLongitude));
-  const [pointError, setPointError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPointText(formatPoint(form.geoLatitude, form.geoLongitude));
-  }, [form.geoLatitude, form.geoLongitude]);
-
-  function commitPoint() {
-    if (!pointText.trim()) {
-      setPointError(null);
-      onFormChange("geoLatitude", null);
-      onFormChange("geoLongitude", null);
-      return;
-    }
-    const point = parsePoint(pointText);
-    if (!point) {
-      setPointError("Paste as “latitude, longitude”, e.g. -35.0666, 138.8583");
-      return;
-    }
-    setPointError(null);
-    onFormChange("geoLatitude", point.lat);
-    onFormChange("geoLongitude", point.lng);
-  }
-
   return (
     <fieldset style={{ border: "1px solid #e9ecf2", borderRadius: 8, padding: 14, margin: 0 }}>
       <legend style={{ padding: "0 6px", fontWeight: 600, fontSize: 14 }}>
@@ -87,21 +50,18 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
         </label>
       ))}
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginTop: 6 }}>
-        <label>
-          <HintLabel
-            label="GPS centre (optional)"
-            hint="Right-click a spot in Google Maps and copy the coordinates. Each identity gets its own fixed point inside the radius, so browser location matches a real local searcher. Leave blank to skip GPS."
-          />
-          <input
-            style={inputStyle}
-            placeholder="Blank = no GPS (e.g. -35.0666, 138.8583)"
-            value={pointText}
-            disabled={running}
-            onChange={(e) => setPointText(e.target.value)}
-            onBlur={commitPoint}
-          />
-          {pointError && <div style={{ color: "#bf4352", fontSize: 12 }}>{pointError}</div>}
-        </label>
+        <GpsPointInput
+          label="GPS centre (optional)"
+          hint="Right-click a spot in Google Maps and copy the coordinates. Each identity gets its own fixed point inside the radius, so browser location matches a real local searcher. Leave blank to skip GPS."
+          placeholder="Blank = no GPS (e.g. -35.0666, 138.8583)"
+          latitude={form.geoLatitude}
+          longitude={form.geoLongitude}
+          disabled={running}
+          onChange={(lat, lng) => {
+            onFormChange("geoLatitude", lat);
+            onFormChange("geoLongitude", lng);
+          }}
+        />
         <label>
           <HintLabel label="Radius (km)" hint="Spread of identity GPS points around the centre. Default 3 km." />
           <input
@@ -118,6 +78,20 @@ export default function CampaignTargetingFields({ form, running, onFormChange }:
             }
           />
         </label>
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <GpsPointInput
+          label="Rank check location (optional)"
+          hint="Where daily and manual rank checks search from — set it to the spot you test with your location checker (e.g. the town centre named in the keyword). Leave blank to use the campaign city's centre. Don't use the business's own address: it ranks #1 there."
+          placeholder="Blank = campaign city centre (e.g. -34.9285, 138.6007)"
+          latitude={form.rankCheckLatitude}
+          longitude={form.rankCheckLongitude}
+          disabled={running}
+          onChange={(lat, lng) => {
+            onFormChange("rankCheckLatitude", lat);
+            onFormChange("rankCheckLongitude", lng);
+          }}
+        />
       </div>
     </fieldset>
   );

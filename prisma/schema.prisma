@@ -199,6 +199,9 @@ model Experiment {
   geoLatitude          Float?           @map("geo_latitude")
   geoLongitude         Float?           @map("geo_longitude")
   geoRadiusKm          Float?           @map("geo_radius_km")
+  /** Where rank checks search from; null = the campaign city's centre. */
+  rankCheckLatitude    Float?           @map("rank_check_latitude")
+  rankCheckLongitude   Float?           @map("rank_check_longitude")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 

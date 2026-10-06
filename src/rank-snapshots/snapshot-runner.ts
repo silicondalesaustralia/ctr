@@ -12,6 +12,7 @@ import { ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
 import { addMinutes, randomBetween, sleep } from "../utils/helpers.js";
 import { withSnapshotBrowser } from "./snapshot-browser.js";
 import { captureQuerySnapshot } from "./snapshot-capture.js";
+import { rankCheckGeoPoint } from "./rank-check-point.js";
 import { pickSnapshotIdentity } from "./snapshot-identity.js";
 
 /** First attempt plus one retry on a fresh IP, matching the campaign block policy. */
@@ -107,10 +108,7 @@ export async function runExperimentSnapshots(experimentId: string): Promise<void
     data: { status: "running", attemptCount: { increment: 1 }, identityExternalId: identity.externalId },
   });
 
-  const geoPoint: GeoPoint | undefined =
-    experiment.geoLatitude !== null && experiment.geoLongitude !== null
-      ? { latitude: experiment.geoLatitude, longitude: experiment.geoLongitude }
-      : undefined;
+  const geoPoint = rankCheckGeoPoint(experiment);
 
   try {
     await captureRows(rows, experiment, identity, geoPoint);

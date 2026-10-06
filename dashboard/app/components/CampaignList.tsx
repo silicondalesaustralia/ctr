@@ -115,7 +115,7 @@ export default function CampaignList() {
           <span>
             Showing {visible.length} of {campaigns.length} campaigns
           </span>
-          <span>Latest rank check from the campaign centre · lower is better</span>
+          <span>Latest rank check from each campaign&apos;s rank check location · lower is better</span>
         </div>
       </section>
 

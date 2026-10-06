@@ -101,6 +101,8 @@ interface Campaign {
   geoLatitude?: number | null;
   geoLongitude?: number | null;
   geoRadiusKm?: number | null;
+  rankCheckLatitude?: number | null;
+  rankCheckLongitude?: number | null;
   gmbBusinessName?: string | null;
   gmbPlaceId?: string | null;
   gmbMapsUrl?: string | null;
@@ -149,6 +151,8 @@ const defaultForm = (): CampaignFormState => ({
   geoLatitude: null,
   geoLongitude: null,
   geoRadiusKm: null,
+  rankCheckLatitude: null,
+  rankCheckLongitude: null,
   gmbBusinessName: "",
   gmbPlaceId: "",
   gmbMapsUrl: "",
@@ -354,6 +358,8 @@ export default function CampaignDashboard({
       geoLatitude: c.geoLatitude ?? null,
       geoLongitude: c.geoLongitude ?? null,
       geoRadiusKm: c.geoRadiusKm ?? null,
+      rankCheckLatitude: c.rankCheckLatitude ?? null,
+      rankCheckLongitude: c.rankCheckLongitude ?? null,
       gmbBusinessName: c.gmbBusinessName ?? "",
       gmbPlaceId: c.gmbPlaceId ?? "",
       gmbMapsUrl: c.gmbMapsUrl ?? "",
@@ -491,6 +497,8 @@ export default function CampaignDashboard({
       geoLatitude: form.geoLatitude,
       geoLongitude: form.geoLongitude,
       geoRadiusKm: form.geoRadiusKm,
+      rankCheckLatitude: form.rankCheckLatitude,
+      rankCheckLongitude: form.rankCheckLongitude,
       gmbBusinessName: form.gmbBusinessName || null,
       gmbPlaceId: form.gmbPlaceId || null,
       gmbMapsUrl: form.gmbMapsUrl || null,
