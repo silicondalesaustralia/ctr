@@ -15,7 +15,7 @@ const CITY_SPREAD_KM = 8;
  * Only www.google.com: google.com.au redirects there, and intercepting a redirected
  * navigation makes Firefox fail with NS_ERROR_REDIRECT_LOOP.
  */
-export const GOOGLE_HOSTS = /^https:\/\/www\.google\.com\//;
+const GOOGLE_HOSTS = /^https:\/\/www\.google\.com\//;
 
 /** Undefined for custom cities outside the catalog (no known centre, so no header). */
 export function cityGeoPoint(
@@ -47,10 +47,20 @@ export function encodeXGeo(point: GeoPoint): string {
   return `a ${Buffer.from(text).toString("base64")}`;
 }
 
-/** Google remembers the last location per profile, so every Google request carries this point. */
+const currentHeader = new WeakMap<BrowserContext, string>();
+
+/**
+ * Google remembers the last location per profile, so every Google request carries this point.
+ * The route is registered once per context and later calls only swap the point: unroute +
+ * route in Firefox leaves page requests hanging (search box clicks never complete).
+ */
 export async function applyGoogleGeoHeader(context: BrowserContext, point: GeoPoint): Promise<void> {
-  const header = encodeXGeo(point);
-  await context.route(GOOGLE_HOSTS, (route) =>
-    route.continue({ headers: { ...route.request().headers(), "x-geo": header } }),
-  );
+  const registered = currentHeader.has(context);
+  currentHeader.set(context, encodeXGeo(point));
+  if (registered) return;
+  await context.route(GOOGLE_HOSTS, (route) => {
+    const header = currentHeader.get(context);
+    const headers = route.request().headers();
+    return route.continue({ headers: header ? { ...headers, "x-geo": header } : headers });
+  });
 }

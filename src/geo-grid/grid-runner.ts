@@ -16,7 +16,10 @@ import { isCentreCell } from "./grid-points.js";
 import { finaliseGridScan } from "./grid-summary.js";
 
 /** A blocked scan resumes from its unfinished points on a fresh IP, up to this many sessions. */
-const MAX_SCAN_ATTEMPTS = 3;
+const MAX_SCAN_ATTEMPTS = 4;
+/** A browser that fails this many points in a row is stuck; resume in a fresh one. */
+const MAX_CONSECUTIVE_POINT_ERRORS = 2;
+const POINT_ERROR_RETRY_MINUTES = 3;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -28,9 +31,10 @@ async function capturePoints(
   points: GeoGridPoint[],
   experiment: Experiment,
   identity: Identity,
-): Promise<"done" | "blocked"> {
+): Promise<"done" | "blocked" | "stuck"> {
   const centre = { latitude: scan.centreLatitude, longitude: scan.centreLongitude };
   return withSnapshotBrowser(identity, centre, async ({ page, egress }) => {
+    let consecutiveErrors = 0;
     for (const [index, point] of points.entries()) {
       const isCentre = isCentreCell(point, scan.gridSize);
       try {
@@ -61,11 +65,14 @@ async function capturePoints(
             data: { centreImageJpeg: capture.serpImageJpeg },
           });
         }
+        consecutiveErrors = 0;
       } catch (error) {
         await prisma.geoGridPoint.update({
           where: { id: point.id },
           data: { errorMessage: errorMessage(error) },
         });
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_POINT_ERRORS) return "stuck";
       }
       if (index < points.length - 1) await sleep(randomBetween(6_000, 15_000));
     }
@@ -118,7 +125,8 @@ export async function runGridScan(scanId: string): Promise<void> {
     await prisma.geoGridScan.update({ where: { id: scanId }, data: { attemptCount: { increment: 1 } } });
     const remaining = await prisma.geoGridPoint.count({ where: { scanId, status: "pending" } });
     if (remaining === 0) await finaliseGridScan(scanId, true);
-    else await retryLater(scan, BLOCK_RETRY_DELAY_MINUTES, outcome === "blocked" ? "blocked" : "points failed");
+    else if (outcome === "blocked") await retryLater(scan, BLOCK_RETRY_DELAY_MINUTES, "blocked");
+    else await retryLater(scan, POINT_ERROR_RETRY_MINUTES, "points failed; resuming in a fresh browser");
   } catch (error) {
     if (error instanceof ProxyPoolExhaustedError) {
       await prisma.geoGridScan.update({

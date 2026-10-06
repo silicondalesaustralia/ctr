@@ -49,7 +49,13 @@ export async function typeAndSubmitQuery(
 ): Promise<void> {
   const searchBox = page.locator('textarea[name="q"], input[name="q"]').first();
   await searchBox.waitFor({ state: "visible", timeout: 15_000 });
-  await searchBox.click();
+  try {
+    await searchBox.click({ timeout: 10_000 });
+  } catch (error) {
+    // Camoufox sometimes never acknowledges the click on Google's box; focus needs no mouse event.
+    console.warn(`[search] search box click failed, focusing instead: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+    await searchBox.focus({ timeout: 5_000 });
+  }
 
   const prePause = effectivePauseMs(persona.preTypePauseMs, traits);
   await sleep(randomBetween(prePause[0], prePause[1]));
