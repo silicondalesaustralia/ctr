@@ -1,13 +1,13 @@
 import Link from "next/link";
-import RankSparkline from "../RankSparkline";
 import CampaignProgressCell from "./CampaignProgressCell";
+import GridRankCell from "./GridRankCell";
+import UrlRankCell from "./UrlRankCell";
 import CampaignRowMenu from "./CampaignRowMenu";
 import { campaignProgress, formatNextSession } from "./campaign-progress";
 import progressStyles from "./CampaignProgress.module.css";
 import {
   campaignInitials,
   campaignTitle,
-  coverageLine,
   formatUpdated,
   regionParts,
   type CampaignAction,
@@ -93,8 +93,11 @@ export default function CampaignRow({ campaign, busyAction, onStart, onStop, onD
         <CampaignProgressCell progress={progress} />
       </td>
       <td>
-        <RankSparkline points={campaign.rankHistory ?? []} />
-        {coverageLine(campaign) && <small className={cells.updated}>{coverageLine(campaign)}</small>}
+        {isGmb ? (
+          <GridRankCell href={href} coverage={campaign.gridCoverage} />
+        ) : (
+          <UrlRankCell href={href} points={campaign.rankHistory ?? []} />
+        )}
         {campaign.rankCheckQueued && (
           <small className={cells.updated} role="status">
             Checking position…

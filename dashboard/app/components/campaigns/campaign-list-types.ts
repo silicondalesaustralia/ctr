@@ -9,10 +9,16 @@ export interface RankPoint {
   totalCities?: number;
 }
 
-/** Latest finished coverage grid: points in the 3-pack out of all points. */
-export interface GridCoverage {
+export interface GridScanTotals {
   inPackCount: number;
   pointCount: number;
+  avgRank: number | null;
+  localDate: string;
+}
+
+/** Latest finished coverage grid, with the scan before it for the change. */
+export interface GridCoverage extends GridScanTotals {
+  previous: GridScanTotals | null;
 }
 
 export interface CampaignSummary {
@@ -58,18 +64,6 @@ const RANK_SOURCE_LABELS: Record<string, string> = {
 /** Which Google list the rank came from; 3-pack and Places list positions are not comparable. */
 export function rankSourceLabel(source: string | null): string {
   return source ? (RANK_SOURCE_LABELS[source] ?? source) : "";
-}
-
-/** Extra rank-cell line: grid coverage for GMB, city reach for national panels. */
-export function coverageLine(campaign: CampaignSummary): string | null {
-  if (campaign.gridCoverage) {
-    return `3-pack ${campaign.gridCoverage.inPackCount}/${campaign.gridCoverage.pointCount}`;
-  }
-  const latest = campaign.rankHistory?.[campaign.rankHistory.length - 1];
-  if (latest?.source === "national" && latest.totalCities) {
-    return `Found in ${latest.foundCities ?? 0}/${latest.totalCities} cities`;
-  }
-  return null;
 }
 
 const STATE_NAMES: Record<string, string> = {

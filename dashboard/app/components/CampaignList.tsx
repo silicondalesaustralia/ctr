@@ -41,6 +41,10 @@ export default function CampaignList() {
       );
     });
   }, [campaigns, status, search, region]);
+  const groups = [
+    { title: "GMB campaigns", rankHeader: "Grid coverage", campaigns: visible.filter((c) => c.campaignKind === "gmb") },
+    { title: "URL campaigns", rankHeader: "Rank", campaigns: visible.filter((c) => c.campaignKind !== "gmb") },
+  ];
 
   const newButton = (
     <Link href="/campaign/new" className={styles.newCampaign}>
@@ -101,21 +105,28 @@ export default function CampaignList() {
         ) : visible.length === 0 ? (
           <p className={styles.message}>No campaigns match these filters.</p>
         ) : (
-          <CampaignTable
-            campaigns={visible}
-            busy={data.busy}
-            onStart={data.startCampaign}
-            onStop={data.stopCampaign}
-            onDelete={data.deleteCampaign}
-            onUpdateRank={data.updateRank}
-          />
+          groups.map((group) =>
+            group.campaigns.length === 0 ? null : (
+              <CampaignTable
+                key={group.title}
+                title={group.title}
+                rankHeader={group.rankHeader}
+                campaigns={group.campaigns}
+                busy={data.busy}
+                onStart={data.startCampaign}
+                onStop={data.stopCampaign}
+                onDelete={data.deleteCampaign}
+                onUpdateRank={data.updateRank}
+              />
+            ),
+          )
         )}
 
         <div className={styles.panelFoot}>
           <span>
             Showing {visible.length} of {campaigns.length} campaigns
           </span>
-          <span>Latest rank check from each campaign&apos;s rank check location · lower is better</span>
+          <span>GMB: share of coverage grid points in the 3-pack · URL: latest rank, lower is better</span>
         </div>
       </section>
 

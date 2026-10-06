@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../../../lib/api";
+import RankHistoryTable from "./RankHistoryTable";
 import { panelStyle } from "./shared";
 import type { RankSnapshotRow } from "./snapshot-types";
 import { timelinePoints, type TimelinePoint } from "./timeline-points";
@@ -56,7 +57,7 @@ export default function RankTimeline({ campaignId, keyword }: Props) {
   const line = plotted.filter((entry) => entry.point.position != null && entry.point.kind !== "followup");
 
   return (
-    <div style={{ ...panelStyle, marginBottom: 16, display: "grid", gap: 10 }}>
+    <div id="rank-history" style={{ ...panelStyle, marginBottom: 16, display: "grid", gap: 10 }}>
       <h2 style={{ margin: 0, fontSize: 18 }}>Rank over time · “{keyword}”</h2>
       {error && <p style={{ color: "#bf4352", margin: 0, fontSize: 13 }}>{error}</p>}
       {points.length === 0 ? (
@@ -96,6 +97,7 @@ export default function RankTimeline({ campaignId, keyword }: Props) {
       <p style={{ margin: 0, fontSize: 12, color: "#767d8e" }}>
         Green band: baseline range · shaded: campaign running · orange diamonds: follow-up checks after stop
       </p>
+      {points.length > 0 && <RankHistoryTable points={points} />}
     </div>
   );
 }

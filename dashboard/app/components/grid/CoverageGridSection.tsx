@@ -5,6 +5,7 @@ import OsmMap from "../map/OsmMap";
 import BlobImageLink from "../campaign/BlobImageLink";
 import { panelStyle } from "../campaign/shared";
 import { GRID_AMBER, GRID_GREEN, GRID_GREY, GRID_RED } from "./grid-colors";
+import GridHistoryTable from "./GridHistoryTable";
 import GridOverlay from "./GridOverlay";
 import GridScanControls from "./GridScanControls";
 import GridSummaryCards from "./GridSummaryCards";
@@ -51,7 +52,7 @@ export default function CoverageGridSection({ campaignId }: Props) {
   const done = openScan ? (mode === "before" ? from.points : to.points).filter((p) => p.status !== "pending").length : 0;
 
   return (
-    <div style={{ ...panelStyle, marginBottom: 16, display: "grid", gap: 16 }}>
+    <div id="coverage-grid" style={{ ...panelStyle, marginBottom: 16, display: "grid", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18 }}>Coverage grid</h2>
@@ -133,6 +134,7 @@ export default function CoverageGridSection({ campaignId }: Props) {
             )}
           </div>
           {(from.error || to.error) && <p style={{ color: "#bf4352", margin: 0, fontSize: 13 }}>{from.error ?? to.error}</p>}
+          <GridHistoryTable scans={queryScans} />
         </>
       )}
     </div>
