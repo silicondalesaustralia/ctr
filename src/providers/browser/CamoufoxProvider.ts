@@ -83,6 +83,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs, ...mobile?.firefox_user_prefs },
       ...(mobile && { window: mobile.window }),
       locale: proxy?.locale ?? "en-AU",
+      exclude_addons: ["UBO"],
       humanize: true,
       i_know_what_im_doing: true,
       ...(proxy && {

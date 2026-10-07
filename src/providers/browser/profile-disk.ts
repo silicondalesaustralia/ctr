@@ -39,12 +39,18 @@ function mb(bytes: number): number {
   return Math.round(bytes / 1024 / 1024);
 }
 
+/** Extension storage (uBlock Origin filter lists, ~35MB per profile); add-ons are excluded at launch. */
+async function extensionStorageDirs(dir: string): Promise<string[]> {
+  const storage = join(dir, "storage", "default");
+  const entries = await readdir(storage).catch(() => [] as string[]);
+  return entries.filter((name) => name.startsWith("moz-extension+++")).map((name) => join(storage, name));
+}
+
 /** Remove a profile's rebuildable caches; only call while its browser is closed. */
 export async function pruneProfileCaches(profileId: string): Promise<void> {
   const dir = join(profileRoot(), profileId);
-  await Promise.all(
-    PRUNABLE_DIRS.map((name) => rm(join(dir, name), { recursive: true, force: true })),
-  );
+  const targets = [...PRUNABLE_DIRS.map((name) => join(dir, name)), ...(await extensionStorageDirs(dir))];
+  await Promise.all(targets.map((path) => rm(path, { recursive: true, force: true })));
 }
 
 /**
