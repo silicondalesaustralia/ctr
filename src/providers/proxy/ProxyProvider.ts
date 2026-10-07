@@ -33,6 +33,10 @@ export interface ProxyAllocationRequest {
   city?: string;
   sessionKey?: string;
   deviceClass?: "desktop" | "mobile";
+  /** Restrict to one network (e.g. 1221 = Telstra), where the provider supports it. */
+  asn?: number;
+  /** Restrict to one carrier by the provider's ISP code (e.g. SOAX "telstra_internet"). */
+  isp?: string;
 }
 
 export interface ProxyProvider {

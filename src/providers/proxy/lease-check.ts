@@ -53,8 +53,9 @@ export async function checkLeaseBeforeLaunch(lease: ProxyLease, expectedCity?: s
   } catch (error) {
     throw new LeaseUnreachableError(errorMessage(error));
   }
-  await assertEgressPrefixClean(first.ip);
-  await assertGeoPrefixClean(first.ip, expectedCity);
+  const mobile = lease.proxyType === "mobile";
+  await assertEgressPrefixClean(first.ip, mobile);
+  if (!mobile) await assertGeoPrefixClean(first.ip, expectedCity);
 
   await sleep(STABILITY_GAP_MS);
   const second = await lookup(lease, IPINFO_URL, "ipinfo.io (lease check)").catch((error: unknown) => {
@@ -76,8 +77,9 @@ export async function checkLeaseBeforeLaunch(lease: ProxyLease, expectedCity?: s
   return first;
 }
 
-/** Remember the /24 behind a rejected lease so later allocations skip it. */
-export async function recordLeaseRejection(error: unknown, city?: string): Promise<void> {
+/** Remember the /24 behind a rejected lease so later allocations skip it (not for mobile CGNAT ranges). */
+export async function recordLeaseRejection(error: unknown, city?: string, mobile = false): Promise<void> {
+  if (mobile) return;
   if (error instanceof UnstableLeaseError) {
     const rotation = `${error.firstIp} -> ${error.secondIp}`;
     await recordBadGeoPrefix(error.firstIp, ANY_CITY, "unstable", rotation);

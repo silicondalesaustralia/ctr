@@ -77,7 +77,9 @@ const envSchema = z.object({
   BROWSER_PROFILE_PROVIDER: z.enum(["mock", "gologin", "multilogin", "camoufox"]).default("mock"),
   /** Persistent Camoufox user-data dirs (Railway volume in prod). Headful follows GOLOGIN_HEADLESS. */
   CAMOUFOX_PROFILE_DIR: z.string().default("./tmp/camoufox-profiles"),
-  PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports"]).default("mock"),
+  PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports", "oxylabs", "brightdata", "soax"]).default("mock"),
+  /** Provider for mobile identities (e.g. soax). Unset = mobile uses PROXY_PROVIDER too. */
+  MOBILE_PROXY_PROVIDER: z.enum(["mock", "decodo", "premiumports", "oxylabs", "brightdata", "soax"]).optional(),
   /** Send Google an x-geo device location (identity's city / campaign point). Kill switch: "false". */
   GOOGLE_XGEO_ENABLED: z
     .string()
@@ -120,6 +122,23 @@ const envSchema = z.object({
   PREMIUMPORTS_PROXY_PORT: z.string().optional(),
   PREMIUMPORTS_PROXY_USERNAME: z.string().optional(),
   PREMIUMPORTS_PROXY_PASSWORD: z.string().optional(),
+  OXYLABS_PROXY_HOST: z.string().default("pr.oxylabs.io"),
+  OXYLABS_PROXY_PORT: z.string().default("7777"),
+  OXYLABS_PROXY_USERNAME: z.string().optional(),
+  OXYLABS_PROXY_PASSWORD: z.string().optional(),
+  BRIGHTDATA_PROXY_HOST: z.string().default("brd.superproxy.io"),
+  BRIGHTDATA_PROXY_PORT: z.string().default("44445"),
+  BRIGHTDATA_PROXY_USERNAME: z.string().optional(),
+  BRIGHTDATA_PROXY_PASSWORD: z.string().optional(),
+  SOAX_PROXY_HOST: z.string().default("proxy.soax.com"),
+  SOAX_PROXY_PORT: z.string().default("1337"),
+  SOAX_NETWORK: z.enum(["mob", "res", "res_mob"]).default("mob"),
+  SOAX_PACKAGE_KEY: z.string().optional(),
+  /** Off = country-wide mobile IPs (SOAX city pools are thin). */
+  SOAX_CITY_TARGETING: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   GSC_CLIENT_ID: z.string().optional(),
   GSC_CLIENT_SECRET: z.string().optional(),

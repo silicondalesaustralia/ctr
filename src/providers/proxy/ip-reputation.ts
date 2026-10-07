@@ -26,8 +26,18 @@ export function ipPrefix(ip: string): string | null {
   return null;
 }
 
-export async function recordBlockedEgress(ip: string | undefined): Promise<void> {
-  const prefix = ip ? ipPrefix(ip) : null;
+/**
+ * Reputation key: the /24 (/48) for fixed lines, the exact IP for mobile —
+ * a carrier /24 is CGNAT shared by many real phones, so one block says little about it.
+ */
+export function reputationKey(ip: string, mobile = false): string | null {
+  const trimmed = ip.trim();
+  if (!mobile) return ipPrefix(trimmed);
+  return ipPrefix(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+export async function recordBlockedEgress(ip: string | undefined, mobile = false): Promise<void> {
+  const prefix = ip ? reputationKey(ip, mobile) : null;
   if (!prefix) return;
   try {
     await prisma.blockedIpPrefix.upsert({
@@ -43,8 +53,8 @@ export async function recordBlockedEgress(ip: string | undefined): Promise<void>
 }
 
 /** Throws FlaggedIpPrefixError (→ proxy_error retry on a fresh lease) before Google. */
-export async function assertEgressPrefixClean(ip: string): Promise<void> {
-  const prefix = ipPrefix(ip);
+export async function assertEgressPrefixClean(ip: string, mobile = false): Promise<void> {
+  const prefix = reputationKey(ip, mobile);
   if (!prefix) return;
   const since = new Date(Date.now() - BLOCKED_PREFIX_TTL_DAYS * 24 * 60 * 60 * 1000);
   const flagged = await prisma.blockedIpPrefix.findFirst({

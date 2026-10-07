@@ -38,6 +38,7 @@ function plainHttp(lease: ProxyLease, url: URL, timeoutMs: number): Promise<unkn
       path: url.toString(),
       headers: { Host: url.host, Accept: "application/json", "Proxy-Authorization": proxyAuth(lease) },
       timeout: timeoutMs,
+      agent: false,
     });
     request.on("response", (response) => readJson(response).then(resolve, reject));
     request.on("timeout", () => request.destroy(new Error(`proxy request timed out after ${timeoutMs}ms`)));
@@ -56,11 +57,16 @@ function tunnelledHttps(lease: ProxyLease, url: URL, timeoutMs: number): Promise
       path: `${url.hostname}:${port}`,
       headers: { Host: `${url.hostname}:${port}`, "Proxy-Authorization": proxyAuth(lease) },
       timeout: timeoutMs,
+      agent: false,
     });
     connect.on("connect", (response, socket) => {
       if (response.statusCode !== 200) {
         socket.destroy();
-        reject(new Error(`proxy CONNECT returned ${response.statusCode}`));
+        const detail = Object.entries(response.headers)
+          .filter(([name]) => /error|detail/i.test(name))
+          .map(([name, value]) => `${name}=${String(value)}`)
+          .join(" ");
+        reject(new Error(`proxy CONNECT returned ${response.statusCode}${detail ? ` (${detail})` : ""}`));
         return;
       }
       const request = https.request({
@@ -81,7 +87,10 @@ function tunnelledHttps(lease: ProxyLease, url: URL, timeoutMs: number): Promise
   });
 }
 
-/** GET a JSON endpoint through the lease's proxy, without launching a browser. */
+/**
+ * GET a JSON endpoint through the lease's proxy, without launching a browser.
+ * Every request opens its own socket: a pooled keep-alive socket would carry another lease's session.
+ */
 export function fetchJsonViaProxy(
   lease: ProxyLease,
   target: string,

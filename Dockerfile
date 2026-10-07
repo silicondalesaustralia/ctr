@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/playwright:v1.51.0-jammy
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends xvfb build-essential python3 \
+  && apt-get install -y --no-install-recommends xvfb build-essential python3 fonts-roboto \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./

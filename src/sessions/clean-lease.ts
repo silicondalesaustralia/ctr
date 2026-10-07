@@ -44,18 +44,32 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** City the egress must be in (undefined = country only). Mobile pools are country-wide. */
+export function egressCityFor(city: string | undefined, deviceClass?: string): string | undefined {
+  if (deviceClass === "mobile" || shouldSkipCityTargeting(city)) return undefined;
+  return city;
+}
+
 /** City the lease must egress in (undefined = country only), and whether to test leases at all. */
-export function leaseTarget(city: string | undefined): { expectedCity?: string; checkLeases: boolean } {
+export function leaseTarget(
+  city: string | undefined,
+  deviceClass?: string,
+): { expectedCity?: string; checkLeases: boolean } {
   return {
-    expectedCity: shouldSkipCityTargeting(city) ? undefined : city,
+    expectedCity: egressCityFor(city, deviceClass),
     checkLeases: !isDryRun() && getEnv().PROXY_PROVIDER !== "mock",
   };
 }
 
 /** Log a rejected lease and remember its /24 so later allocations skip it. */
-export async function rejectLease(error: unknown, attempt: number, expectedCity: string | undefined): Promise<void> {
+export async function rejectLease(
+  error: unknown,
+  attempt: number,
+  expectedCity: string | undefined,
+  lease: ProxyLease,
+): Promise<void> {
   console.error(`[proxy] lease ${attempt}/${MAX_LEASE_ATTEMPTS} rejected (${errorMessage(error).slice(0, 120)})`);
-  await recordLeaseRejection(error, expectedCity);
+  await recordLeaseRejection(error, expectedCity, lease.proxyType === "mobile");
 }
 
 /** Draw leases until one passes the pre-launch check, for callers that start the browser themselves. */
@@ -63,7 +77,7 @@ export async function allocateCleanLease(
   proxyProvider: ProxyProvider,
   allocation: ProxyAllocationRequest & { sessionKey: string },
 ): Promise<ProxyLease> {
-  const { expectedCity, checkLeases } = leaseTarget(allocation.city);
+  const { expectedCity, checkLeases } = leaseTarget(allocation.city, allocation.deviceClass);
   for (let attempt = 1; ; attempt += 1) {
     const sessionKey = attempt === 1 ? allocation.sessionKey : `${allocation.sessionKey}r${attempt}`;
     const lease = await proxyProvider.allocate({ ...allocation, sessionKey });
@@ -73,7 +87,7 @@ export async function allocateCleanLease(
       return lease;
     } catch (error) {
       if (!isBadLeaseError(error)) throw error;
-      await rejectLease(error, attempt, expectedCity);
+      await rejectLease(error, attempt, expectedCity, lease);
       await proxyProvider.release(lease.leaseId).catch((releaseError: unknown) => {
         console.error(`[proxy] release failed: ${errorMessage(releaseError)}`);
       });

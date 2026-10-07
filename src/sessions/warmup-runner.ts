@@ -6,7 +6,7 @@ import { runSiteJourney } from "../behaviour/site-journey.js";
 import { inspectSerp } from "../behaviour/serp-inspection.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
 import { assertEgressPrefixClean } from "../providers/proxy/ip-reputation.js";
-import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
+import { egressCityFor } from "./clean-lease.js";
 import { browseAuSites, browseAuSitesBeforeGoogle } from "../browser/pre-google-browse.js";
 import { applyBrowserStealth } from "../browser/stealth.js";
 import { clickRandomOrganicResult } from "../browser/warmup-serp.js";
@@ -14,7 +14,7 @@ import { checkBlocked, openGoogle, typeAndSubmitQuery } from "../browser/google-
 import { googleTargetFor } from "../geo/google-target.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
-import { createProxyProvider } from "../providers/proxy/index.js";
+import { createProxyProvider, proxyProviderNameFor } from "../providers/proxy/index.js";
 import { startBrowserWithLeaseRetry } from "./start-browser-with-lease.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
@@ -219,11 +219,9 @@ export async function runWarmupSession(
         if (isDryRun() || env.PROXY_PROVIDER === "mock") {
           return { page: openedPage, egress: undefined };
         }
-        const expectedCity = shouldSkipCityTargeting(input.identity.city)
-          ? undefined
-          : input.identity.city;
+        const expectedCity = egressCityFor(input.identity.city, input.identity.deviceClass);
         const verified = await verifyBrowserEgressGeo(openedPage, input.identity.country, expectedCity);
-        if (!isBrowse) await assertEgressPrefixClean(verified.ip);
+        if (!isBrowse) await assertEgressPrefixClean(verified.ip, input.identity.deviceClass === "mobile");
         return { page: openedPage, egress: verified };
       },
       discard: async (running) => {
@@ -253,7 +251,7 @@ export async function runWarmupSession(
       egressCity = egress.city ?? input.identity.city;
       egressIpHash = hashValue(egress.ip);
       await updateSessionRecord(session.id, {
-        proxyProvider: env.PROXY_PROVIDER,
+        proxyProvider: proxyProviderNameFor(input.identity.deviceClass),
         proxyCountry: egressCountry,
         proxyRegion: egressRegion,
         proxyCity: egressCity,
@@ -305,7 +303,7 @@ export async function runWarmupSession(
         searchSubmitted: false,
         durationSeconds: 0,
         bytesTransferred: BigInt(bandwidth.getTotal()),
-        proxyProvider: env.PROXY_PROVIDER,
+        proxyProvider: proxyProviderNameFor(input.identity.deviceClass),
         proxyCountry: egressCountry,
         proxyRegion: egressRegion,
         proxyCity: egressCity,
@@ -384,7 +382,7 @@ export async function runWarmupSession(
         searchSubmitted: true,
         durationSeconds: 0,
         bytesTransferred: BigInt(bandwidth.getTotal()),
-        proxyProvider: env.PROXY_PROVIDER,
+        proxyProvider: proxyProviderNameFor(input.identity.deviceClass),
         proxyCountry: egressCountry,
         proxyRegion: egressRegion,
         proxyCity: egressCity,
@@ -445,7 +443,7 @@ export async function runWarmupSession(
       scrollDepth,
       durationSeconds,
       bytesTransferred: BigInt(bandwidth.getTotal()),
-      proxyProvider: env.PROXY_PROVIDER,
+      proxyProvider: proxyProviderNameFor(input.identity.deviceClass),
       proxyCountry: egressCountry,
       proxyRegion: egressRegion,
       proxyCity: egressCity,

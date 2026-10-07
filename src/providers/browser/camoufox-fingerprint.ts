@@ -5,11 +5,16 @@ import { getPath } from "camoufox-js/dist/pkgman.js";
 import { sampleWebGL } from "camoufox-js/dist/webgl/sample.js";
 import type { Fingerprint } from "fingerprint-generator";
 import { prisma } from "../../db/client.js";
+import { ANDROID_OS } from "./camoufox-mobile.js";
 
-export type CamoufoxOs = "windows" | "macos";
+export type CamoufoxOs = "windows" | "macos" | "linux";
+
+const WEBGL_OS = { windows: "win", macos: "mac", linux: "lin" } as const;
 
 export interface PinnedFingerprint {
   os: CamoufoxOs;
+  /** Firefox-for-Android identity: launch with the mobile overrides. */
+  mobile: boolean;
   fingerprint: Fingerprint;
   webgl: [string, string];
   seeds: Record<string, number>;
@@ -33,26 +38,34 @@ function installedCamoufoxProperties(): Set<string> {
 
 /** Pinned seeds minus any the installed browser dropped (e.g. fonts:spacing_seed in newer builds). */
 export function supportedSeeds(seeds: Record<string, number>): Record<string, number> {
+  return supportedConfig(seeds);
+}
+
+/** Config keys the installed Camoufox build accepts. */
+export function supportedConfig<T>(config: Record<string, T>): Record<string, T> {
   const known = installedCamoufoxProperties();
-  return Object.fromEntries(Object.entries(seeds).filter(([key]) => known.has(key)));
+  return Object.fromEntries(Object.entries(config).filter(([key]) => known.has(key)));
 }
 
 export function camoufoxOsFor(osFamily: string): CamoufoxOs {
+  if (osFamily === ANDROID_OS || osFamily === "linux") return "linux";
   return osFamily === "mac" || osFamily === "macos" ? "macos" : "windows";
 }
 
 /** Generate a device once and persist it so every launch is the same machine. */
 export async function createPinnedFingerprint(
   profileId: string,
-  os: CamoufoxOs,
+  osFamily: string,
 ): Promise<PinnedFingerprint> {
+  const os = camoufoxOsFor(osFamily);
+  const mobile = osFamily === ANDROID_OS;
   const fingerprint = generateFingerprint(undefined, {
     operatingSystems: [os],
     devices: ["desktop"],
     screen: SCREEN,
   });
   // camoufox-js types claim vendor/renderer, but the payload keys are "webGl:vendor"/"webGl:renderer".
-  const sampled: Record<string, unknown> = { ...(await sampleWebGL(os === "macos" ? "mac" : "win")) };
+  const sampled: Record<string, unknown> = { ...(await sampleWebGL(WEBGL_OS[os])) };
   const vendor = sampled["webGl:vendor"];
   const renderer = sampled["webGl:renderer"];
   if (typeof vendor !== "string" || typeof renderer !== "string") {
@@ -67,7 +80,7 @@ export async function createPinnedFingerprint(
   await prisma.browserFingerprint.create({
     data: {
       profileId,
-      os,
+      os: mobile ? ANDROID_OS : os,
       fingerprintJson: JSON.stringify(fingerprint),
       webglVendor: webglData.vendor,
       webglRenderer: webglData.renderer,
@@ -75,7 +88,7 @@ export async function createPinnedFingerprint(
     },
   });
 
-  return { os, fingerprint, webgl: [webglData.vendor, webglData.renderer], seeds };
+  return { os, mobile, fingerprint, webgl: [webglData.vendor, webglData.renderer], seeds };
 }
 
 export async function loadPinnedFingerprint(profileId: string): Promise<PinnedFingerprint> {
@@ -85,6 +98,7 @@ export async function loadPinnedFingerprint(profileId: string): Promise<PinnedFi
   }
   return {
     os: camoufoxOsFor(row.os),
+    mobile: row.os === ANDROID_OS,
     fingerprint: JSON.parse(row.fingerprintJson) as Fingerprint,
     webgl: [row.webglVendor, row.webglRenderer],
     seeds: JSON.parse(row.seedsJson) as Record<string, number>,

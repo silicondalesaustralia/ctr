@@ -1,4 +1,5 @@
 import { DeviceClass, ProfileProvider, type Identity } from "@prisma/client";
+import { getEnv } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -22,9 +23,11 @@ export interface CreateIdentitiesOptions extends IdentityLocationOptions {
   desktopPercent?: number;
 }
 
-/** Camoufox is desktop Firefox only — mobile identities cannot be created under it. */
+/** Camoufox mobile identities (Firefox for Android) only run with a mobile proxy pool configured. */
 function effectiveDesktopPercent(desktopPercent: number): number {
-  return activeProfileProvider() === ProfileProvider.camoufox ? 100 : desktopPercent;
+  const camoufoxDesktopOnly =
+    activeProfileProvider() === ProfileProvider.camoufox && !getEnv().MOBILE_PROXY_PROVIDER;
+  return camoufoxDesktopOnly ? 100 : desktopPercent;
 }
 
 /** Numbers are global across countries, so au_005 and gb_005 never both exist. */

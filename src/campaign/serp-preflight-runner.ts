@@ -14,7 +14,7 @@ import { RESULT_TITLE_SELECTOR } from "../browser/serp-pagination.js";
 import { registerGoogleBlock } from "../identities/block-policy.js";
 import { startBrowserWithLeaseRetry } from "../sessions/start-browser-with-lease.js";
 import { verifyBrowserEgressGeo } from "../browser/egress-geo.js";
-import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
+import { egressCityFor } from "../sessions/clean-lease.js";
 import { getEnv, isDryRun } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
@@ -317,7 +317,7 @@ export async function runSerpPreflightChecks(input: {
           throw new Error("Browser provider did not return a usable browser");
         }
         if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
-          const expectedCity = shouldSkipCityTargeting(identity.city) ? undefined : identity.city;
+          const expectedCity = egressCityFor(identity.city, identity.deviceClass);
           await verifyBrowserEgressGeo(openedPage, identity.country, expectedCity);
         }
         return openedPage;

@@ -14,11 +14,12 @@ import type {
   StartProfileOptions,
 } from "./BrowserProfileProvider.js";
 import {
-  camoufoxOsFor,
   createPinnedFingerprint,
   loadPinnedFingerprint,
+  supportedConfig,
   supportedSeeds,
 } from "./camoufox-fingerprint.js";
+import { ANDROID_OS, firefoxAndroidOverrides } from "./camoufox-mobile.js";
 import { buildCamoufoxGeo } from "./camoufox-geo.js";
 import { DISK_CACHE_PREFS, pruneProfileCaches } from "./profile-disk.js";
 import { applyGoogleGeoHeader, cityGeoPoint } from "../../browser/google-geo-header.js";
@@ -35,11 +36,8 @@ function profileDir(profileId: string): string {
  */
 export class CamoufoxProvider implements BrowserProfileProvider {
   async createProfile(input: CreateProfileInput): Promise<BrowserProfile> {
-    if (input.deviceClass !== "desktop") {
-      throw new Error("Camoufox supports desktop identities only");
-    }
     const profileId = randomUUID();
-    await createPinnedFingerprint(profileId, camoufoxOsFor(input.osFamily));
+    await createPinnedFingerprint(profileId, input.deviceClass === "mobile" ? ANDROID_OS : input.osFamily);
     await mkdir(profileDir(profileId), { recursive: true });
     return {
       profileId,
@@ -67,8 +65,10 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       ? (options.googleGeoPoint ?? options.geoPoint ?? cityGeoPoint(proxy?.city, profileId, proxy?.country))
       : undefined;
 
+    const mobile = pinned.mobile ? firefoxAndroidOverrides(profileId) : undefined;
+
     console.error(
-      `[camoufox] Starting ${profileId} os=${pinned.os} egress=${geo.egressIp}` +
+      `[camoufox] Starting ${profileId} os=${pinned.os}${mobile ? " device=android" : ""} egress=${geo.egressIp}` +
         ` tz=${String(geo.config.timezone ?? "?")}${options.geoPoint ? " gps=campaign" : ""}` +
         (googleGeo ? ` xgeo=${googleGeo.latitude.toFixed(3)},${googleGeo.longitude.toFixed(3)}` : " xgeo=off"),
     );
@@ -79,8 +79,9 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       os: pinned.os,
       fingerprint: pinned.fingerprint,
       webgl_config: pinned.webgl,
-      config: { ...supportedSeeds(pinned.seeds), ...geo.config },
-      firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs },
+      config: { ...supportedSeeds(pinned.seeds), ...geo.config, ...supportedConfig(mobile?.config ?? {}) },
+      firefox_user_prefs: { ...DISK_CACHE_PREFS, ...geo.firefoxPrefs, ...mobile?.firefox_user_prefs },
+      ...(mobile && { window: mobile.window }),
       locale: proxy?.locale ?? "en-AU",
       humanize: true,
       i_know_what_im_doing: true,
@@ -130,7 +131,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
       profileId,
       provider: ProfileProvider.camoufox,
       name: identity?.externalId ?? profileId,
-      deviceClass: "desktop",
+      deviceClass: row.os === ANDROID_OS ? "mobile" : "desktop",
       osFamily: row.os,
       locale: identity?.locale ?? "en-AU",
       timezone: identity?.timezone ?? "Australia/Adelaide",

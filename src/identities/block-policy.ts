@@ -17,13 +17,12 @@ export async function registerGoogleBlock(
   identityId: string,
   egressIp: string | undefined,
 ): Promise<BlockOutcome> {
-  await recordBlockedEgress(egressIp);
-
   const updated = await prisma.identity.update({
     where: { id: identityId },
     data: { consecutiveBlocks: { increment: 1 } },
-    select: { consecutiveBlocks: true, externalId: true },
+    select: { consecutiveBlocks: true, externalId: true, deviceClass: true },
   });
+  await recordBlockedEgress(egressIp, updated.deviceClass === "mobile");
 
   const parked = updated.consecutiveBlocks >= MAX_CONSECUTIVE_BLOCKS;
   if (parked) {

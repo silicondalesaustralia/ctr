@@ -27,14 +27,15 @@ GoLogin seats are no longer needed (legacy GoLogin identities are skipped under 
 | Fingerprint | Pinned per identity in `browser_fingerprints` (device, WebGL, canvas/audio/font seeds) |
 | Profile (cookies) | Persistent dir on Railway volume `worker-volume` → `CAMOUFOX_PROFILE_DIR=/data/camoufox` |
 | Display | Headful via Xvfb (`GOLOGIN_HEADLESS=false`, reused flag) |
-| Proxy | Premium Ports sticky AU residential, new lease per session |
-| Devices | Desktop only (Camoufox is desktop Firefox) |
+| Proxy | Desktop: Premium Ports sticky AU residential. Mobile: `MOBILE_PROXY_PROVIDER` (SOAX carrier IPs, country-wide). New lease per session |
+| Devices | Desktop + mobile. Mobile = Camoufox (linux) spoofed as Firefox for Android: UA (JS + header), phone screen, touch; pinned per identity (`browser_fingerprints.os = android`). Without `MOBILE_PROXY_PROVIDER`, new identities are desktop only |
 | Queue | BullMQ `session-jobs` + `warmup-jobs`, concurrency 1 |
 
 ## Railway env
 
 Worker: `BROWSER_PROFILE_PROVIDER=camoufox`, `CAMOUFOX_PROFILE_DIR=/data/camoufox`,
 `GOLOGIN_HEADLESS=false`, `PROXY_PROVIDER=premiumports`, `PREMIUMPORTS_*`,
+`MOBILE_PROXY_PROVIDER=soax`, `SOAX_PACKAGE_KEY`, `SOAX_NETWORK=mob`,
 `WARMUP_MIN_DAYS=2`, `WARMUP_BENIGN_SITE_CLICKS=1`, `WARMUP_SPREAD_DAYS=2`,
 `WARMUP_WINDOW_HOURS=48`, `WARMUP_FIRST_DELAY_HOURS=12`.
 
@@ -52,6 +53,8 @@ The API service deploys via `railway up --service ctr`; the worker deploys from 
    every city). Rejected leases record their /24 and a fresh lease is drawn, up to 8. If all 8 fail
    the work is deferred 30 min (`proxy_pool_exhausted`, session status `cancelled`) instead of
    counting as a failure. Preflight checks use the same gate (`allocateCleanLease`).
+   Mobile leases: country only (no metro check), Google blocks keyed by exact IP (carrier /24s are
+   CGNAT shared by many phones), and rejected mobile IPs are not written to `bad_geo_ip_prefixes`.
 2. Launch Camoufox with the identity's pinned fingerprint and profile dir; timezone/locale/WebRTC
    from the egress IP; optional campaign GPS point (see below)
 3. In-browser egress gate repeats the country/city and /24 checks as a second line

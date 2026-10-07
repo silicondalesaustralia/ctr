@@ -6,7 +6,7 @@ import type { GeoPoint, RunningBrowser } from "../providers/browser/BrowserProfi
 import { createBrowserProvider } from "../providers/browser/index.js";
 import { assertEgressPrefixClean } from "../providers/proxy/ip-reputation.js";
 import { createProxyProvider } from "../providers/proxy/index.js";
-import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
+import { egressCityFor } from "../sessions/clean-lease.js";
 import {
   cleanupBrowserSession,
   clearSessionCleanup,
@@ -69,9 +69,9 @@ export async function withSnapshotBrowser<T>(
         if (!running.context) throw new Error("Rank snapshots require a Camoufox browser context");
         const page = running.context.pages()[0] ?? (await running.context.newPage());
         if (isDryRun() || env.PROXY_PROVIDER === "mock") return { page, egress: undefined };
-        const expectedCity = shouldSkipCityTargeting(identity.city) ? undefined : identity.city;
+        const expectedCity = egressCityFor(identity.city, identity.deviceClass);
         const egress = await verifyBrowserEgressGeo(page, identity.country, expectedCity);
-        await assertEgressPrefixClean(egress.ip);
+        await assertEgressPrefixClean(egress.ip, identity.deviceClass === "mobile");
         return { page, egress };
       },
       discard: async (running) => {

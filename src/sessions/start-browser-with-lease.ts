@@ -39,7 +39,7 @@ export interface StartWithLeaseInput<T> {
 export async function startBrowserWithLeaseRetry<T>(
   input: StartWithLeaseInput<T>,
 ): Promise<{ lease: ProxyLease; running: RunningBrowser; prepared: T }> {
-  const { expectedCity, checkLeases } = leaseTarget(input.allocation.city);
+  const { expectedCity, checkLeases } = leaseTarget(input.allocation.city, input.allocation.deviceClass);
   for (let attempt = 1; ; attempt += 1) {
     const sessionKey =
       attempt === 1 ? input.allocation.sessionKey : `${input.allocation.sessionKey}r${attempt}`;
@@ -69,7 +69,7 @@ export async function startBrowserWithLeaseRetry<T>(
       return { lease, running, prepared };
     } catch (error) {
       if (!isBadLeaseError(error)) throw error;
-      await rejectLease(error, attempt, expectedCity);
+      await rejectLease(error, attempt, expectedCity, lease);
       await releaseRejected(input, lease, running);
       if (attempt >= MAX_LEASE_ATTEMPTS) {
         throw new ProxyPoolExhaustedError(expectedCity ?? input.allocation.country, errorMessage(error));

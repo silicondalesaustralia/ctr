@@ -18,11 +18,11 @@ import { parseActionsJson } from "../campaign/gmb-types.js";
 import { runDirectFlow } from "../browser/google-search.js";
 import { googleTargetFor } from "../geo/google-target.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
-import { createProxyProvider } from "../providers/proxy/index.js";
+import { createProxyProvider, proxyProviderNameFor } from "../providers/proxy/index.js";
 import { campaignGeoPoint } from "../providers/browser/camoufox-geo.js";
 import { startBrowserWithLeaseRetry } from "./start-browser-with-lease.js";
 import { saveSessionSnapshot } from "./save-session-snapshot.js";
-import { shouldSkipCityTargeting } from "../providers/proxy/premiumports-utils.js";
+import { egressCityFor } from "./clean-lease.js";
 import { hashValue, sleep } from "../utils/helpers.js";
 import {
   appendSessionEvent,
@@ -93,7 +93,7 @@ function proxyFields(
   egress?: EgressGeo,
 ) {
   return {
-    proxyProvider: env.PROXY_PROVIDER,
+    proxyProvider: proxyProviderNameFor(identity.deviceClass),
     proxyCountry: egress?.country ?? identity.country,
     proxyRegion: egress?.region ?? identity.region,
     proxyCity: egress?.city ?? identity.city,
@@ -243,11 +243,9 @@ export async function runSession(input: RunSessionInput): Promise<RunSessionResu
         }
         let verified: EgressGeo | undefined;
         if (!isDryRun() && env.PROXY_PROVIDER !== "mock") {
-          const expectedCity = shouldSkipCityTargeting(input.identity.city)
-            ? undefined
-            : input.identity.city;
+          const expectedCity = egressCityFor(input.identity.city, input.identity.deviceClass);
           verified = await verifyBrowserEgressGeo(openedPage, input.identity.country, expectedCity);
-          await assertEgressPrefixClean(verified.ip);
+          await assertEgressPrefixClean(verified.ip, input.identity.deviceClass === "mobile");
         }
         return { page: openedPage, egress: verified };
       },
