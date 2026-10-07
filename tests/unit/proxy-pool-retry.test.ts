@@ -24,4 +24,8 @@ describe("proxy pool exhausted retry policy", () => {
   it("still classifies a single bad lease as a proxy error", () => {
     expect(classifyBrowserErrorCode("Proxy egress geo mismatch: expected AU, got PH/Naic ip=1.2.3.4")).toBe("proxy_error");
   });
+
+  it("treats a browse warmup that loaded no sites as a proxy error", () => {
+    expect(classifyBrowserErrorCode("No warmup sites loaded through the proxy")).toBe("proxy_error");
+  });
 });

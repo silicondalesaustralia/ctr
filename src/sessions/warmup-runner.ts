@@ -297,6 +297,9 @@ export async function runWarmupSession(
         phase: "cookie_age_browse",
         sites,
       });
+      if (sites.length === 0) {
+        throw new Error("No warmup sites loaded through the proxy");
+      }
       await completeSession(session.id, {
         status: "completed",
         googleLoaded: false,

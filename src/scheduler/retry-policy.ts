@@ -46,6 +46,7 @@ export function isProxyTunnelError(message: string): boolean {
     /tunnel connection failed/i.test(message) ||
     /Proxy egress geo lookup failed/i.test(message) ||
     /Failed to get a public proxy IP/i.test(message) ||
+    /No warmup sites loaded/i.test(message) ||
     /^fetch failed$/i.test(message.trim()) ||
     /ECONNRESET|ETIMEDOUT|ENOTFOUND|socket hang up/i.test(message)
   );
