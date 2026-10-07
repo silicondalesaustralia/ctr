@@ -1,5 +1,5 @@
 import type { Page } from "./pw.js";
-import { randomBetween } from "../utils/helpers.js";
+import { classifyGoogleSerpHref, randomBetween } from "../utils/helpers.js";
 import {
   clickSerpResult,
   collectSerpLinkCandidates,
@@ -7,9 +7,16 @@ import {
   type SerpResult,
 } from "./serp-parser.js";
 
+/** Excludes Google's own links ("Learn more", "Search tools") that pass the organic heuristics. */
+export function leadsOffGoogle(href: string): boolean {
+  return classifyGoogleSerpHref(href) !== "other_google";
+}
+
 export async function pickRandomOrganicResult(page: Page): Promise<SerpResult | null> {
   const candidates = await collectSerpLinkCandidates(page);
-  const organic = candidates.filter((candidate) => isOrganicCandidate(candidate));
+  const organic = candidates.filter(
+    (candidate) => isOrganicCandidate(candidate) && leadsOffGoogle(candidate.href),
+  );
 
   if (organic.length === 0) {
     const sample = candidates

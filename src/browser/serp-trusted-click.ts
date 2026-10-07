@@ -1,7 +1,9 @@
 import type { ElementHandle, Page } from "./pw.js";
 import { randomBetween } from "../utils/helpers.js";
 
-export const SERP_ANCHOR_SELECTOR = "#center_col a[href], #search a[href], #rso a[href], div.MjjYud a[href]";
+/** `#main` covers the Firefox-for-Android SERP, which has no #rso / #search / #center_col. */
+export const SERP_ANCHOR_SELECTOR =
+  "#center_col a[href], #search a[href], #rso a[href], div.MjjYud a[href], #main a[href]";
 
 interface HitCheck {
   hit: boolean;
