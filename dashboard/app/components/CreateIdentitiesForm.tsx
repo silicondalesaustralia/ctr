@@ -29,6 +29,8 @@ interface CreateIdentitiesFormProps {
 
 export default function CreateIdentitiesForm({ busy, countries, onCreate }: CreateIdentitiesFormProps) {
   const [count, setCount] = useState(5);
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const desktopPercent = device === "desktop" ? 100 : 0;
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [city, setCity] = useState("");
   const [custom, setCustom] = useState<CustomLocation>({ country: "", city: "", timezone: "" });
@@ -41,6 +43,7 @@ export default function CreateIdentitiesForm({ busy, countries, onCreate }: Crea
     if (isCustom) {
       onCreate({
         count,
+        desktopPercent,
         custom: {
           country: custom.country.trim(),
           city: custom.city.trim(),
@@ -51,7 +54,7 @@ export default function CreateIdentitiesForm({ busy, countries, onCreate }: Crea
       });
       return;
     }
-    onCreate({ count, country, city: city || undefined });
+    onCreate({ count, desktopPercent, country, city: city || undefined });
   }
 
   return (
@@ -65,6 +68,15 @@ export default function CreateIdentitiesForm({ busy, countries, onCreate }: Crea
         aria-label="Number of identities"
         style={{ ...fieldStyle, width: 72 }}
       />
+      <select
+        value={device}
+        onChange={(event) => setDevice(event.target.value === "mobile" ? "mobile" : "desktop")}
+        aria-label="Identity device"
+        style={fieldStyle}
+      >
+        <option value="desktop">Desktop</option>
+        <option value="mobile">Mobile</option>
+      </select>
       <CountrySelect
         countries={countries}
         value={country}

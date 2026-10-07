@@ -89,8 +89,9 @@ URL → the SERP page the site is on (page 1 if not found).
 
 ## Warm pool (Identities page)
 
-Per-city target of Camoufox identities (warming + warm). Worker tops up hourly (max 3 new per
-tick) and gives warm identities idle ≥ 7 days a browse session. Light warmup: 2 browse sessions,
+Per-city desktop and mobile targets of Camoufox identities (warming + warm); mobile targets need
+`MOBILE_PROXY_PROVIDER`. The "Create identities" form also picks Desktop or Mobile. Worker tops up
+hourly (max 3 new per tick) and gives warm identities idle ≥ 7 days a browse session. Light warmup: 2 browse sessions,
 1 benign click, graduation, eligible after ~2 days.
 
 ---

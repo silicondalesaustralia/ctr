@@ -89,7 +89,7 @@ function IdentitiesPage() {
       await apiPost("/identities/create", request);
       const count = request.count;
       setMessage(
-        `Created ${count} ${describeLocation(request, countries)} identit${count === 1 ? "y" : "ies"} — warmup sessions scheduled automatically`,
+        `Created ${count} ${request.desktopPercent === 0 ? "mobile" : "desktop"} ${describeLocation(request, countries)} identit${count === 1 ? "y" : "ies"} — warmup sessions scheduled automatically`,
       );
       await load();
     } catch (err) {

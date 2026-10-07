@@ -10,6 +10,11 @@ export function activeProfileProvider(): ProfileProvider {
   return ProfileProvider.mock;
 }
 
+/** Camoufox mobile identities (Firefox for Android) need a mobile proxy pool to run on. */
+export function mobileIdentitiesAvailable(): boolean {
+  return activeProfileProvider() !== ProfileProvider.camoufox || Boolean(getEnv().MOBILE_PROXY_PROVIDER);
+}
+
 /**
  * Under Camoufox only Camoufox identities can launch (legacy GoLogin profiles have no
  * pinned fingerprint). Other modes keep their historical behaviour.

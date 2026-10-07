@@ -2,9 +2,9 @@ import { ProfileProvider } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { logger } from "../config/logger.js";
 import { createAdditionalIdentities } from "../identities/identity-service.js";
-import { activeProfileProvider } from "../identities/provider-compat.js";
+import { activeProfileProvider, mobileIdentitiesAvailable } from "../identities/provider-compat.js";
 import { addMinutes, randomBetween } from "../utils/helpers.js";
-import { countPoolIdentities, getWarmPoolTargets, parseWarmPoolKey } from "./warm-pool-settings.js";
+import { countPoolIdentities, getWarmPoolTargets, parseWarmPoolKey, POOL_DEVICES } from "./warm-pool-settings.js";
 import { campaignIdentityLocation } from "../campaign/geo-capacity.js";
 
 /** Cap identity creation per tick so a big target ramps up gradually. */
@@ -12,30 +12,35 @@ const MAX_CREATED_PER_TICK = 3;
 /** Warm identities idle this long get a browse session to keep cookies fresh. */
 const MAINTENANCE_IDLE_DAYS = 7;
 
-/** Creates Camoufox identities (desktop, warming) for cities below their target. */
+/** Creates Camoufox identities (warming) for city/device pools below their target. */
 export async function topUpWarmPools(): Promise<number> {
   if (activeProfileProvider() !== ProfileProvider.camoufox) return 0;
   const targets = await getWarmPoolTargets();
+  const devices = POOL_DEVICES.filter((device) => device === "desktop" || mobileIdentitiesAvailable());
   let budget = MAX_CREATED_PER_TICK;
 
   for (const [key, target] of Object.entries(targets)) {
-    if (budget <= 0) break;
     const { country, city } = parseWarmPoolKey(key);
-    const { warming, eligible } = await countPoolIdentities(city, country);
-    const deficit = target - warming - eligible;
-    if (deficit <= 0) continue;
+    for (const device of devices) {
+      if (budget <= 0) break;
+      const { warming, eligible } = await countPoolIdentities(city, country, device);
+      const deficit = target[device] - warming - eligible;
+      if (deficit <= 0) continue;
 
-    const count = Math.min(deficit, budget);
-    const location = await campaignIdentityLocation(country, city);
-    const result = await createAdditionalIdentities({ count, desktopPercent: 100, ...location });
-    budget -= result.created.length;
-    logger.info({
-      event: "warm_pool_topped_up",
-      country,
-      city,
-      created: result.created.length,
-      range: `${result.fromExternalId}..${result.toExternalId}`,
-    });
+      const count = Math.min(deficit, budget);
+      const location = await campaignIdentityLocation(country, city);
+      const desktopPercent = device === "desktop" ? 100 : 0;
+      const result = await createAdditionalIdentities({ count, desktopPercent, ...location });
+      budget -= result.created.length;
+      logger.info({
+        event: "warm_pool_topped_up",
+        country,
+        city,
+        device,
+        created: result.created.length,
+        range: `${result.fromExternalId}..${result.toExternalId}`,
+      });
+    }
   }
   return MAX_CREATED_PER_TICK - budget;
 }

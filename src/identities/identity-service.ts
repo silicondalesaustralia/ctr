@@ -1,9 +1,8 @@
 import { DeviceClass, ProfileProvider, type Identity } from "@prisma/client";
-import { getEnv } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { assignPersona } from "../behaviour/personas.js";
 import { createBrowserProvider, getMockBrowserProvider } from "../providers/browser/index.js";
-import { activeProfileProvider } from "./provider-compat.js";
+import { activeProfileProvider, mobileIdentitiesAvailable } from "./provider-compat.js";
 import { findRegionConfigByCode, isRegionCoherent } from "./regions.js";
 import { isWarmupEligible, scheduleWarmupForIdentity } from "../warmup/warmup-service.js";
 import { DEFAULT_COUNTRY, resolveIdentityLocation } from "../geo/locations.js";
@@ -23,11 +22,9 @@ export interface CreateIdentitiesOptions extends IdentityLocationOptions {
   desktopPercent?: number;
 }
 
-/** Camoufox mobile identities (Firefox for Android) only run with a mobile proxy pool configured. */
+/** Without a mobile proxy pool, Camoufox batches fall back to all desktop. */
 function effectiveDesktopPercent(desktopPercent: number): number {
-  const camoufoxDesktopOnly =
-    activeProfileProvider() === ProfileProvider.camoufox && !getEnv().MOBILE_PROXY_PROVIDER;
-  return camoufoxDesktopOnly ? 100 : desktopPercent;
+  return mobileIdentitiesAvailable() ? desktopPercent : 100;
 }
 
 /** Numbers are global across countries, so au_005 and gb_005 never both exist. */
@@ -244,6 +241,9 @@ export async function createAdditionalIdentities(
   }
   if (count > 50) {
     throw new Error("Cannot create more than 50 identities at once");
+  }
+  if (desktopPercent === 0 && !mobileIdentitiesAvailable()) {
+    throw new Error("Mobile identities need a mobile proxy pool (set MOBILE_PROXY_PROVIDER)");
   }
 
   const maxIndex = await getMaxExternalIdNumber();

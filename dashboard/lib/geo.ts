@@ -29,6 +29,8 @@ export interface CustomLocation {
 
 export interface CreateIdentitiesRequest {
   count: number;
+  /** 100 = all desktop, 0 = all mobile. */
+  desktopPercent: number;
   country?: string;
   city?: string;
   custom?: CustomLocation;
