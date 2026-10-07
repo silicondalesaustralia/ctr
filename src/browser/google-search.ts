@@ -60,16 +60,17 @@ export async function typeAndSubmitQuery(
   const prePause = effectivePauseMs(persona.preTypePauseMs, traits);
   await sleep(randomBetween(prePause[0], prePause[1]));
 
-  await searchBox.fill("");
+  await searchBox.fill("", { timeout: 15_000 });
 
   const typingDelay = effectiveTypingDelayMs(persona, traits);
   const perKeyDelay = randomBetween(typingDelay[0], typingDelay[1]);
-  await page.keyboard.type(query, { delay: perKeyDelay });
+  // Locator input has a timeout; page.keyboard waits forever when Camoufox stops acking input.
+  await searchBox.pressSequentially(query, { delay: perKeyDelay, timeout: 30_000 + query.length * perKeyDelay });
 
   const postPause = effectivePauseMs(persona.postTypePauseMs, traits);
   await sleep(randomBetween(postPause[0], postPause[1]));
 
-  await page.keyboard.press("Enter");
+  await searchBox.press("Enter", { timeout: 15_000 });
   // Enter often triggers redirects (including lite `gbv=2`). Wait for /search and settle
   // before any follow-up goto — racing that causes net::ERR_ABORTED.
   await Promise.race([
