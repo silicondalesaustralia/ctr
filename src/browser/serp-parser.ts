@@ -303,7 +303,11 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
   // real mouse so the event is trusted and Camoufox's humanized cursor moves to it.
   const pick = await page.evaluateHandle(
     ({ title, href, selector }): HTMLElement | null => {
-      const organicAnchors = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+      // Whole-page anchors last, matching collectSerpLinkCandidates' fallback scan.
+      const scoped = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+      const scopedSet = new Set(scoped);
+      const rest = (Array.from(document.querySelectorAll("a[href]")) as HTMLElement[]).filter((el) => !scopedSet.has(el));
+      const organicAnchors = [...scoped, ...rest];
 
       const needle = title.toLowerCase().slice(0, 24);
       if (needle.length >= 4) {
