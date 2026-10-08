@@ -14,6 +14,7 @@ import {
 import { matchCandidate, type LocalPackResult, type LocalPackTarget } from "./local-pack-match.js";
 import { trustedClickPicked } from "./serp-trusted-click.js";
 import { goToNextSerpPage } from "./serp-pagination.js";
+import { findGmbOnMobile, isMobilePage } from "./mobile-local.js";
 
 export type { LocalPackCandidate };
 export type { LocalPackResult, LocalPackSource } from "./local-pack-match.js";
@@ -58,6 +59,7 @@ export async function findGmbInLocalPack(
     allowBrandedFallback?: boolean;
   },
 ): Promise<LocalPackResult | null> {
+  if (await isMobilePage(page)) return findGmbOnMobile(page, input);
   await waitForLocalCandidates(page);
 
   let candidates = await collectLocalPackCandidates(page);
@@ -139,6 +141,7 @@ export async function findGmbInLocalPack(
 }
 
 export async function clickLocalPackResult(page: Page, result: LocalPackResult): Promise<void> {
+  if (result.href && result.href === page.url()) return;
   const handle = await page.evaluateHandle(
     ({ title, href, cardSelectors }): HTMLElement | null => {
       const needle = title.toLowerCase().slice(0, 24);
@@ -147,9 +150,10 @@ export async function clickLocalPackResult(page: Page, result: LocalPackResult):
       for (const card of cards) {
         const text = (card.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
         if (!text.includes(needle)) continue;
+        // Mobile Maps cards use button.hfpxzc; their first a[href] is the tel: Call link.
         const anchor = card.querySelector(
-          "a.hfpxzc, a[href*='/maps/place'], a[href*='/maps'], a[href]",
-        ) as HTMLAnchorElement | null;
+          ".hfpxzc, a[href*='/maps/place'], a[href*='/maps'], a[href]",
+        ) as HTMLElement | null;
         const target = anchor ?? card;
         target.scrollIntoView({ block: "center", inline: "nearest" });
         return target;

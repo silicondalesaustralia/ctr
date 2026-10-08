@@ -34,7 +34,8 @@ async function clickByLabels(
     const panel =
       panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().includes(target)) ??
       panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().startsWith(target.slice(0, 12))) ??
-      null;
+      // The phone SERP's /searchviewer/ profile shows one business with no named panel.
+      (location.pathname.startsWith("/searchviewer/") ? document.body : null);
     if (!panel) return null;
 
     const preciseHit = Array.from(panel.querySelectorAll(preciseSelector)).find(
@@ -47,7 +48,7 @@ async function clickByLabels(
 
     const candidates = (
       Array.from(
-        panel.querySelectorAll("a, button, [role='button'], [data-value], [aria-label]"),
+        panel.querySelectorAll("a, button, [role='button'], [role='link'], [data-value], [aria-label]"),
       ) as HTMLElement[]
     ).filter((el) => !el.closest("[role='feed'], [role='article']"));
 
@@ -87,7 +88,6 @@ export interface GmbActionOutcome {
   /** Page showing the business website (Maps opens it in a new tab). */
   sitePage: Page | null;
 }
-
 const isGoogleUrl = (url: string): boolean => /^https?:\/\/([^/]+\.)?google\.[^/]+\//i.test(url);
 
 export async function performGmbAction(
