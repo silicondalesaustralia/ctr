@@ -12,13 +12,28 @@ export function leadsOffGoogle(href: string): boolean {
   return classifyGoogleSerpHref(href) !== "other_google";
 }
 
-export async function pickRandomOrganicResult(page: Page): Promise<SerpResult | null> {
-  const candidates = await collectSerpLinkCandidates(page);
-  const organic = candidates.filter(
-    (candidate) => isOrganicCandidate(candidate) && leadsOffGoogle(candidate.href),
-  );
+const MAX_CLICK_PICKS = 3;
 
-  if (organic.length === 0) {
+/** Organic results in random order (some may be hidden, e.g. collapsed mobile carousels). */
+async function shuffledOrganicResults(page: Page): Promise<SerpResult[]> {
+  const candidates = await collectSerpLinkCandidates(page);
+  const results: SerpResult[] = [];
+  let position = 0;
+  for (const candidate of candidates) {
+    if (!isOrganicCandidate(candidate)) continue;
+    position += 1;
+    if (!leadsOffGoogle(candidate.href)) continue;
+    results.push({
+      position,
+      rank: position,
+      title: candidate.title,
+      url: candidate.href,
+      displayedUrl: candidate.displayedUrl,
+      serpPage: 1,
+    });
+  }
+
+  if (results.length === 0) {
     const sample = candidates
       .slice(0, 6)
       .map((c) => `${c.href.slice(0, 60)} «${c.title.slice(0, 30)}» cite=${c.displayedUrl.slice(0, 30)}`)
@@ -26,35 +41,33 @@ export async function pickRandomOrganicResult(page: Page): Promise<SerpResult | 
     console.error(
       `[serp] no organic candidates url=${page.url().slice(0, 120)} total=${candidates.length} ${sample}`,
     );
-    return null;
   }
 
-  const pick = organic[randomBetween(0, organic.length - 1)]!;
-  let position = 0;
-  for (const candidate of candidates) {
-    if (!isOrganicCandidate(candidate)) continue;
-    position += 1;
-    if (candidate.href === pick.href && candidate.title === pick.title) {
-      break;
-    }
+  for (let i = results.length - 1; i > 0; i -= 1) {
+    const j = randomBetween(0, i);
+    [results[i], results[j]] = [results[j]!, results[i]!];
   }
-
-  return {
-    position,
-    rank: position,
-    title: pick.title,
-    url: pick.href,
-    displayedUrl: pick.displayedUrl,
-    serpPage: 1,
-  };
+  return results;
 }
 
 export async function clickRandomOrganicResult(page: Page): Promise<SerpResult | null> {
-  const result = await pickRandomOrganicResult(page);
-  if (!result) {
+  const results = await shuffledOrganicResults(page);
+  if (results.length === 0) {
     return null;
   }
 
-  await clickSerpResult(page, result);
-  return result;
+  let lastError: unknown;
+  for (const result of results.slice(0, MAX_CLICK_PICKS)) {
+    try {
+      await clickSerpResult(page, result);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Only an unfound link is retryable; once clicked, the page may have moved on.
+      if (!message.startsWith("Could not click SERP result")) throw error;
+      console.error(`[serp] ${message}; trying another result`);
+      lastError = error;
+    }
+  }
+  throw lastError;
 }

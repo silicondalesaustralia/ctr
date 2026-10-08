@@ -313,7 +313,8 @@ export async function clickSerpResult(page: Page, result: SerpResult): Promise<v
       if (needle.length >= 4) {
         for (const el of organicAnchors) {
           const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-          if (!text.includes(needle)) {
+          // Titles come from the anchor's own text; "includes" also matched AI Overview blocks quoting them.
+          if (!text.startsWith(needle)) {
             continue;
           }
           if ((el.textContent ?? "").trim().length < 4) {
