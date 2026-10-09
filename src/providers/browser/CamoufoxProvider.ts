@@ -23,9 +23,9 @@ import { ANDROID_OS, firefoxAndroidOverrides } from "./camoufox-mobile.js";
 import { buildCamoufoxGeo } from "./camoufox-geo.js";
 import { DISK_CACHE_PREFS, pruneProfileCaches } from "./profile-disk.js";
 import { applyGoogleGeoHeader, cityGeoPoint } from "../../browser/google-geo-header.js";
+import { closeCamoufoxContext } from "./orphan-browsers.js";
 
 const GOOGLE_ORIGINS = ["https://www.google.com.au", "https://www.google.com"];
-
 function profileDir(profileId: string): string {
   return resolve(join(getEnv().CAMOUFOX_PROFILE_DIR, profileId));
 }
@@ -110,10 +110,7 @@ export class CamoufoxProvider implements BrowserProfileProvider {
 
   async stopProfile(profileId: string, running?: RunningBrowser): Promise<void> {
     if (!running?.context) return;
-    await running.context.close().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[camoufox] Close failed for ${profileId}: ${message}`);
-    });
+    await closeCamoufoxContext(running.context, profileId);
     await pruneProfileCaches(profileId).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[camoufox] Cache prune failed for ${profileId}: ${message}`);

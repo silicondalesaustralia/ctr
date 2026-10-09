@@ -5,10 +5,11 @@ import { BLOCK_RETRY_DELAY_MINUTES, registerGoogleBlock, registerGoogleClean } f
 import { pickSnapshotIdentity } from "../rank-snapshots/snapshot-identity.js";
 import { withSnapshotBrowser } from "../rank-snapshots/snapshot-browser.js";
 import { PROXY_POOL_DEFER_MINUTES } from "../scheduler/retry-policy.js";
-import { ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
+import { errorMessage, ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
 import { addMinutes, randomBetween, sleep } from "../utils/helpers.js";
+import { DeadlineExceededError, withDeadline } from "../utils/deadline.js";
 import { queueMobilePass, runMobilePass } from "./grid-mobile-pass.js";
-import { captureGridPoint } from "./grid-point-capture.js";
+import { captureGridPoint, GRID_POINT_DEADLINE_MS } from "./grid-point-capture.js";
 import { isCentreCell } from "./grid-points.js";
 import { finaliseGridScan } from "./grid-summary.js";
 
@@ -17,10 +18,6 @@ const MAX_SCAN_ATTEMPTS = 4;
 /** A browser that fails this many points in a row is stuck; resume in a fresh one. */
 const MAX_CONSECUTIVE_POINT_ERRORS = 2;
 const POINT_ERROR_RETRY_MINUTES = 3;
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Search every unfinished point in one browser session; stops at the first Google block. */
 async function capturePoints(
@@ -35,7 +32,11 @@ async function capturePoints(
     for (const [index, point] of points.entries()) {
       const isCentre = isCentreCell(point, scan.gridSize);
       try {
-        const capture = await captureGridPoint(page, experiment, scan.query, point, isCentre);
+        const capture = await withDeadline(
+          captureGridPoint(page, experiment, scan.query, point, isCentre),
+          GRID_POINT_DEADLINE_MS,
+          "Grid point",
+        );
         if (capture.outcome === "blocked") {
           await registerGoogleBlock(identity.id, egress?.ip);
           await prisma.geoGridScan.update({
@@ -69,7 +70,7 @@ async function capturePoints(
           data: { errorMessage: errorMessage(error) },
         });
         consecutiveErrors += 1;
-        if (consecutiveErrors >= MAX_CONSECUTIVE_POINT_ERRORS) return "stuck";
+        if (error instanceof DeadlineExceededError || consecutiveErrors >= MAX_CONSECUTIVE_POINT_ERRORS) return "stuck";
       }
       if (index < points.length - 1) await sleep(randomBetween(6_000, 15_000));
     }

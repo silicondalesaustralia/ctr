@@ -14,6 +14,11 @@ import { pickSnapshotIdentity } from "../rank-snapshots/snapshot-identity.js";
 import { PROXY_POOL_DEFER_MINUTES } from "../scheduler/retry-policy.js";
 import { ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
 import { addMinutes, randomBetween, sleep } from "../utils/helpers.js";
+import { DeadlineExceededError, withDeadline } from "../utils/deadline.js";
+import type { LocalPackCandidate } from "../browser/local-pack-collect.js";
+import type { Page } from "../browser/pw.js";
+import type { GeoPoint } from "../providers/browser/BrowserProfileProvider.js";
+import { GRID_POINT_DEADLINE_MS } from "./grid-point-capture.js";
 import { finaliseGridScan } from "./grid-summary.js";
 
 const MAX_MOBILE_ATTEMPTS = 3;
@@ -22,6 +27,14 @@ const POINT_ERROR_RETRY_MINUTES = 3;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function readPhonePack(page: Page, query: string, experiment: Experiment, point: GeoPoint): Promise<LocalPackCandidate[]> {
+  await setSearchLocation(page.context(), point);
+  const blockReason = await searchQuery(page, query, googleTargetFor(experiment.country));
+  if (blockReason) throw new GoogleBlockedError(blockReason);
+  await page.waitForTimeout(1500);
+  return (await collectMobilePackCandidates(page)).slice(0, 3);
 }
 
 /** Phone search from each point: is the target in the results page's 3-pack? */
@@ -38,11 +51,7 @@ async function checkPoints(
     let consecutiveErrors = 0;
     for (const [index, point] of points.entries()) {
       try {
-        await setSearchLocation(page.context(), point);
-        const blockReason = await searchQuery(page, scan.query, googleTargetFor(experiment.country));
-        if (blockReason) throw new GoogleBlockedError(blockReason);
-        await page.waitForTimeout(1500);
-        const pack = (await collectMobilePackCandidates(page)).slice(0, 3);
+        const pack = await withDeadline(readPhonePack(page, scan.query, experiment, point), GRID_POINT_DEADLINE_MS, "Phone grid point");
         const match = matchCandidate(pack, { businessName, placeId: experiment.gmbPlaceId }, "local_pack");
         await prisma.geoGridPoint.update({
           where: { id: point.id },
@@ -61,7 +70,7 @@ async function checkPoints(
         }
         logger.warn({ event: "geo_grid_mobile_point_failed", scanId: scan.id, pointId: point.id, error: errorMessage(error) });
         consecutiveErrors += 1;
-        if (consecutiveErrors >= MAX_CONSECUTIVE_POINT_ERRORS) return "stuck";
+        if (error instanceof DeadlineExceededError || consecutiveErrors >= MAX_CONSECUTIVE_POINT_ERRORS) return "stuck";
       }
       if (index < points.length - 1) await sleep(randomBetween(6_000, 15_000));
     }

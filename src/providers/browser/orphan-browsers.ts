@@ -1,4 +1,6 @@
 import { execSync } from "node:child_process";
+import type { BrowserContext } from "../../browser/pw.js";
+import { DeadlineExceededError, withDeadline } from "../../utils/deadline.js";
 
 /**
  * Railway OOM kills leave Orbita/Chrome children behind on restart.
@@ -14,6 +16,25 @@ export function killOrphanBrowserProcesses(reason: string): void {
   } catch {
     // pkill exits non-zero when nothing matched; ignore.
   }
+}
+
+const CLOSE_DEADLINE_MS = 30_000;
+
+/** Last resort when a frozen Camoufox ignores close(); the worker runs one browser at a time. */
+function killCamoufoxProcesses(reason: string): void {
+  try {
+    execSync("pkill -9 -f '[Cc]amoufox' 2>/dev/null || true", { stdio: "ignore", timeout: 5_000 });
+    console.error(`[browser] Killed Camoufox processes (${reason})`);
+  } catch (error) {
+    console.error(`[browser] Could not kill Camoufox: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function closeCamoufoxContext(context: BrowserContext, profileId: string): Promise<void> {
+  await withDeadline(context.close(), CLOSE_DEADLINE_MS, "Camoufox close").catch((error: unknown) => {
+    console.error(`[camoufox] Close failed for ${profileId}: ${error instanceof Error ? error.message : String(error)}`);
+    if (error instanceof DeadlineExceededError) killCamoufoxProcesses(`close hung for ${profileId}`);
+  });
 }
 
 export function logWorkerMemory(label: string): void {

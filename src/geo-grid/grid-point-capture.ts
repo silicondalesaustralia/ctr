@@ -7,6 +7,9 @@ import { setSearchLocation } from "../browser/set-search-location.js";
 import { googleTargetFor } from "../geo/google-target.js";
 import { searchQuery } from "../rank-snapshots/snapshot-capture.js";
 
+/** One point normally takes under a minute; past this the browser has frozen. */
+export const GRID_POINT_DEADLINE_MS = 4 * 60_000;
+
 export interface PointCapture {
   outcome: "captured" | "not_found" | "blocked";
   position: number | null;
