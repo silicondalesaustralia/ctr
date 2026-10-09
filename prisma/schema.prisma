@@ -560,6 +560,10 @@ model GeoGridScan {
   inPackCount        Int?              @map("in_pack_count")
   foundCount         Int?              @map("found_count")
   avgRank            Float?            @map("avg_rank")
+  /** Points where the target was in the phone results' 3-pack; null until the mobile pass ran. */
+  mobileInPackCount  Int?              @map("mobile_in_pack_count")
+  mobileAttemptCount Int               @default(0) @map("mobile_attempt_count")
+  mobileIdentityExternalId String?     @map("mobile_identity_external_id")
   centreImageJpeg    Bytes?            @map("centre_image_jpeg")
   errorMessage       String?           @map("error_message")
   startedAt          DateTime?         @map("started_at")
@@ -589,6 +593,10 @@ model GeoGridPoint {
   topResultsJson String?            @map("top_results_json")
   errorMessage   String?            @map("error_message")
   capturedAt     DateTime?          @map("captured_at")
+  /** 1-3 when the target was in the phone 3-pack at this point. */
+  mobilePackPosition   Int?         @map("mobile_pack_position")
+  mobileTopResultsJson String?      @map("mobile_top_results_json")
+  mobileCheckedAt      DateTime?    @map("mobile_checked_at")
 
   scan GeoGridScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
 

@@ -45,7 +45,13 @@ export function registerGeoGridRoutes(app: Express): void {
         where: { scanId: req.params.id },
         orderBy: [{ row: "asc" }, { col: "asc" }],
       });
-      res.json(points.map(({ topResultsJson, ...point }) => ({ ...point, topResults: parseTopResults(topResultsJson) })));
+      res.json(
+        points.map(({ topResultsJson, mobileTopResultsJson, ...point }) => ({
+          ...point,
+          topResults: parseTopResults(topResultsJson),
+          mobileTopResults: parseTopResults(mobileTopResultsJson),
+        })),
+      );
     } catch (error) {
       res.status(500).json({ error: errorMessage(error) });
     }

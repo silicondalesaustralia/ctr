@@ -22,11 +22,7 @@ const RANK_LEGEND = [
   { color: GRID_RED, label: "11+ / not found" },
   { color: GRID_GREY, label: "Not checked" },
 ];
-const CHANGE_LEGEND = [
-  { color: GRID_GREEN, label: "Improved" },
-  { color: GRID_RED, label: "Dropped" },
-  { color: GRID_GREY, label: "No change" },
-];
+const CHANGE_LEGEND = [{ color: GRID_GREEN, label: "Improved" }, { color: GRID_RED, label: "Dropped" }, { color: GRID_GREY, label: "No change" }];
 
 /** GMB coverage grid: rank at each point around the rank check location, before vs latest. */
 export default function CoverageGridSection({ campaignId }: Props) {
@@ -49,7 +45,9 @@ export default function CoverageGridSection({ campaignId }: Props) {
   const shownPoints = mode === "before" ? from.points : to.points;
   const legend = mode === "change" ? CHANGE_LEGEND : RANK_LEGEND;
   const openScan = queryScans.find(isScanOpen);
-  const done = openScan ? (mode === "before" ? from.points : to.points).filter((p) => p.status !== "pending").length : 0;
+  const done = openScan ? shownPoints.filter((p) => p.status !== "pending").length : 0;
+  const phoneDone = openScan ? shownPoints.filter((p) => p.mobileCheckedAt).length : 0;
+  const progress = done < (openScan?.pointCount ?? 0) ? `${done}/${openScan?.pointCount} points checked` : `phone check ${phoneDone}/${openScan?.pointCount}`;
 
   return (
     <div id="coverage-grid" style={{ ...panelStyle, marginBottom: 16, display: "grid", gap: 16 }}>
@@ -105,7 +103,7 @@ export default function CoverageGridSection({ campaignId }: Props) {
           <GridSummaryCards fromScan={fromScan} toScan={toScan} fromPoints={from.points} toPoints={to.points} />
           {openScan && (
             <p style={{ margin: 0, fontSize: 13, color: "#6155dc" }}>
-              Scan in progress{shownScan?.id === openScan.id ? ` · ${done}/${openScan.pointCount} points checked` : ""}
+              Scan in progress{shownScan?.id === openScan.id ? ` · ${progress}` : ""}
             </p>
           )}
           {shownPoints.length > 0 && shownScan && (
@@ -129,6 +127,12 @@ export default function CoverageGridSection({ campaignId }: Props) {
                 {item.label}
               </span>
             ))}
+            {mode !== "change" && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 4, background: "#fff", border: "1.5px solid #1f2433" }} />
+                In phone 3-pack
+              </span>
+            )}
             {shownScan?.hasImage && (
               <BlobImageLink imagePath={`/geo-grids/${shownScan.id}/image`} label="Centre results page ↗" />
             )}

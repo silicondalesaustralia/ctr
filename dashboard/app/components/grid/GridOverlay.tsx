@@ -26,8 +26,12 @@ function tooltip(mode: GridMode, from: GridPoint | undefined, to: GridPoint | un
           : point.status;
   const shown = mode === "before" ? from : to;
   const pack = shown?.topResults.length ? `\n3-pack: ${shown.topResults.join(", ")}` : "";
-  if (mode === "change") return `Before ${describe(from)} → now ${describe(to)}${pack}`;
-  return `${describe(shown)}${pack}`;
+  const phone = shown?.mobileCheckedAt
+    ? `\nPhone 3-pack: ${shown.mobilePackPosition ? `#${shown.mobilePackPosition}` : "not in it"}` +
+      (shown.mobileTopResults.length ? ` (${shown.mobileTopResults.join(", ")})` : "")
+    : "";
+  if (mode === "change") return `Before ${describe(from)} → now ${describe(to)}${pack}${phone}`;
+  return `${describe(shown)}${pack}${phone}`;
 }
 
 /** One coloured square per grid point; the centre (rank check location) is outlined. */
@@ -49,6 +53,7 @@ export default function GridOverlay({ view, mode, fromPoints, toPoints, gridSize
         const text = mode === "change" ? changeText(change) : rankText(mode === "before" ? from : to);
         const { x, y } = toScreen(view, point);
         const centre = point.row === half && point.col === half;
+        const shown = mode === "before" ? from : to;
         return (
           <g key={point.id}>
             <title>{tooltip(mode, from, to)}</title>
@@ -74,6 +79,9 @@ export default function GridOverlay({ view, mode, fromPoints, toPoints, gridSize
             >
               {text}
             </text>
+            {shown?.mobilePackPosition != null && (
+              <circle cx={x + side / 2 - 5} cy={y - side / 2 + 5} r={4} fill="#fff" stroke="#1f2433" strokeWidth={1.5} />
+            )}
           </g>
         );
       })}

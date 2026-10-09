@@ -20,6 +20,7 @@ export default function GridHistoryTable({ scans }: Props) {
         <tr style={{ color: "#767d8e" }}>
           <th style={cell}>Scan</th>
           <th style={cell}>In 3-pack</th>
+          <th style={cell}>Phone 3-pack</th>
           <th style={cell}>Avg grid rank</th>
           <th style={cell}>Change</th>
         </tr>
@@ -37,6 +38,9 @@ export default function GridHistoryTable({ scans }: Props) {
                 {scan.inPackCount !== null && (
                   <span style={{ fontWeight: 400, color: "#767d8e" }}> · {scan.inPackCount}/{scan.pointCount}</span>
                 )}
+              </td>
+              <td style={cell}>
+                {scan.mobileInPackCount === null ? "—" : `${scan.mobileInPackCount}/${scan.pointCount}`}
               </td>
               <td style={cell}>{scan.avgRank === null ? "—" : scan.avgRank.toFixed(1)}</td>
               <td style={{ ...cell, color: change === null || change === 0 ? GRID_GREY : change > 0 ? GRID_GREEN : GRID_RED }}>

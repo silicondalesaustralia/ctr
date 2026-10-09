@@ -1,4 +1,4 @@
-import type { Experiment, Identity } from "@prisma/client";
+import type { DeviceClass, Experiment, Identity } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { isIdentityRunnable } from "../identities/provider-compat.js";
 
@@ -7,7 +7,11 @@ import { isIdentityRunnable } from "../identities/provider-compat.js";
  * searches never land in a campaign identity's history. Falls back to any local identity.
  * cityOverride (national panel) prefers that city and falls back to anywhere in the country.
  */
-export async function pickSnapshotIdentity(experiment: Experiment, cityOverride?: string): Promise<Identity | null> {
+export async function pickSnapshotIdentity(
+  experiment: Experiment,
+  cityOverride?: string,
+  deviceClass: DeviceClass = "desktop",
+): Promise<Identity | null> {
   const [selected, scheduled] = await Promise.all([
     prisma.experimentIdentity.findMany({
       where: { experimentId: experiment.id, selected: true },
@@ -26,7 +30,7 @@ export async function pickSnapshotIdentity(experiment: Experiment, cityOverride?
       where: {
         active: true,
         country: experiment.country,
-        deviceClass: "desktop",
+        deviceClass,
         externalProfileId: { not: null },
       },
       orderBy: { lastUsedAt: { sort: "asc", nulls: "first" } },

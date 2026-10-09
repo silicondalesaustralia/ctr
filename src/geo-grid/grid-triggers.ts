@@ -10,7 +10,7 @@ import { localDateString } from "../rank-snapshots/snapshot-triggers.js";
 import { localHourMinute } from "../utils/helpers.js";
 import { buildGridPoints, gridSettings } from "./grid-points.js";
 
-/** Weekly scans start from this local hour, overnight before sessions begin. */
+/** Weekly and follow-up scans run in this local window, overnight before sessions begin. */
 const WEEKLY_HOUR_START = 2;
 const WEEKLY_HOUR_END = 6;
 const WEEKLY_GAP_MS = 6 * 24 * 60 * 60_000;
@@ -56,14 +56,20 @@ export async function createGridScan(
   return scan.id;
 }
 
+/** Scheduled scans share one local time window so results are comparable across weeks. */
+function inScanWindow(experiment: Experiment, now: Date): boolean {
+  const { hour } = localHourMinute(now, experiment.scheduleTimezone);
+  return hour >= WEEKLY_HOUR_START && hour < WEEKLY_HOUR_END;
+}
+
 async function queueActiveScans(experiment: Experiment, now: Date): Promise<number> {
   const localDate = localDateString(now, experiment.scheduleTimezone);
-  const { hour } = localHourMinute(now, experiment.scheduleTimezone);
-  const overnight = hour >= WEEKLY_HOUR_START && hour < WEEKLY_HOUR_END;
+  const overnight = inScanWindow(experiment, now);
   let queued = 0;
   for (const query of await activeQueries(experiment.id)) {
+    // Manual scans run at any hour, so they don't move the weekly cadence.
     const latest = await prisma.geoGridScan.findFirst({
-      where: { experimentId: experiment.id, query },
+      where: { experimentId: experiment.id, query, kind: { not: "manual" } },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
@@ -78,6 +84,7 @@ async function queueActiveScans(experiment: Experiment, now: Date): Promise<numb
 }
 
 async function queueFollowupScans(experiment: Experiment, now: Date): Promise<number> {
+  if (!inScanWindow(experiment, now)) return 0;
   const stoppedAt = await campaignStoppedAt(experiment, now);
   if (!stoppedAt) return 0;
   let queued = 0;

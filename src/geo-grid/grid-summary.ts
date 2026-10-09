@@ -32,10 +32,13 @@ export async function finaliseGridScan(scanId: string, final: boolean): Promise<
       data: { status: "error" },
     });
   }
+  const mobileChecked = points.filter((point) => point.mobileCheckedAt !== null);
   await prisma.geoGridScan.update({
     where: { id: scanId },
     data: {
       ...summariseGridPoints(points),
+      mobileInPackCount:
+        mobileChecked.length > 0 ? mobileChecked.filter((point) => point.mobilePackPosition !== null).length : null,
       status: open.length > 0 ? "partial" : "complete",
       completedAt: new Date(),
     },

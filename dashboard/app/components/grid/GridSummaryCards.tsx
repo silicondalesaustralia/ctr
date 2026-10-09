@@ -40,6 +40,9 @@ function buildCards({ fromScan, toScan, fromPoints, toPoints }: GridSummaryCards
   const fromPack = fromScan?.inPackCount ?? null;
   const toPack = toScan?.inPackCount ?? null;
   const packDelta = fromPack !== null && toPack !== null ? toPack - fromPack : null;
+  const fromPhone = fromScan?.mobileInPackCount ?? null;
+  const toPhone = toScan?.mobileInPackCount ?? null;
+  const phoneDelta = fromPhone !== null && toPhone !== null ? toPhone - fromPhone : null;
   const fromAvg = fromScan?.avgRank ?? null;
   const toAvg = toScan?.avgRank ?? null;
   const avgDelta = fromAvg !== null && toAvg !== null ? Number((fromAvg - toAvg).toFixed(1)) : null;
@@ -57,6 +60,13 @@ function buildCards({ fromScan, toScan, fromPoints, toPoints }: GridSummaryCards
       to: toPack === null ? "—" : `${toPack}/${toScan?.pointCount ?? 0}`,
       delta: packDelta,
       deltaText: packDelta === null ? "" : signed(packDelta),
+    },
+    {
+      title: "Points in the phone 3-pack",
+      from: fromPhone === null ? "—" : `${fromPhone}/${fromScan?.pointCount ?? 0}`,
+      to: toPhone === null ? "—" : `${toPhone}/${toScan?.pointCount ?? 0}`,
+      delta: phoneDelta,
+      deltaText: phoneDelta === null ? "" : signed(phoneDelta),
     },
     {
       title: "Average grid rank",

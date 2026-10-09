@@ -1,16 +1,13 @@
 import type { Experiment, GeoGridPoint, GeoGridScan, Identity } from "@prisma/client";
 import { logger } from "../config/logger.js";
 import { prisma } from "../db/client.js";
-import {
-  BLOCK_RETRY_DELAY_MINUTES,
-  registerGoogleBlock,
-  registerGoogleClean,
-} from "../identities/block-policy.js";
+import { BLOCK_RETRY_DELAY_MINUTES, registerGoogleBlock, registerGoogleClean } from "../identities/block-policy.js";
 import { pickSnapshotIdentity } from "../rank-snapshots/snapshot-identity.js";
 import { withSnapshotBrowser } from "../rank-snapshots/snapshot-browser.js";
 import { PROXY_POOL_DEFER_MINUTES } from "../scheduler/retry-policy.js";
 import { ProxyPoolExhaustedError } from "../sessions/clean-lease.js";
 import { addMinutes, randomBetween, sleep } from "../utils/helpers.js";
+import { queueMobilePass, runMobilePass } from "./grid-mobile-pass.js";
 import { captureGridPoint } from "./grid-point-capture.js";
 import { isCentreCell } from "./grid-points.js";
 import { finaliseGridScan } from "./grid-summary.js";
@@ -102,7 +99,7 @@ export async function runGridScan(scanId: string): Promise<void> {
     orderBy: [{ row: "asc" }, { col: "asc" }],
   });
   if (points.length === 0) {
-    await finaliseGridScan(scanId, true);
+    await runMobilePass(scan);
     return;
   }
 
@@ -124,7 +121,7 @@ export async function runGridScan(scanId: string): Promise<void> {
     const outcome = await capturePoints(scan, points, scan.experiment, identity);
     await prisma.geoGridScan.update({ where: { id: scanId }, data: { attemptCount: { increment: 1 } } });
     const remaining = await prisma.geoGridPoint.count({ where: { scanId, status: "pending" } });
-    if (remaining === 0) await finaliseGridScan(scanId, true);
+    if (remaining === 0) await queueMobilePass(scanId);
     else if (outcome === "blocked") await retryLater(scan, BLOCK_RETRY_DELAY_MINUTES, "blocked");
     else await retryLater(scan, POINT_ERROR_RETRY_MINUTES, "points failed; resuming in a fresh browser");
   } catch (error) {

@@ -13,6 +13,8 @@ export interface GridScan {
   gridSize: number;
   spacingKm: number;
   inPackCount: number | null;
+  /** Points in the phone 3-pack; null when no mobile pass ran. */
+  mobileInPackCount: number | null;
   foundCount: number | null;
   avgRank: number | null;
   errorMessage: string | null;
@@ -33,6 +35,9 @@ export interface GridPoint {
   source: string | null;
   resultTitle: string | null;
   topResults: string[];
+  mobilePackPosition: number | null;
+  mobileTopResults: string[];
+  mobileCheckedAt: string | null;
   errorMessage: string | null;
 }
 
