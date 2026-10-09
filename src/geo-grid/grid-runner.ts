@@ -94,7 +94,7 @@ async function retryLater(scan: GeoGridScan, minutes: number, message: string): 
 
 export async function runGridScan(scanId: string): Promise<void> {
   const scan = await prisma.geoGridScan.findUnique({ where: { id: scanId }, include: { experiment: true } });
-  if (!scan || scan.status !== "pending") return;
+  if (!scan || scan.status !== "pending" || scan.scheduledAt > new Date()) return;
   const points = await prisma.geoGridPoint.findMany({
     where: { scanId, status: "pending" },
     orderBy: [{ row: "asc" }, { col: "asc" }],

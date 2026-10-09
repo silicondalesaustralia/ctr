@@ -57,11 +57,17 @@ export async function pollAndEnqueueDueGridScans(): Promise<number> {
   return due.length;
 }
 
-/** No-op while a job for this scan is already waiting or running. */
+/**
+ * A job left active by a killed worker keeps its lock (BULLMQ_JOB_LOCK_MS) and would block a
+ * same-id re-add, so ids are per boot. A stale job that runs later finds the scan not pending and exits.
+ */
+const BOOT_ID = Date.now().toString(36);
+
+/** No-op while a job for this scan is already waiting or running in this worker. */
 export async function enqueueGridJob(scanId: string): Promise<void> {
   await getGridQueue().add(
     "run-geo-grid",
     { scanId },
-    { jobId: `geo-grid-${scanId}`, removeOnComplete: true, removeOnFail: true },
+    { jobId: `geo-grid-${scanId}-${BOOT_ID}`, removeOnComplete: true, removeOnFail: true },
   );
 }
