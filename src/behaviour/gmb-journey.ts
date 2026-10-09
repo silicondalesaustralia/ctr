@@ -173,14 +173,14 @@ export async function runGmbSearchJourney(
     const { result, sitePage } = await performGmbAction(page, secondary, found.title || businessName);
     actionResults.push(result);
     const eventType =
-      secondary === "website"
+      result.action === "website"
         ? "gmb_action_website"
-        : secondary === "directions"
+        : result.action === "directions"
           ? "gmb_action_directions"
           : "gmb_action_call";
     await onEvent(eventType, { success: result.success, detail: result.detail });
 
-    if (secondary === "website" && result.success && sitePage) {
+    if (result.action === "website" && result.success && sitePage) {
       const site = await runSiteJourney({ page: sitePage, persona, traits, onEvent });
       return {
         status: "completed",

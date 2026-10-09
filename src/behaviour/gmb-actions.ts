@@ -1,7 +1,8 @@
 import type { Page } from "../browser/pw.js";
 import type { GmbAction } from "../campaign/gmb-types.js";
-import { trustedClickPicked } from "../browser/serp-trusted-click.js";
+import { expandMobilePlaceSheet } from "../browser/mobile-local-nav.js";
 import { randomBetween, sleep } from "../utils/helpers.js";
+import { clickByLabels } from "./gmb-panel-click.js";
 
 export interface GmbActionResult {
   action: GmbAction;
@@ -16,66 +17,7 @@ const PRECISE_SELECTORS: Record<Exclude<GmbAction, "open_listing">, string> = {
   call: "button[data-item-id^='phone:'], a[data-item-id^='phone:']",
 };
 
-/**
- * Click an action control inside the target business's panel only. Maps keeps
- * the results feed beside the open listing, and every competitor card there has
- * its own Website / Directions / phone controls.
- */
-async function clickByLabels(
-  page: Page,
-  labels: string[],
-  precise: string,
-  businessName: string,
-): Promise<boolean> {
-  const handle = await page.evaluateHandle(({ needles, preciseSelector, name }): HTMLElement | null => {
-    const lowered = needles.map((n) => n.toLowerCase());
-    const target = name.toLowerCase();
-    const panels = Array.from(document.querySelectorAll("[role='main'][aria-label]")) as HTMLElement[];
-    const panel =
-      panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().includes(target)) ??
-      panels.find((el) => (el.getAttribute("aria-label") ?? "").toLowerCase().startsWith(target.slice(0, 12))) ??
-      // The phone SERP's /searchviewer/ profile shows one business with no named panel.
-      (location.pathname.startsWith("/searchviewer/") ? document.body : null);
-    if (!panel) return null;
-
-    const preciseHit = Array.from(panel.querySelectorAll(preciseSelector)).find(
-      (el) => !el.closest("[role='feed'], [role='article']"),
-    ) as HTMLElement | undefined;
-    if (preciseHit) {
-      preciseHit.scrollIntoView({ block: "center", inline: "nearest" });
-      return preciseHit;
-    }
-
-    const candidates = (
-      Array.from(
-        panel.querySelectorAll("a, button, [role='button'], [role='link'], [data-value], [aria-label]"),
-      ) as HTMLElement[]
-    ).filter((el) => !el.closest("[role='feed'], [role='article']"));
-
-    for (const el of candidates) {
-      const text = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-      const aria = (el.getAttribute("aria-label") ?? "").toLowerCase();
-      const dataValue = (el.getAttribute("data-value") ?? "").toLowerCase();
-      const haystack = `${text} ${aria} ${dataValue}`;
-      if (!lowered.some((needle) => haystack.includes(needle))) continue;
-
-      const style = window.getComputedStyle(el);
-      const rect = el.getBoundingClientRect();
-      if (
-        style.visibility === "hidden" ||
-        style.display === "none" ||
-        rect.width <= 0 ||
-        rect.height <= 0
-      ) {
-        continue;
-      }
-      el.scrollIntoView({ block: "center", inline: "nearest" });
-      return el;
-    }
-    return null;
-  }, { needles: labels, preciseSelector: precise, name: businessName });
-  return (await trustedClickPicked(page, handle.asElement(), "gmb-action")) !== null;
-}
+const NOT_FOUND = "control not found in target panel";
 
 export async function dwellOnListing(page: Page, secondsMin = 4, secondsMax = 12): Promise<void> {
   await sleep(randomBetween(secondsMin * 1000, secondsMax * 1000));
@@ -90,25 +32,42 @@ export interface GmbActionOutcome {
 }
 const isGoogleUrl = (url: string): boolean => /^https?:\/\/([^/]+\.)?google\.[^/]+\//i.test(url);
 
+/** result.action is the action actually performed (directions falls back to website when the listing has none). */
 export async function performGmbAction(
   page: Page,
   action: GmbAction,
   businessName: string,
 ): Promise<GmbActionOutcome> {
+  await expandMobilePlaceSheet(page);
   if (action === "website") return performWebsiteAction(page, businessName);
-  return { result: await performPanelAction(page, action, businessName), sitePage: null };
+  const result = await performPanelAction(page, action, businessName);
+  // Service-area businesses have no address, so no Directions control on any device.
+  if (action === "directions" && result.detail === NOT_FOUND) {
+    console.error("[gmb] no Directions on this listing; opening the website instead");
+    return performWebsiteAction(page, businessName);
+  }
+  return { result, sitePage: null };
 }
+
 async function performWebsiteAction(page: Page, businessName: string): Promise<GmbActionOutcome> {
   const popup = page.context().waitForEvent("page", { timeout: 10_000 }).catch(() => null);
-  const clicked = await clickByLabels(page, ["website", "visit website"], PRECISE_SELECTORS.website, businessName);
+  const { clicked, href } = await clickByLabels(page, ["website", "visit website"], PRECISE_SELECTORS.website, businessName);
   if (!clicked) {
-    return { result: { action: "website", attempted: true, success: false, detail: "control not found in target panel" }, sitePage: null };
+    return { result: { action: "website", attempted: true, success: false, detail: NOT_FOUND }, sitePage: null };
   }
 
   const opened = await popup;
   const sitePage = opened ?? page;
   await sitePage.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
   await sitePage.waitForTimeout(1500);
+  if (!opened && href && isGoogleUrl(page.url())) {
+    // Mobile Maps sometimes swallows the tap; follow the same /url?q= redirect it points at.
+    console.error("[gmb] website tap opened nothing; following the link directly");
+    await page.goto(href, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch((error: unknown) => {
+      console.error(`[gmb] website link failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+    });
+    await page.waitForTimeout(1500);
+  }
   const url = sitePage.url();
   if (isGoogleUrl(url) || url === "about:blank") {
     return { result: { action: "website", attempted: true, success: false, detail: `website did not open (${url.slice(0, 120)})` }, sitePage: null };
@@ -130,12 +89,12 @@ async function performPanelAction(
     action === "website"
       ? ["website", "visit website"]
       : action === "directions"
-        ? ["directions", "get directions", "route"]
+        ? ["directions", "get directions"]
         : ["call", "phone"];
 
-  const success = await clickByLabels(page, labels, PRECISE_SELECTORS[action], businessName);
-  if (!success) {
-    return { action, attempted: true, success: false, detail: "control not found in target panel" };
+  const { clicked } = await clickByLabels(page, labels, PRECISE_SELECTORS[action], businessName);
+  if (!clicked) {
+    return { action, attempted: true, success: false, detail: NOT_FOUND };
   }
 
   await page.waitForTimeout(1500);

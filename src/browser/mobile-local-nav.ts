@@ -1,9 +1,8 @@
 import type { Page } from "./pw.js";
 import { acceptConsentIfPresent, assertNotBlocked } from "./blocked-detection.js";
-import { mapsSearchUrl } from "./local-pack-collect.js";
 import { gotoSettled } from "./local-finder-nav.js";
 import { trustedClick } from "./serp-trusted-click.js";
-import { googleTargetForPage } from "../geo/google-target.js";
+import { googleTargetForPage, type GoogleTarget } from "../geo/google-target.js";
 
 const MAPS_CARD = ".Nv2PK";
 
@@ -33,16 +32,22 @@ async function settleMobileMaps(page: Page): Promise<void> {
     await page.waitForTimeout(1_500);
     if (await clickVisibleText(page, /^keep using web$/i)) continue;
     if (await clickVisibleText(page, /^view list$/i)) continue;
-    const ready = await page
-      .evaluate(
-        (card) => document.querySelector(card) !== null || document.querySelector("[role='main'][aria-label]") !== null,
-        MAPS_CARD,
-      )
-      .catch(() => false);
-    if (ready) break;
+    if (await hasMapsResults(page)) break;
   }
   await page.waitForTimeout(1_500);
   console.error(`[gmb] mobile Maps settled url=${page.url().slice(0, 100)}`);
+}
+
+async function hasMapsResults(page: Page): Promise<boolean> {
+  return page
+    .evaluate((card) => document.querySelector(card) !== null || document.querySelector("[role='main'][aria-label]") !== null, MAPS_CARD)
+    .catch(() => false);
+}
+
+/** www.google.com/maps/search renders a blank map on phones; the Maps tab's maps.google.com form works. */
+function mobileMapsUrl(query: string, target: GoogleTarget): string {
+  const params = new URLSearchParams({ q: query.trim(), hl: target.hl, gl: target.gl });
+  return `https://maps.google.com/maps?${params.toString()}`;
 }
 
 /**
@@ -62,15 +67,33 @@ export async function openMobileMapsList(page: Page, query: string): Promise<voi
     await trustedClick(page, mapsTab, "maps-tab");
   } else {
     console.error("[gmb] mobile: no Maps tab on the SERP; opening Maps search by URL");
-    await gotoSettled(page, mapsSearchUrl(query, googleTargetForPage(page)));
+    await gotoSettled(page, mobileMapsUrl(query, googleTargetForPage(page)));
   }
   await settleMobileMaps(page);
+  if (mapsTab && !(await hasMapsResults(page))) {
+    console.error("[gmb] mobile: Maps tab showed no results; opening Maps search by URL");
+    await openMobileMapsSearch(page, query);
+  }
 }
 
 /** Branded fallback: Maps search by URL (often lands straight on the place page). */
 export async function openMobileMapsSearch(page: Page, query: string): Promise<void> {
-  await gotoSettled(page, mapsSearchUrl(query, googleTargetForPage(page)));
+  await gotoSettled(page, mobileMapsUrl(query, googleTargetForPage(page)));
   await settleMobileMaps(page);
+}
+
+/** A phone place page opens as a peek (name, Call, Save, Share); Website and phone rows need it expanded. */
+export async function expandMobilePlaceSheet(page: Page): Promise<void> {
+  if (!(await isMobilePage(page))) return;
+  const heading = page.locator("[role='main'][aria-label] h1").first();
+  const details = page.locator("[role='main'] [data-item-id='authority'], [role='main'] [data-item-id^='phone:']");
+  if (!(await heading.isVisible().catch(() => false)) || (await details.count().catch(() => 0)) > 0) return;
+  const box = await heading.boundingBox();
+  if (!box) return;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+  await page.waitForTimeout(250);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(2_500);
 }
 
 /** Mobile Maps scrolls the results sheet, not the window. */
