@@ -1,3 +1,5 @@
+import { runWithWatchdog } from "./browser-job-watchdog.js";
+
 /**
  * Campaign + warmup BullMQ workers both use concurrency=1 in one process.
  * Without this, they can overlap (one waiting on GoLogin slot while the other
@@ -18,7 +20,7 @@ function handOff(): void {
 
 export async function withBrowserJobExclusive<T>(
   fn: () => Promise<T>,
-  options: { priority?: boolean } = {},
+  options: { priority?: boolean; limitMs?: number; label?: string } = {},
 ): Promise<T> {
   if (locked) {
     await new Promise<void>((resolve) => {
@@ -28,7 +30,7 @@ export async function withBrowserJobExclusive<T>(
     locked = true;
   }
   try {
-    return await fn();
+    return options.limitMs ? await runWithWatchdog(fn, options.limitMs, options.label ?? "browser job") : await fn();
   } finally {
     handOff();
   }

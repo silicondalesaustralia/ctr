@@ -5,6 +5,7 @@ import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { BULLMQ_JOB_LOCK_MS, BULLMQ_STALLED_INTERVAL_MS } from "../scheduler/bullmq-options.js";
 import { withBrowserJobExclusive } from "../scheduler/browser-job-mutex.js";
+import { BROWSER_JOB_LIMIT_MS } from "../scheduler/browser-job-watchdog.js";
 import { runGridScan } from "./grid-runner.js";
 import { queueDueGridScans } from "./grid-triggers.js";
 
@@ -31,7 +32,10 @@ export function createGridWorker(): Worker<GridJobData> {
   return new Worker<GridJobData>(
     QUEUE_NAME,
     async (job: Job<GridJobData>) => {
-      await withBrowserJobExclusive(() => runGridScan(job.data.scanId));
+      await withBrowserJobExclusive(() => runGridScan(job.data.scanId), {
+        limitMs: BROWSER_JOB_LIMIT_MS.grid,
+        label: `grid ${job.data.scanId}`,
+      });
     },
     {
       connection: getConnection(),

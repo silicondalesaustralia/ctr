@@ -5,6 +5,7 @@ import { createRedisConnection } from "../config/redis.js";
 import { prisma } from "../db/client.js";
 import { BULLMQ_JOB_LOCK_MS, BULLMQ_STALLED_INTERVAL_MS } from "../scheduler/bullmq-options.js";
 import { withBrowserJobExclusive } from "../scheduler/browser-job-mutex.js";
+import { BROWSER_JOB_LIMIT_MS } from "../scheduler/browser-job-watchdog.js";
 import { runExperimentSnapshots } from "./snapshot-runner.js";
 import { queueDueSnapshots } from "./snapshot-triggers.js";
 import { queueFollowupSnapshots } from "./followup-triggers.js";
@@ -36,7 +37,10 @@ export function createSnapshotWorker(): Worker<SnapshotJobData> {
   return new Worker<SnapshotJobData>(
     QUEUE_NAME,
     async (job: Job<SnapshotJobData>) => {
-      await withBrowserJobExclusive(() => runExperimentSnapshots(job.data.experimentId));
+      await withBrowserJobExclusive(() => runExperimentSnapshots(job.data.experimentId), {
+        limitMs: BROWSER_JOB_LIMIT_MS.snapshot,
+        label: `snapshot ${job.data.experimentId}`,
+      });
     },
     {
       connection: getConnection(),

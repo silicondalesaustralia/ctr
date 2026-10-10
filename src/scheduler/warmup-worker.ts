@@ -8,6 +8,7 @@ import {
   BULLMQ_STALLED_INTERVAL_MS,
 } from "./bullmq-options.js";
 import { withBrowserJobExclusive } from "./browser-job-mutex.js";
+import { BROWSER_JOB_LIMIT_MS } from "./browser-job-watchdog.js";
 import { addUniqueJob } from "./enqueue-unique.js";
 import { warmupInfraRetryDelayMs } from "../warmup/warmup-config.js";
 import { PROXY_POOL_DEFER_MINUTES } from "./retry-policy.js";
@@ -141,7 +142,7 @@ export function createWarmupWorker(): Worker<WarmupJobData> {
   return new Worker<WarmupJobData>(
     QUEUE_NAME,
     async (job: Job<WarmupJobData>) => {
-      await withBrowserJobExclusive(() => processWarmupSession(job.data.warmupSessionId));
+      await withBrowserJobExclusive(() => processWarmupSession(job.data.warmupSessionId), { limitMs: BROWSER_JOB_LIMIT_MS.warmup, label: "warmup" });
     },
     {
       connection: getConnection(),
